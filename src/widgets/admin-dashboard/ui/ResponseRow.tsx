@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Gift } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { formatAnswer, parts, questions } from '@/entities/survey';
 import { giftLabel, type ResponseRow as Row } from '@/entities/response';
+import { DeleteButton } from '@/features/admin-delete-response';
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -16,11 +17,12 @@ export function ResponseRow({ row }: { row: Row }) {
   const [open, setOpen] = useState(false);
   return (
     <li className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-zinc-50"
-      >
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="-mx-2 -my-1 flex flex-1 items-center gap-3 rounded-md px-2 py-1 text-left transition hover:bg-zinc-50"
+        >
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="truncate font-semibold text-zinc-900">
@@ -50,12 +52,14 @@ export function ResponseRow({ row }: { row: Row }) {
             ) : null}
           </div>
         </div>
-        {open ? (
-          <ChevronUp className="h-4 w-4 text-zinc-400" />
-        ) : (
-          <ChevronDown className="h-4 w-4 text-zinc-400" />
-        )}
-      </button>
+          {open ? (
+            <ChevronUp className="h-4 w-4 text-zinc-400" />
+          ) : (
+            <ChevronDown className="h-4 w-4 text-zinc-400" />
+          )}
+        </button>
+        <DeleteButton id={row.id} />
+      </div>
 
       {open ? (
         <div className="space-y-4 border-t border-zinc-100 bg-zinc-50/40 px-4 py-4">

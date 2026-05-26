@@ -116,11 +116,13 @@ export function SurveyPage() {
       router.push('/survey/complete');
     },
     onError: (err) => {
-      const msg =
-        err && typeof err === 'object' && 'message' in err
-          ? (err as { message?: string }).message
-          : '제출에 실패했어요.';
-      toast.error(msg ?? '제출에 실패했어요. 잠시 후 다시 시도해 주세요.');
+      const e = err as { message?: string; status?: number } | undefined;
+      if (e?.status === 403) {
+        toast.error('설문이 마감되었습니다.');
+        router.replace('/closed');
+        return;
+      }
+      toast.error(e?.message ?? '제출에 실패했어요. 잠시 후 다시 시도해 주세요.');
     },
   });
 

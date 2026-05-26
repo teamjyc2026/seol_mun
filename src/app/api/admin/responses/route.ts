@@ -1,17 +1,24 @@
+import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { responsePayloadSchema } from '@/entities/response/model/payloadSchema';
-import { isClosed } from '@/shared/config/cap';
+import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+async function requireAdmin() {
+  const store = await cookies();
+  return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
+}
+
+/**
+ * Admin-only manual entry. Bypasses the public cap so paper or offline
+ * responses can be recorded after the public survey closes.
+ */
 export async function POST(req: NextRequest) {
-  if (await isClosed()) {
-    return NextResponse.json(
-      { message: '설문이 마감되었습니다.' },
-      { status: 403 },
-    );
+  if (!(await requireAdmin())) {
+    return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 
   let parsed;
@@ -26,7 +33,6 @@ export async function POST(req: NextRequest) {
 
   try {
     const supabase = getSupabaseServer();
-    const userAgent = req.headers.get('user-agent') ?? null;
     const { data, error } = await supabase
       .from('responses')
       .insert({
@@ -38,21 +44,21 @@ export async function POST(req: NextRequest) {
         answers: parsed.answers,
         gift: parsed.gift,
         status: 'submitted',
-        user_agent: userAgent,
+        user_agent: 'admin-manual',
       })
       .select('id')
       .single();
 
     if (error) {
-      console.error('[POST /api/responses] supabase error', error);
+      console.error('[POST /api/admin/responses] supabase error', error);
       return NextResponse.json(
-        { message: '응답 저장 중 오류가 발생했습니다.', details: error.message },
+        { message: '저장 중 오류가 발생했습니다.', details: error.message },
         { status: 500 },
       );
     }
     return NextResponse.json({ id: data.id }, { status: 201 });
   } catch (e) {
-    console.error('[POST /api/responses] server error', e);
+    console.error('[POST /api/admin/responses] server error', e);
     return NextResponse.json(
       { message: '서버 오류가 발생했습니다.' },
       { status: 500 },
