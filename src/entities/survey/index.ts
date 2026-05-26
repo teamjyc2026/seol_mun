@@ -12,6 +12,7 @@ export {
   type SubmissionForm,
 } from './model/schema';
 export { buildDefaultAnswers } from './model/defaults';
+export { formatAnswer } from './model/formatAnswer';
 export { QuestionCard } from './ui/QuestionCard';
 export {
   SingleChoice,
