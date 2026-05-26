@@ -2,6 +2,7 @@
 
 import { Controller, useFormContext } from 'react-hook-form';
 import { cn } from '@/shared/lib/cn';
+import { scrollToNextQuestion } from '@/shared/lib/scrollToNextQuestion';
 import { useQuestionCard } from '../QuestionCard';
 import { partById } from '../../model/parts';
 
@@ -39,11 +40,14 @@ export function ScaleField() {
                       type="button"
                       role="radio"
                       aria-checked={checked}
-                      onClick={() =>
-                        allowEmpty && checked
-                          ? field.onChange(null)
-                          : field.onChange(n)
-                      }
+                      onClick={() => {
+                        if (allowEmpty && checked) {
+                          field.onChange(null);
+                          return;
+                        }
+                        field.onChange(n);
+                        requestAnimationFrame(() => scrollToNextQuestion(q.id));
+                      }}
                       className={cn(
                         'grid h-12 w-12 place-items-center rounded-full border-2 text-sm font-semibold transition',
                         'hover:scale-105 active:scale-95',

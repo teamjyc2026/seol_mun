@@ -3,6 +3,7 @@
 import { Controller, useFormContext } from 'react-hook-form';
 import { Check } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
+import { scrollToNextQuestion } from '@/shared/lib/scrollToNextQuestion';
 import { useQuestionCard } from '../QuestionCard';
 import { partById } from '../../model/parts';
 
@@ -47,7 +48,14 @@ export function MultiChoice() {
                     disabled={disabled}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        field.onChange([...value, opt.value]);
+                        const nextValue = [...value, opt.value];
+                        field.onChange(nextValue);
+                        if (
+                          typeof q.maxSelect === 'number' &&
+                          nextValue.length === q.maxSelect
+                        ) {
+                          requestAnimationFrame(() => scrollToNextQuestion(q.id));
+                        }
                       } else {
                         field.onChange(value.filter((v) => v !== opt.value));
                       }

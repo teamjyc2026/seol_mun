@@ -95,7 +95,10 @@ function Step({ children }: { children: React.ReactNode }) {
 
 function Footer({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-2 flex items-center justify-between gap-3 pt-2">
+    <div
+      data-wizard-footer
+      className="mt-2 flex items-center justify-between gap-3 pt-2"
+    >
       {children}
     </div>
   );

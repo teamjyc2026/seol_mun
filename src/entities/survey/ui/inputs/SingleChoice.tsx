@@ -2,6 +2,7 @@
 
 import { Controller, useFormContext } from 'react-hook-form';
 import { cn } from '@/shared/lib/cn';
+import { scrollToNextQuestion } from '@/shared/lib/scrollToNextQuestion';
 import { useQuestionCard } from '../QuestionCard';
 import { partById } from '../../model/parts';
 
@@ -41,7 +42,10 @@ export function SingleChoice() {
                   name={field.name}
                   value={opt.value}
                   checked={checked}
-                  onChange={() => field.onChange(opt.value)}
+                  onChange={() => {
+                    field.onChange(opt.value);
+                    requestAnimationFrame(() => scrollToNextQuestion(q.id));
+                  }}
                 />
                 <span
                   className={cn(

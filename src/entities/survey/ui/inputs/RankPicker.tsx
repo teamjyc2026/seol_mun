@@ -2,6 +2,7 @@
 
 import { Controller, useFormContext } from 'react-hook-form';
 import { cn } from '@/shared/lib/cn';
+import { scrollToNextQuestion } from '@/shared/lib/scrollToNextQuestion';
 import { useQuestionCard } from '../QuestionCard';
 import { partById } from '../../model/parts';
 
@@ -61,6 +62,9 @@ export function RankPicker() {
                     } else if (filled < max) {
                       const nextRank = filled + 1;
                       field.onChange({ ...map, [String(nextRank)]: opt.value });
+                      if (nextRank === max) {
+                        requestAnimationFrame(() => scrollToNextQuestion(q.id));
+                      }
                     }
                   }}
                   className={cn(
