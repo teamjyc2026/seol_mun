@@ -179,6 +179,7 @@ export function buildAggregations(
     const values = responses.map((r) => r.answers?.[q.id]);
     switch (q.type) {
       case 'single':
+      case 'select':
         out[q.id] = aggregateSingle(q, values);
         break;
       case 'multi':

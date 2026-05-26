@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
+import { giftLabel } from '@/entities/response';
 import { listResponses } from '@/entities/response/api/listResponses';
 import { formatAnswer, parts, questions } from '@/entities/survey';
 import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
@@ -36,6 +37,7 @@ export async function GET() {
     '응답 ID',
     '제출 일시',
     '상태',
+    '상품권',
     '이름',
     '연락처',
     '소속',
@@ -53,6 +55,7 @@ export async function GET() {
       r.id,
       fmtTs(r.created_at),
       r.status,
+      r.gift ? giftLabel[r.gift] : '',
       r.name ?? '',
       r.phone ?? '',
       r.affiliation ?? '',
@@ -67,7 +70,7 @@ export async function GET() {
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   ws['!cols'] = headers.map((h, i) => ({
-    wch: i < 8 ? Math.max(14, h.length + 2) : Math.min(48, Math.max(20, h.length)),
+    wch: i < 9 ? Math.max(14, h.length + 2) : Math.min(48, Math.max(20, h.length)),
   }));
   ws['!freeze'] = { xSplit: 0, ySplit: 1 };
 

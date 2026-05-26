@@ -7,7 +7,7 @@ export async function listResponses(limit = 500): Promise<ResponseRow[]> {
   const { data, error } = await supabase
     .from('responses')
     .select(
-      'id, name, phone, affiliation, email, answers, status, user_agent, created_at',
+      'id, name, phone, affiliation, email, answers, gift, status, user_agent, created_at',
     )
     .order('created_at', { ascending: false })
     .limit(limit);

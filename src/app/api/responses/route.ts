@@ -14,6 +14,7 @@ const bodySchema = z.object({
     affiliation: z.string().min(1).max(100),
     email: z.string().email(),
   }),
+  gift: z.enum(['oliveyoung', 'cu']),
 });
 
 export async function POST(req: NextRequest) {
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
         affiliation: parsed.consent.affiliation,
         email: parsed.consent.email,
         answers: parsed.answers,
+        gift: parsed.gift,
         status: 'submitted',
         user_agent: userAgent,
       })

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Gift } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { formatAnswer, parts, questions } from '@/entities/survey';
-import type { ResponseRow as Row } from '@/entities/response';
+import { giftLabel, type ResponseRow as Row } from '@/entities/response';
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
@@ -42,6 +42,12 @@ export function ResponseRow({ row }: { row: Row }) {
             <span>{fmtDate(row.created_at)}</span>
             <span>{row.email ?? '—'}</span>
             <span>{row.phone ?? '—'}</span>
+            {row.gift ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-medium text-rose-700">
+                <Gift className="h-3 w-3" />
+                {giftLabel[row.gift]}
+              </span>
+            ) : null}
           </div>
         </div>
         {open ? (

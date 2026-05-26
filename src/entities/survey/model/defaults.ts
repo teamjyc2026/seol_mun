@@ -6,6 +6,7 @@ export function buildDefaultAnswers(): SurveyAnswers {
   for (const q of questionList) {
     switch (q.type) {
       case 'single':
+      case 'select':
       case 'short':
       case 'long':
         out[q.id] = '';

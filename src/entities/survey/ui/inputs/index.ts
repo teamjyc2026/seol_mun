@@ -1,4 +1,5 @@
 export { SingleChoice } from './SingleChoice';
+export { SelectChoice } from './SelectChoice';
 export { MultiChoice } from './MultiChoice';
 export { ShortText } from './ShortText';
 export { LongText } from './LongText';

@@ -14,6 +14,7 @@ export function formatAnswer(questionId: string, value: unknown): string {
 
   switch (q.type) {
     case 'single':
+    case 'select':
       return optionLabel(q, String(value));
     case 'multi':
       if (!Array.isArray(value)) return '—';

@@ -11,6 +11,7 @@ export type PartId =
 
 export type QuestionType =
   | 'single'
+  | 'select'
   | 'multi'
   | 'short'
   | 'long'
@@ -98,7 +99,10 @@ export type ConsentInfo = {
   email: string;
 };
 
+export type GiftChoice = 'oliveyoung' | 'cu';
+
 export type SurveySubmission = {
   answers: SurveyAnswers;
   consent: ConsentInfo;
+  gift: GiftChoice;
 };

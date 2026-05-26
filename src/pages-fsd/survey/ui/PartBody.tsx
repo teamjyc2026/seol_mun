@@ -6,6 +6,7 @@ import {
   QuestionCard,
   RankPicker,
   ScaleField,
+  SelectChoice,
   ShortText,
   SingleChoice,
   questions,
@@ -18,6 +19,8 @@ function FieldByType({ type }: { type: Question['type'] }) {
   switch (type) {
     case 'single':
       return <SingleChoice />;
+    case 'select':
+      return <SelectChoice />;
     case 'multi':
       return <MultiChoice />;
     case 'short':

@@ -83,7 +83,7 @@ export const parts: Part[] = [
     subtitle: '지금 어떻게 공부하고 있나요?',
     description: '사교육 형태·공부시간·비용·만족도. 5문항.',
     theme: themes.P2,
-    questionIds: ['Q6', 'Q7', 'Q8', 'Q9', 'Q10'],
+    questionIds: ['Q6', 'Q7', 'Q8', 'Q9', 'Q9b', 'Q10'],
   },
   {
     id: 'P3',

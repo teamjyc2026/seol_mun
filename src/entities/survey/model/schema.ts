@@ -5,6 +5,7 @@ import type { Question } from './types';
 function fieldSchema(q: Question): ZodType {
   switch (q.type) {
     case 'single':
+    case 'select':
       return q.optional
         ? z.string().optional().default('')
         : z.string().min(1, '선택해 주세요.');
@@ -70,9 +71,14 @@ export const consentSchema = z.object({
   email: z.string().email('올바른 이메일 형식이 아닙니다.'),
 });
 
+export const giftSchema = z.enum(['oliveyoung', 'cu'], {
+  error: '상품권을 선택해 주세요.',
+});
+
 export const submissionSchema = z.object({
   answers: answersSchema,
   consent: consentSchema,
+  gift: giftSchema,
 });
 
 export type AnswersForm = z.infer<typeof answersSchema>;

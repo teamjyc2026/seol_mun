@@ -44,6 +44,9 @@ export function SurveyPage() {
         affiliation: '',
         email: '',
       } as SubmissionForm['consent'],
+      // gift is forced by the landing page; surveys reached without it
+      // get redirected below. The cast satisfies the literal-union type.
+      gift: 'oliveyoung' as SubmissionForm['gift'],
     }),
     [],
   );
@@ -55,6 +58,7 @@ export function SurveyPage() {
   });
 
   const hydrated = useDraftStore((s) => s.hydrated);
+  const storedGift = useDraftStore((s) => s.gift);
   const setAnswers = useDraftStore((s) => s.setAnswers);
   const setConsent = useDraftStore((s) => s.setConsent);
   const resetDraft = useDraftStore((s) => s.reset);
@@ -64,7 +68,7 @@ export function SurveyPage() {
   useEffect(() => {
     if (restored.current || !hydrated) return;
     restored.current = true;
-    const { answers, consent } = useDraftStore.getState();
+    const { answers, consent, gift } = useDraftStore.getState();
     if (answers && Object.keys(answers).length > 0) {
       form.setValue('answers', {
         ...defaultValues.answers,
@@ -77,7 +81,19 @@ export function SurveyPage() {
         ...consent,
       } as SubmissionForm['consent']);
     }
-  }, [hydrated, form, defaultValues]);
+    if (gift) {
+      form.setValue('gift', gift as SubmissionForm['gift']);
+    } else {
+      // No gift chosen → bounce back to landing
+      toast.error('먼저 받으실 상품권을 선택해 주세요.');
+      router.replace('/');
+    }
+  }, [hydrated, form, defaultValues, router]);
+
+  // Keep form's gift in sync if user edits it on landing in another tab
+  useEffect(() => {
+    if (storedGift) form.setValue('gift', storedGift as SubmissionForm['gift']);
+  }, [storedGift, form]);
 
   // Push form changes to store (debounced naturally by zustand batching)
   useEffect(() => {

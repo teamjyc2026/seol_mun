@@ -21,6 +21,7 @@ export {
 export { QuestionCard } from './ui/QuestionCard';
 export {
   SingleChoice,
+  SelectChoice,
   MultiChoice,
   ShortText,
   LongText,
