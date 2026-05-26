@@ -1,9 +1,7 @@
-import { Suspense } from 'react';
 import Link from 'next/link';
 import { CheckCircle2 } from 'lucide-react';
 
-function Complete({ searchParams }: { searchParams: { id?: string } }) {
-  const id = searchParams.id;
+export default function Page() {
   return (
     <main className="min-h-svh bg-gradient-to-b from-emerald-50 via-white to-sky-50">
       <div className="mx-auto flex max-w-xl flex-col items-center gap-6 px-6 py-24 text-center">
@@ -20,11 +18,6 @@ function Complete({ searchParams }: { searchParams: { id?: string } }) {
             사은품 안내가 필요한 경우 입력해 주신 연락처로 안내드릴게요.
           </p>
         </div>
-        {id ? (
-          <p className="rounded-md bg-zinc-100 px-3 py-2 font-mono text-xs text-zinc-600">
-            응답 번호 · {id}
-          </p>
-        ) : null}
         <Link
           href="/"
           className="inline-flex h-9 items-center justify-center rounded-lg px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100"
@@ -33,18 +26,5 @@ function Complete({ searchParams }: { searchParams: { id?: string } }) {
         </Link>
       </div>
     </main>
-  );
-}
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<{ id?: string }>;
-}) {
-  const params = await searchParams;
-  return (
-    <Suspense fallback={null}>
-      <Complete searchParams={params} />
-    </Suspense>
   );
 }

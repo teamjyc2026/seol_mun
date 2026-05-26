@@ -15,9 +15,8 @@ import {
 } from '@/entities/survey';
 import { SurveyWizard, useWizardStep } from '@/widgets/survey-wizard';
 import { useSubmitSurvey } from '@/features/submit-survey-response';
+import { useDraftStore } from '@/shared/lib/draftStore';
 import { PartBody } from './PartBody';
-
-const DRAFT_KEY = 'seolmun:draft-v2';
 
 function partFieldNames(part: Part): string[] {
   if (part.id === 'CONSENT') {
@@ -34,6 +33,7 @@ function partFieldNames(part: Part): string[] {
 
 export function SurveyPage() {
   const router = useRouter();
+
   const defaultValues = useMemo<SubmissionForm>(
     () => ({
       answers: buildDefaultAnswers() as SubmissionForm['answers'],
@@ -54,47 +54,50 @@ export function SurveyPage() {
     mode: 'onChange',
   });
 
-  // Restore from localStorage on mount
+  const hydrated = useDraftStore((s) => s.hydrated);
+  const setAnswers = useDraftStore((s) => s.setAnswers);
+  const setConsent = useDraftStore((s) => s.setConsent);
+  const resetDraft = useDraftStore((s) => s.reset);
+
+  // Hydrate form from persisted store once rehydration is done
   const restored = useRef(false);
   useEffect(() => {
-    if (restored.current || typeof window === 'undefined') return;
-    try {
-      const raw = window.localStorage.getItem(DRAFT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<SubmissionForm>;
-        if (parsed.answers) form.setValue('answers', { ...defaultValues.answers, ...parsed.answers });
-        if (parsed.consent)
-          form.setValue('consent', { ...defaultValues.consent, ...parsed.consent });
-      }
-    } catch {
-      // ignore corrupted draft
-    }
+    if (restored.current || !hydrated) return;
     restored.current = true;
-  }, [form, defaultValues]);
+    const { answers, consent } = useDraftStore.getState();
+    if (answers && Object.keys(answers).length > 0) {
+      form.setValue('answers', {
+        ...defaultValues.answers,
+        ...answers,
+      } as SubmissionForm['answers']);
+    }
+    if (consent) {
+      form.setValue('consent', {
+        ...defaultValues.consent,
+        ...consent,
+      } as SubmissionForm['consent']);
+    }
+  }, [hydrated, form, defaultValues]);
 
-  // Persist to localStorage (debounced via subscription)
+  // Push form changes to store (debounced naturally by zustand batching)
   useEffect(() => {
     const sub = form.watch((value) => {
-      if (typeof window === 'undefined') return;
-      try {
-        window.localStorage.setItem(DRAFT_KEY, JSON.stringify(value));
-      } catch {
-        // quota / private mode — ignore
+      if (value.answers) {
+        setAnswers(value.answers as Parameters<typeof setAnswers>[0]);
+      }
+      if (value.consent) {
+        setConsent(value.consent as Parameters<typeof setConsent>[0]);
       }
     });
     return () => sub.unsubscribe();
-  }, [form]);
+  }, [form, setAnswers, setConsent]);
 
   const step = useWizardStep(parts);
 
   const submit = useSubmitSurvey({
-    onSuccess: (id) => {
-      if (typeof window !== 'undefined') {
-        try {
-          window.localStorage.removeItem(DRAFT_KEY);
-        } catch {}
-      }
-      router.push(`/survey/complete?id=${id}`);
+    onSuccess: () => {
+      resetDraft();
+      router.push('/survey/complete');
     },
     onError: (err) => {
       const msg =

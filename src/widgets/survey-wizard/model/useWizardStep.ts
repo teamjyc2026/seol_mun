@@ -1,24 +1,44 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import type { Part } from '@/entities/survey';
+import { useDraftStore } from '@/shared/lib/draftStore';
 
 export function useWizardStep(parts: Part[]) {
   const router = useRouter();
   const search = useSearchParams();
   const stepParam = search.get('step');
+
+  const storedIndex = useDraftStore((s) => s.stepIndex);
+  const hydrated = useDraftStore((s) => s.hydrated);
+  const setStoredIndex = useDraftStore((s) => s.setStepIndex);
+
   const initialIndex = (() => {
-    if (!stepParam) return 0;
-    const i = parts.findIndex((p) => p.id.toLowerCase() === stepParam.toLowerCase());
-    return i === -1 ? 0 : i;
+    if (stepParam) {
+      const i = parts.findIndex((p) => p.id.toLowerCase() === stepParam.toLowerCase());
+      if (i !== -1) return i;
+    }
+    return 0;
   })();
   const [index, setIndex] = useState(initialIndex);
 
-  // keep URL in sync on internal changes
+  // After zustand rehydrates, restore step if URL didn't override
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !hydrated) return;
+    restored.current = true;
+    if (!stepParam && storedIndex > 0 && storedIndex < parts.length) {
+      setIndex(storedIndex);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  // Sync index → URL and store
   useEffect(() => {
     const id = parts[index]?.id.toLowerCase();
     if (!id) return;
+    setStoredIndex(index);
     const params = new URLSearchParams(search.toString());
     if (params.get('step') === id) return;
     params.set('step', id);
@@ -26,7 +46,7 @@ export function useWizardStep(parts: Part[]) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
-  // reflect back/forward navigation
+  // Reflect browser back/forward
   useEffect(() => {
     if (!stepParam) return;
     const i = parts.findIndex((p) => p.id.toLowerCase() === stepParam.toLowerCase());
