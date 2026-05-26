@@ -17,7 +17,7 @@ import { SurveyWizard, useWizardStep } from '@/widgets/survey-wizard';
 import { useSubmitSurvey } from '@/features/submit-survey-response';
 import { PartBody } from './PartBody';
 
-const DRAFT_KEY = 'seolmun:draft-v1';
+const DRAFT_KEY = 'seolmun:draft-v2';
 
 function partFieldNames(part: Part): string[] {
   if (part.id === 'CONSENT') {

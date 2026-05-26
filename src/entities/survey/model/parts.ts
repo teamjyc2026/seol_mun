@@ -74,7 +74,7 @@ export const parts: Part[] = [
     subtitle: '먼저 당신에 대해 알려주세요',
     description: '학년·성별·지역 등 기본 정보를 묻습니다. 5문항.',
     theme: themes.P1,
-    questionIds: ['Q1', 'Q2', 'Q3', 'Q4', 'Q5'],
+    questionIds: ['Q1', 'Q2', 'Q3', 'Q4', 'Q5a', 'Q5b'],
   },
   {
     id: 'P2',

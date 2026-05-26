@@ -46,11 +46,18 @@ const list: Question[] = [
     ]),
   },
   {
-    id: 'Q5',
+    id: 'Q5a',
     partId: 'P1',
     type: 'short',
-    title: '가장 자신 있는 과목과 가장 어려운 과목을 각각 적어주세요.',
-    placeholder: '예) 자신 있는 과목: 영어 / 어려운 과목: 수학',
+    title: '가장 자신 있는 과목은 무엇인가요?',
+    placeholder: '예) 영어',
+  },
+  {
+    id: 'Q5b',
+    partId: 'P1',
+    type: 'short',
+    title: '가장 어려운 과목은 무엇인가요?',
+    placeholder: '예) 수학',
   },
 
   // Part 2

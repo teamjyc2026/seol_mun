@@ -34,7 +34,7 @@ export type RankConfig = {
   allOptions: boolean;
 };
 
-export type QuestionId = `Q${number}`;
+export type QuestionId = `Q${string}`;
 
 export type Question = {
   id: QuestionId;
