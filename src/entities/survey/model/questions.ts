@@ -79,9 +79,16 @@ const list: Question[] = [
   {
     id: 'Q7',
     partId: 'P2',
-    type: 'short',
+    type: 'single',
     title: '주중 평일 기준, 학교 수업을 제외한 하루 평균 공부시간은?',
-    placeholder: '예) 3시간 30분',
+    options: opt([
+      '1시간 미만',
+      '1~2시간',
+      '2~3시간',
+      '3~4시간',
+      '4시간 이상',
+      '기타',
+    ]),
   },
   {
     id: 'Q8',
