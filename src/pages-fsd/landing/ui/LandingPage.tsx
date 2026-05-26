@@ -47,6 +47,15 @@ export function LandingPage() {
             진행 중 새로고침해도 입력하신 답변은 사라지지 않게 임시 저장됩니다.
           </p>
         </div>
+
+        <footer className="mt-12 w-full border-t border-zinc-200/60 pt-4">
+          <Link
+            href="/admin"
+            className="text-xs text-zinc-400 underline-offset-2 hover:text-zinc-600 hover:underline"
+          >
+            관리자
+          </Link>
+        </footer>
       </div>
     </main>
   );

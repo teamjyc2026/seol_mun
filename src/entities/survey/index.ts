@@ -13,6 +13,11 @@ export {
 } from './model/schema';
 export { buildDefaultAnswers } from './model/defaults';
 export { formatAnswer } from './model/formatAnswer';
+export {
+  buildAggregations,
+  type QuestionAggregation,
+  type AggCount,
+} from './model/buildAggregations';
 export { QuestionCard } from './ui/QuestionCard';
 export {
   SingleChoice,
