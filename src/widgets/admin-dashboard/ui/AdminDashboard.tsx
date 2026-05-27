@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { LogOut, Plus } from 'lucide-react';
+import { Bot, LogOut, Plus } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { ResponseRow as Row } from '@/entities/response';
 import { ExportButton } from '@/features/admin-export';
@@ -89,6 +89,13 @@ export function AdminDashboard({ responses }: { responses: Row[] }) {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              href="/admin/agent"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-sm font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              에이전트
+            </Link>
             <Link
               href="/admin/new"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
