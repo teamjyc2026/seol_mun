@@ -41,7 +41,6 @@ export function SourceDetailPage({
     edition: source.edition ?? '',
     isbn: source.isbn ?? '',
     description: source.description ?? '',
-    unitsRaw: (source.units ?? []).join(', '),
     tagsRaw: (source.tags ?? []).join(', '),
   });
 
@@ -58,10 +57,6 @@ export function SourceDetailPage({
         edition: form.edition || null,
         isbn: form.isbn || null,
         description: form.description || null,
-        units: form.unitsRaw
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
         tags: form.tagsRaw
           .split(',')
           .map((s) => s.trim())
@@ -239,20 +234,14 @@ export function SourceDetailPage({
                 onChange={(e) => setForm((f) => ({ ...f, isbn: e.target.value }))}
               />
             </Field>
-            <Field label="단원 (쉼표 구분)">
-              <Input
-                value={form.unitsRaw}
-                onChange={(e) => setForm((f) => ({ ...f, unitsRaw: e.target.value }))}
-              />
-              <p className="mt-1 text-[11px] text-zinc-500">
-                변경 후 재인덱싱하면 임베딩에 새 단원 정보가 반영됩니다.
-              </p>
-            </Field>
             <Field label="태그 (쉼표 구분)">
               <Input
                 value={form.tagsRaw}
                 onChange={(e) => setForm((f) => ({ ...f, tagsRaw: e.target.value }))}
               />
+              <p className="mt-1 text-[11px] text-zinc-500">
+                단원은 PDF 목차에서 자동 추출돼요 (오른쪽 청크 목록에서 확인).
+              </p>
             </Field>
             <Field label="메모">
               <textarea
@@ -294,9 +283,16 @@ export function SourceDetailPage({
                     key={c.id}
                     className="rounded-lg border border-zinc-100 bg-zinc-50/40 p-3"
                   >
-                    <p className="font-mono text-[10px] text-zinc-400">
-                      p.{c.page_number ?? '?'} · #{c.chunk_index}
-                    </p>
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <p className="font-mono text-[10px] text-zinc-400">
+                        p.{c.page_number ?? '?'} · #{c.chunk_index}
+                      </p>
+                      {(c.chapter_path ?? []).length > 0 ? (
+                        <p className="text-[10px] font-medium text-indigo-600">
+                          {c.chapter_path.join(' > ')}
+                        </p>
+                      ) : null}
+                    </div>
                     <p className="mt-1 whitespace-pre-wrap text-xs text-zinc-700">
                       {c.content.slice(0, 600)}
                       {c.content.length > 600 ? '…' : ''}

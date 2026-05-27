@@ -52,6 +52,7 @@ export type SourceChunk = {
   page_number: number | null;
   chunk_index: number;
   content: string;
+  chapter_path: string[];
   similarity?: number;
 };
 

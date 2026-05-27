@@ -1,7 +1,11 @@
 import 'server-only';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedTexts } from '@/shared/lib/embedding';
-import { extractTextWithPages } from '@/shared/lib/pdf';
+import {
+  chapterPathForPage,
+  detectChaptersByHeuristic,
+  extractTextWithPages,
+} from '@/shared/lib/pdf';
 import { splitWithOverlap } from '@/shared/lib/chunk';
 import { buildEmbeddingText, type EmbedMeta } from './buildEmbeddingText';
 
@@ -16,6 +20,7 @@ export async function indexSource(sourceId: string): Promise<{
   totalPages: number;
   needsOcr: boolean;
   textDensity: number;
+  outlineEntries: number;
 }> {
   const supabase = getSupabaseServer();
 
@@ -27,7 +32,7 @@ export async function indexSource(sourceId: string): Promise<{
   const { data: source, error: srcErr } = await supabase
     .from('sources')
     .select(
-      'id, file_path, title, subject, grade, publisher, edition, author, source_type, units, tags',
+      'id, file_path, title, subject, grade, publisher, edition, author, source_type, tags',
     )
     .eq('id', sourceId)
     .single();
@@ -40,7 +45,7 @@ export async function indexSource(sourceId: string): Promise<{
     if (dlErr || !file) throw new Error(dlErr?.message ?? 'download failed');
 
     const buf = Buffer.from(await file.arrayBuffer());
-    const { pages, totalPages } = await extractTextWithPages(buf);
+    const { pages, totalPages, outline } = await extractTextWithPages(buf);
 
     const totalChars = pages.reduce((sum, p) => sum + (p.text?.length ?? 0), 0);
     const textDensity = totalChars / Math.max(1, totalPages);
@@ -65,8 +70,16 @@ export async function indexSource(sourceId: string): Promise<{
           indexed_at: null,
         })
         .eq('id', sourceId);
-      return { chunks: 0, totalPages, needsOcr: true, textDensity };
+      return {
+        chunks: 0,
+        totalPages,
+        needsOcr: true,
+        textDensity,
+        outlineEntries: 0,
+      };
     }
+
+    const heuristic = outline.length === 0 ? detectChaptersByHeuristic(pages) : new Map();
 
     const sharedMeta: EmbedMeta = {
       subject: source.subject,
@@ -75,7 +88,6 @@ export async function indexSource(sourceId: string): Promise<{
       edition: source.edition,
       author: source.author,
       source_type: source.source_type,
-      units: source.units,
       tags: source.tags,
       title: source.title,
     };
@@ -85,11 +97,13 @@ export async function indexSource(sourceId: string): Promise<{
       page_number: number;
       chunk_index: number;
       content: string;
+      chapter_path: string[];
     };
     const rows: ChunkRow[] = [];
     const embedInputs: string[] = [];
     let idx = 0;
     for (const p of pages) {
+      const chapterPath = chapterPathForPage(p.page, outline, heuristic);
       const split = splitWithOverlap(p.text, { size: 800, overlap: 100 });
       for (const c of split) {
         rows.push({
@@ -97,8 +111,14 @@ export async function indexSource(sourceId: string): Promise<{
           page_number: p.page,
           chunk_index: idx++,
           content: c.text,
+          chapter_path: chapterPath,
         });
-        embedInputs.push(buildEmbeddingText({ ...sharedMeta, page: p.page }, c.text));
+        embedInputs.push(
+          buildEmbeddingText(
+            { ...sharedMeta, page: p.page, chapterPath },
+            c.text,
+          ),
+        );
       }
     }
     if (rows.length === 0) throw new Error('추출된 청크가 없습니다.');
@@ -129,7 +149,13 @@ export async function indexSource(sourceId: string): Promise<{
       })
       .eq('id', sourceId);
 
-    return { chunks: rows.length, totalPages, needsOcr: false, textDensity };
+    return {
+      chunks: rows.length,
+      totalPages,
+      needsOcr: false,
+      textDensity,
+      outlineEntries: outline.length,
+    };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase

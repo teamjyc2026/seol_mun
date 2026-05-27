@@ -5,6 +5,8 @@ export type Citation = {
   sourceTitle?: string;
   page: number | null;
   snippet: string;
+  /** auto-derived chapter breadcrumb for the cited chunk */
+  chapterPath?: string[];
 };
 
 export type ProblemDraft = {

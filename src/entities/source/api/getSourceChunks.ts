@@ -9,7 +9,7 @@ export async function getSourceChunks(
   const supabase = getSupabaseServer();
   const { data, error } = await supabase
     .from('source_chunks')
-    .select('id, source_id, page_number, chunk_index, content')
+    .select('id, source_id, page_number, chunk_index, content, chapter_path')
     .eq('source_id', sourceId)
     .order('chunk_index', { ascending: true })
     .limit(opts.limit ?? 500);

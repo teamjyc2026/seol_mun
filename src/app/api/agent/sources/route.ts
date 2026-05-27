@@ -35,7 +35,6 @@ const metadataSchema = z.object({
   author: z.string().max(100).nullable().optional(),
   edition: z.string().max(100).nullable().optional(),
   isbn: z.string().max(40).nullable().optional(),
-  units: z.array(z.string().min(1).max(80)).max(40).optional(),
   tags: z.array(z.string().min(1).max(40)).max(40).optional(),
 });
 
@@ -107,7 +106,6 @@ export async function POST(req: NextRequest) {
     author: form!.get('author')?.toString() || null,
     edition: form!.get('edition')?.toString() || null,
     isbn: form!.get('isbn')?.toString() || null,
-    units: csvToArray(form!.get('units')?.toString()),
     tags: csvToArray(form!.get('tags')?.toString()),
   };
 
@@ -151,7 +149,6 @@ export async function POST(req: NextRequest) {
         author: meta.author ?? null,
         edition: meta.edition ?? null,
         isbn: meta.isbn ?? null,
-        units: meta.units ?? [],
         tags: meta.tags ?? [],
         file_path: path,
         original_filename: file.name,

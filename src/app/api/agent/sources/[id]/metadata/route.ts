@@ -28,7 +28,6 @@ const patchSchema = z
     author: z.string().max(100).nullable(),
     edition: z.string().max(100).nullable(),
     isbn: z.string().max(40).nullable(),
-    units: z.array(z.string().min(1).max(80)).max(40),
     tags: z.array(z.string().min(1).max(40)).max(40),
   })
   .partial();

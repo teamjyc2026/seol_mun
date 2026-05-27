@@ -10,6 +10,7 @@ export function CitationChip({
   citation: Citation;
   onClick?: (c: Citation) => void;
 }) {
+  const chapter = (citation.chapterPath ?? []).filter(Boolean);
   return (
     <button
       type="button"
@@ -20,6 +21,9 @@ export function CitationChip({
       <FileText className="h-3 w-3 shrink-0" />
       <span className="truncate">
         「{citation.sourceTitle ?? '소스'}」 p.{citation.page ?? '?'}
+        {chapter.length > 0 ? (
+          <span className="text-indigo-500"> · {chapter.join(' > ')}</span>
+        ) : null}
       </span>
     </button>
   );

@@ -2,8 +2,8 @@
  * Build the text that actually gets embedded for a chunk:
  * a metadata header followed by the chunk content.
  *
- * Including subject / grade / publisher / units in the embedding gives
- * the retriever a much better signal for queries like
+ * Including subject / grade / publisher / chapterPath in the embedding
+ * gives the retriever a much better signal for queries like
  * "고1 임진왜란 객관식" where the keywords may not appear in body text.
  */
 export type EmbedMeta = {
@@ -13,7 +13,7 @@ export type EmbedMeta = {
   edition?: string | null;
   author?: string | null;
   source_type?: string | null;
-  units?: string[] | null;
+  chapterPath?: string[] | null;
   tags?: string[] | null;
   title?: string | null;
   page?: number | null;
@@ -28,8 +28,8 @@ export function buildEmbeddingText(meta: EmbedMeta, content: string): string {
   if (meta.publisher) parts.push(`출판사:${meta.publisher}`);
   if (meta.edition) parts.push(`판본:${meta.edition}`);
   if (meta.author) parts.push(`저자:${meta.author}`);
-  const units = (meta.units ?? []).filter(Boolean);
-  if (units.length) parts.push(`단원:${units.join(',')}`);
+  const chapter = (meta.chapterPath ?? []).filter(Boolean);
+  if (chapter.length) parts.push(`단원:${chapter.join(' > ')}`);
   const tags = (meta.tags ?? []).filter(Boolean);
   if (tags.length) parts.push(`태그:${tags.join(',')}`);
   if (meta.page != null) parts.push(`페이지:${meta.page}`);

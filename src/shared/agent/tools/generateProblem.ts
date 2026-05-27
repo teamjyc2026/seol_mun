@@ -52,13 +52,14 @@ export async function generateProblemTool(
     page: c.page_number,
     title: titleById.get(c.source_id) ?? '소스',
     content: c.content,
+    chapterPath: c.chapter_path ?? [],
   }));
 
   const referencesBlock = refs
-    .map(
-      (r) =>
-        `[${r.index}] (${r.title}, p.${r.page ?? '?'}) ${r.content.slice(0, 800)}`,
-    )
+    .map((r) => {
+      const chap = r.chapterPath.length ? ` [${r.chapterPath.join(' > ')}]` : '';
+      return `[${r.index}] (${r.title}, p.${r.page ?? '?'}${chap}) ${r.content.slice(0, 800)}`;
+    })
     .join('\n\n');
 
   const sys = buildProblemSystemPrompt({
@@ -137,6 +138,7 @@ export async function generateProblemTool(
         sourceTitle: r.title,
         page: r.page ?? null,
         snippet: r.content.slice(0, 160),
+        chapterPath: r.chapterPath,
       }));
     return {
       topic: args.topic ?? null,

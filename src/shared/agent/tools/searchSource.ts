@@ -25,6 +25,7 @@ export async function searchSourceTool(
       page_number: c.page_number,
       chunk_index: c.chunk_index,
       content: c.content,
+      chapter_path: c.chapter_path ?? [],
       similarity: c.similarity,
     })),
   };

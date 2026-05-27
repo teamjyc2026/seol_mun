@@ -13,7 +13,6 @@ export type UploadSourceInput = {
   author?: string | null;
   edition?: string | null;
   isbn?: string | null;
-  units?: string[];
   tags?: string[];
 };
 
@@ -30,7 +29,6 @@ export async function uploadSource(input: UploadSourceInput): Promise<{ id: stri
   if (input.author) fd.append('author', input.author);
   if (input.edition) fd.append('edition', input.edition);
   if (input.isbn) fd.append('isbn', input.isbn);
-  if (input.units && input.units.length) fd.append('units', input.units.join(','));
   if (input.tags && input.tags.length) fd.append('tags', input.tags.join(','));
   const { data } = await api.post<{ id: string }>('/agent/sources', fd, {
     headers: { 'Content-Type': 'multipart/form-data' },

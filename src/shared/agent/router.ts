@@ -102,6 +102,7 @@ function collectCitations(results: ToolResult[]): Citation[] {
           sourceId: c.source_id,
           page: c.page_number,
           snippet: c.content.slice(0, 160),
+          chapterPath: c.chapter_path,
         });
       }
     }
