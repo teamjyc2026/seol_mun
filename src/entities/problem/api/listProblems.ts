@@ -15,7 +15,7 @@ export type ListProblemsFilters = {
 };
 
 const COLUMNS =
-  'id, created_at, subject, topic, difficulty, problem_type, question, choices, answer, explanation, citations, notes, created_by, conversation_id';
+  'id, created_at, subject, topic, difficulty, problem_type, question, choices, answer, explanation, citations, notes, created_by, conversation_id, embedded_at';
 
 export async function listProblems(
   filters: ListProblemsFilters = {},

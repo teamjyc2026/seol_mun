@@ -1,12 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/shared/api/axios';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   DIFFICULTIES,
+  DIFFICULTY_LABEL,
   PROBLEM_TYPES,
+  PROBLEM_TYPE_LABEL,
   type Difficulty,
   type Problem,
   type ProblemChoice,
@@ -73,6 +77,16 @@ export function ProblemForm({
   const set = <K extends keyof ProblemFormValue>(k: K, v: ProblemFormValue[K]) =>
     onChange({ ...value, [k]: v });
 
+  const chaptersQuery = useQuery({
+    queryKey: ['agent', 'chapters'],
+    queryFn: async () => {
+      const { data } = await api.get<{ chapters: string[] }>('/agent/chapters');
+      return data.chapters;
+    },
+    staleTime: 60_000,
+  });
+  const chapters = chaptersQuery.data ?? [];
+
   function addChoice() {
     const next = value.choices.slice();
     const labels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
@@ -95,13 +109,26 @@ export function ProblemForm({
     <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5 col-span-3 sm:col-span-1">
-          <Label htmlFor="p-topic">단원 / 주제</Label>
+          <Label htmlFor="p-topic">
+            단원 / 주제
+            {chapters.length > 0 ? (
+              <span className="ml-1.5 text-[10px] font-normal text-zinc-400">
+                · 자동완성 {chapters.length}
+              </span>
+            ) : null}
+          </Label>
           <Input
             id="p-topic"
+            list="agent-chapters"
             value={value.topic}
             onChange={(e) => set('topic', e.target.value)}
-            placeholder="예) 임진왜란"
+            placeholder="예) 임진왜란 (소스에서 자동 추출된 단원 선택 가능)"
           />
+          <datalist id="agent-chapters">
+            {chapters.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="p-diff">난이도</Label>
@@ -113,7 +140,7 @@ export function ProblemForm({
           >
             {DIFFICULTIES.map((d) => (
               <option key={d} value={d}>
-                {d}
+                {DIFFICULTY_LABEL[d]}
               </option>
             ))}
           </select>
@@ -128,7 +155,7 @@ export function ProblemForm({
           >
             {PROBLEM_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {PROBLEM_TYPE_LABEL[t]}
               </option>
             ))}
           </select>

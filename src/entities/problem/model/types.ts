@@ -4,6 +4,18 @@ export type Difficulty = (typeof DIFFICULTIES)[number];
 export const PROBLEM_TYPES = ['objective', 'short', 'long'] as const;
 export type ProblemType = (typeof PROBLEM_TYPES)[number];
 
+export const DIFFICULTY_LABEL: Record<Difficulty, string> = {
+  easy: '쉬움',
+  medium: '보통',
+  hard: '어려움',
+};
+
+export const PROBLEM_TYPE_LABEL: Record<ProblemType, string> = {
+  objective: '객관식',
+  short: '단답',
+  long: '서술',
+};
+
 export type ProblemChoice = { label: string; text: string };
 
 export type ProblemCitation = {
@@ -28,6 +40,7 @@ export type Problem = {
   notes: string | null;
   created_by: string | null;
   conversation_id: string | null;
+  embedded_at: string | null;
 };
 
 export type ProblemDraft = Omit<Problem, 'id' | 'created_at'>;

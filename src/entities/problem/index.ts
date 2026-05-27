@@ -1,6 +1,8 @@
 export {
   DIFFICULTIES,
   PROBLEM_TYPES,
+  DIFFICULTY_LABEL,
+  PROBLEM_TYPE_LABEL,
   type Difficulty,
   type ProblemType,
   type ProblemChoice,

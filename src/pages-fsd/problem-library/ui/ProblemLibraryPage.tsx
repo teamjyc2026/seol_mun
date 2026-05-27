@@ -6,7 +6,9 @@ import { ArrowLeft, Plus, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DIFFICULTIES,
+  DIFFICULTY_LABEL,
   PROBLEM_TYPES,
+  PROBLEM_TYPE_LABEL,
   type Difficulty,
   type Problem,
   type ProblemType,
@@ -99,7 +101,7 @@ export function ProblemLibraryPage({
             <option value="">(모든 난이도)</option>
             {DIFFICULTIES.map((d) => (
               <option key={d} value={d}>
-                {d}
+                {DIFFICULTY_LABEL[d]}
               </option>
             ))}
           </select>
@@ -116,7 +118,7 @@ export function ProblemLibraryPage({
             <option value="">(모든 유형)</option>
             {PROBLEM_TYPES.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {PROBLEM_TYPE_LABEL[t]}
               </option>
             ))}
           </select>
