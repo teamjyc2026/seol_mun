@@ -187,12 +187,34 @@ export function ProblemForm({
 
       <div className="space-y-1.5">
         <Label htmlFor="p-a">정답 (필수)</Label>
-        <Input
-          id="p-a"
-          value={value.answer}
-          onChange={(e) => set('answer', e.target.value)}
-          placeholder="예) ① 1592년 - 1598년"
-        />
+        {value.problem_type === 'objective' ? (
+          <select
+            id="p-a"
+            value={value.answer}
+            onChange={(e) => set('answer', e.target.value)}
+            className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm"
+          >
+            <option value="">정답 번호 선택</option>
+            {value.choices
+              .filter((c) => c.label.trim() && c.text.trim())
+              .map((c) => (
+                <option key={c.label} value={c.label}>
+                  {c.label}. {c.text}
+                </option>
+              ))}
+          </select>
+        ) : (
+          <Input
+            id="p-a"
+            value={value.answer}
+            onChange={(e) => set('answer', e.target.value)}
+            placeholder={
+              value.problem_type === 'short'
+                ? '예) 1592년'
+                : '예) 모범 답안을 2~4문장으로'
+            }
+          />
+        )}
       </div>
 
       <div className="space-y-1.5">
