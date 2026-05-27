@@ -6,4 +6,5 @@ export {
   type Grade,
   type IndexingStatus,
   type SourceChunk,
+  type SourceMetadataPatch,
 } from './model/types';

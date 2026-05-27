@@ -3,14 +3,19 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedTexts } from '@/shared/lib/embedding';
 import { extractTextWithPages } from '@/shared/lib/pdf';
 import { splitWithOverlap } from '@/shared/lib/chunk';
+import { buildEmbeddingText, type EmbedMeta } from './buildEmbeddingText';
 
-/**
- * Synchronous indexing: download from Storage, extract, chunk, embed, insert.
- * Updates the source row's status as it progresses.
- */
+// Scanned/image PDFs typically extract 0–10 chars per page (just metadata).
+// Real text PDFs usually go well above 200 chars/page. We err generous to
+// avoid false positives on short summaries.
+const OCR_DENSITY_THRESHOLD = 20;
+const OCR_TOTAL_CHARS_MIN = 40;
+
 export async function indexSource(sourceId: string): Promise<{
   chunks: number;
   totalPages: number;
+  needsOcr: boolean;
+  textDensity: number;
 }> {
   const supabase = getSupabaseServer();
 
@@ -21,12 +26,12 @@ export async function indexSource(sourceId: string): Promise<{
 
   const { data: source, error: srcErr } = await supabase
     .from('sources')
-    .select('id, file_path')
+    .select(
+      'id, file_path, title, subject, grade, publisher, edition, author, source_type, units, tags',
+    )
     .eq('id', sourceId)
     .single();
-  if (srcErr || !source) {
-    throw new Error(srcErr?.message ?? 'source not found');
-  }
+  if (srcErr || !source) throw new Error(srcErr?.message ?? 'source not found');
 
   try {
     const { data: file, error: dlErr } = await supabase.storage
@@ -37,9 +42,43 @@ export async function indexSource(sourceId: string): Promise<{
     const buf = Buffer.from(await file.arrayBuffer());
     const { pages, totalPages } = await extractTextWithPages(buf);
 
-    if (totalPages === 0 || pages.every((p) => !p.text)) {
-      throw new Error('텍스트를 추출할 수 없는 PDF입니다 (이미지·스캔본 가능성).');
+    const totalChars = pages.reduce((sum, p) => sum + (p.text?.length ?? 0), 0);
+    const textDensity = totalChars / Math.max(1, totalPages);
+
+    if (
+      totalPages === 0 ||
+      totalChars < OCR_TOTAL_CHARS_MIN ||
+      textDensity < OCR_DENSITY_THRESHOLD
+    ) {
+      const msg = `텍스트 추출량이 너무 적습니다 (페이지당 평균 ${textDensity.toFixed(
+        1,
+      )}자, 총 ${totalChars}자). 스캔본/이미지 PDF로 추정 — OCR된 PDF로 재업로드해 주세요.`;
+      await supabase
+        .from('sources')
+        .update({
+          total_pages: totalPages,
+          chunk_count: 0,
+          text_density: textDensity,
+          needs_ocr: true,
+          indexing_status: 'needs_ocr',
+          indexing_error: msg,
+          indexed_at: null,
+        })
+        .eq('id', sourceId);
+      return { chunks: 0, totalPages, needsOcr: true, textDensity };
     }
+
+    const sharedMeta: EmbedMeta = {
+      subject: source.subject,
+      grade: source.grade,
+      publisher: source.publisher,
+      edition: source.edition,
+      author: source.author,
+      source_type: source.source_type,
+      units: source.units,
+      tags: source.tags,
+      title: source.title,
+    };
 
     type ChunkRow = {
       source_id: string;
@@ -48,6 +87,7 @@ export async function indexSource(sourceId: string): Promise<{
       content: string;
     };
     const rows: ChunkRow[] = [];
+    const embedInputs: string[] = [];
     let idx = 0;
     for (const p of pages) {
       const split = splitWithOverlap(p.text, { size: 800, overlap: 100 });
@@ -58,17 +98,17 @@ export async function indexSource(sourceId: string): Promise<{
           chunk_index: idx++,
           content: c.text,
         });
+        embedInputs.push(buildEmbeddingText({ ...sharedMeta, page: p.page }, c.text));
       }
     }
     if (rows.length === 0) throw new Error('추출된 청크가 없습니다.');
 
-    const embeddings = await embedTexts(rows.map((r) => r.content));
+    const embeddings = await embedTexts(embedInputs);
     const toInsert = rows.map((r, i) => ({
       ...r,
-      embedding: embeddings[i] as unknown as string, // pgvector accepts JSON array
+      embedding: embeddings[i] as unknown as string,
     }));
 
-    // insert in slices of 200 to keep payloads sane
     const SLICE = 200;
     for (let i = 0; i < toInsert.length; i += SLICE) {
       const slice = toInsert.slice(i, i + SLICE);
@@ -81,13 +121,15 @@ export async function indexSource(sourceId: string): Promise<{
       .update({
         total_pages: totalPages,
         chunk_count: rows.length,
+        text_density: textDensity,
+        needs_ocr: false,
         indexing_status: 'ready',
         indexing_error: null,
         indexed_at: new Date().toISOString(),
       })
       .eq('id', sourceId);
 
-    return { chunks: rows.length, totalPages };
+    return { chunks: rows.length, totalPages, needsOcr: false, textDensity };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await supabase

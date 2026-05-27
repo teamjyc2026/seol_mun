@@ -1,15 +1,23 @@
 import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { listSources } from '@/entities/source/api/listSources';
-import { SOURCE_TYPES, GRADES } from '@/entities/source/model/types';
+import {
+  listSources,
+  type ListSourcesFilters,
+} from '@/entities/source/api/listSources';
+import {
+  SOURCE_TYPES,
+  GRADES,
+  type IndexingStatus,
+  type SourceType,
+} from '@/entities/source/model/types';
 import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { indexSource } from '@/shared/agent/indexSource';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300; // long PDFs
+export const maxDuration = 300;
 
 async function requireAdmin() {
   const store = await cookies();
@@ -24,16 +32,38 @@ const metadataSchema = z.object({
   publisher: z.string().max(100).nullable().optional(),
   year: z.coerce.number().int().min(1900).max(2100).nullable().optional(),
   description: z.string().max(2000).nullable().optional(),
+  author: z.string().max(100).nullable().optional(),
+  edition: z.string().max(100).nullable().optional(),
+  isbn: z.string().max(40).nullable().optional(),
+  units: z.array(z.string().min(1).max(80)).max(40).optional(),
+  tags: z.array(z.string().min(1).max(40)).max(40).optional(),
 });
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
-export async function GET() {
+function csvToArray(input: string | undefined | null): string[] {
+  if (!input) return [];
+  return input
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export async function GET(req: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
+  const url = new URL(req.url);
+  const filters: ListSourcesFilters = {
+    search: url.searchParams.get('search') ?? undefined,
+    subject: url.searchParams.get('subject') ?? undefined,
+    grade: url.searchParams.get('grade') ?? undefined,
+    source_type: (url.searchParams.get('source_type') as SourceType | null) ?? undefined,
+    status:
+      (url.searchParams.get('status') as IndexingStatus | null) ?? undefined,
+  };
   try {
-    const rows = await listSources();
+    const rows = await listSources(filters);
     return NextResponse.json({ sources: rows });
   } catch (e) {
     return NextResponse.json(
@@ -66,23 +96,24 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const metaInput = {
+  const rawMeta = {
     title: form!.get('title')?.toString() ?? file.name.replace(/\.pdf$/i, ''),
     source_type: form!.get('source_type')?.toString(),
     subject: form!.get('subject')?.toString() || '국사',
-    grade: (form!.get('grade')?.toString() || null) as string | null,
+    grade: form!.get('grade')?.toString() || undefined,
     publisher: form!.get('publisher')?.toString() || null,
-    year: form!.get('year')?.toString() || null,
+    year: form!.get('year')?.toString() || undefined,
     description: form!.get('description')?.toString() || null,
+    author: form!.get('author')?.toString() || null,
+    edition: form!.get('edition')?.toString() || null,
+    isbn: form!.get('isbn')?.toString() || null,
+    units: csvToArray(form!.get('units')?.toString()),
+    tags: csvToArray(form!.get('tags')?.toString()),
   };
 
   let meta;
   try {
-    meta = metadataSchema.parse({
-      ...metaInput,
-      grade: metaInput.grade || undefined,
-      year: metaInput.year || undefined,
-    });
+    meta = metadataSchema.parse(rawMeta);
   } catch (e) {
     return NextResponse.json(
       { message: '메타데이터가 올바르지 않습니다.', details: String(e) },
@@ -92,8 +123,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = getSupabaseServer();
   const id = crypto.randomUUID();
-  const ext = 'pdf';
-  const path = `${id}.${ext}`;
+  const path = `${id}.pdf`;
 
   try {
     const buf = Buffer.from(await file.arrayBuffer());
@@ -118,6 +148,11 @@ export async function POST(req: NextRequest) {
         publisher: meta.publisher ?? null,
         year: meta.year ?? null,
         description: meta.description ?? null,
+        author: meta.author ?? null,
+        edition: meta.edition ?? null,
+        isbn: meta.isbn ?? null,
+        units: meta.units ?? [],
+        tags: meta.tags ?? [],
         file_path: path,
         original_filename: file.name,
         file_size_bytes: file.size,
@@ -126,7 +161,6 @@ export async function POST(req: NextRequest) {
       .select('id')
       .single();
     if (insErr || !row) {
-      // best-effort rollback of uploaded file
       await supabase.storage.from('sources').remove([path]).catch(() => undefined);
       return NextResponse.json(
         { message: 'DB 저장 실패', details: insErr?.message },
@@ -134,15 +168,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // synchronous indexing (MVP). For big files this may exceed maxDuration.
     try {
       const result = await indexSource(row.id);
-      return NextResponse.json(
-        { id: row.id, ...result },
-        { status: 201 },
-      );
+      return NextResponse.json({ id: row.id, ...result }, { status: 201 });
     } catch (e) {
-      // status is already set to 'failed' inside indexSource
       return NextResponse.json(
         {
           id: row.id,

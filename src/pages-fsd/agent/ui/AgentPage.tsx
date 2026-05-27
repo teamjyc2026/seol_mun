@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, BookOpen } from 'lucide-react';
+import { ArrowLeft, BookOpen, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Source } from '@/entities/source';
 import {
@@ -74,14 +74,32 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
           <h1 className="text-lg font-bold tracking-tight text-zinc-900">
             🤖 학습 에이전트 · 국사
           </h1>
-          <button
-            type="button"
-            onClick={() => setDrawerOpen(true)}
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            소스 ({initialSources.length})
-          </button>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/admin/agent/sources"
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+              title="소스 라이브러리"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              소스 {initialSources.length}
+            </Link>
+            <Link
+              href="/admin/agent/problems"
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+              title="문제 라이브러리"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              문제
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+              title="빠른 핀/업로드"
+            >
+              핀
+            </button>
+          </div>
         </header>
 
         <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm">

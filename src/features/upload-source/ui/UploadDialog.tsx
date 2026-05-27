@@ -10,6 +10,13 @@ import { Label } from '@/components/ui/label';
 import { SOURCE_TYPES, GRADES, type SourceType, type Grade } from '@/entities/source';
 import { uploadSource } from '../api/uploadSource';
 
+function splitCommas(v: string): string[] {
+  return v
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function UploadDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -20,6 +27,11 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [publisher, setPublisher] = useState('');
   const [year, setYear] = useState('');
   const [description, setDescription] = useState('');
+  const [author, setAuthor] = useState('');
+  const [edition, setEdition] = useState('');
+  const [isbn, setIsbn] = useState('');
+  const [unitsRaw, setUnitsRaw] = useState('');
+  const [tagsRaw, setTagsRaw] = useState('');
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -32,6 +44,11 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
         publisher: publisher || null,
         year: year ? Number(year) : null,
         description: description || null,
+        author: author || null,
+        edition: edition || null,
+        isbn: isbn || null,
+        units: splitCommas(unitsRaw),
+        tags: splitCommas(tagsRaw),
       });
     },
     onSuccess: () => {
@@ -49,8 +66,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   });
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-900/40 p-4">
-      <div className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-zinc-900/40 p-4 overflow-y-auto">
+      <div className="my-8 w-full max-w-lg space-y-4 rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-zinc-900">소스 PDF 업로드</h2>
           <button
@@ -90,7 +107,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="src-type">유형</Label>
+            <Label htmlFor="src-type">유형 (필수)</Label>
             <select
               id="src-type"
               value={sourceType}
@@ -144,7 +161,73 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="src-author">저자</Label>
+            <Input
+              id="src-author"
+              value={author}
+              onChange={(e) => setAuthor(e.target.value)}
+              placeholder="홍길동"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="src-edition">판본</Label>
+            <Input
+              id="src-edition"
+              value={edition}
+              onChange={(e) => setEdition(e.target.value)}
+              placeholder="2024 개정판"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="src-isbn">ISBN</Label>
+          <Input
+            id="src-isbn"
+            value={isbn}
+            onChange={(e) => setIsbn(e.target.value)}
+            placeholder="978-89-..."
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="src-units">단원 (쉼표 구분)</Label>
+          <Input
+            id="src-units"
+            value={unitsRaw}
+            onChange={(e) => setUnitsRaw(e.target.value)}
+            placeholder="예) 임진왜란, 병자호란, 조선후기"
+          />
+          <p className="text-[11px] text-zinc-500">
+            검색·임베딩에 함께 반영되어 retrieval 품질이 좋아져요.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="src-tags">태그 (쉼표 구분)</Label>
+          <Input
+            id="src-tags"
+            value={tagsRaw}
+            onChange={(e) => setTagsRaw(e.target.value)}
+            placeholder="예) 내신, 수능대비, 중요"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="src-desc">메모</Label>
+          <textarea
+            id="src-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+            placeholder="(선택) 자료 출처/사용 맥락 등"
+            className="block w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-sm outline-none"
+          />
+        </div>
+
+        <div className="flex items-center justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={onClose}
