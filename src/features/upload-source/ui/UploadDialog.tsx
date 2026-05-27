@@ -30,6 +30,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [author, setAuthor] = useState('');
   const [edition, setEdition] = useState('');
   const [isbn, setIsbn] = useState('');
+  const [unitsRaw, setUnitsRaw] = useState('');
   const [tagsRaw, setTagsRaw] = useState('');
 
   const mutation = useMutation({
@@ -46,6 +47,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
         author: author || null,
         edition: edition || null,
         isbn: isbn || null,
+        units: splitCommas(unitsRaw),
         tags: splitCommas(tagsRaw),
       });
     },
@@ -191,6 +193,20 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="space-y-1.5">
+          <Label htmlFor="src-units">책 단원/키워드 (쉼표 구분)</Label>
+          <Input
+            id="src-units"
+            value={unitsRaw}
+            onChange={(e) => setUnitsRaw(e.target.value)}
+            placeholder="예) 임진왜란, 병자호란, 조선후기"
+          />
+          <p className="text-[11px] text-zinc-500">
+            기본은 PDF 목차에서 자동 추출 — 목차가 없거나 부족할 때 보조 키워드로
+            쓰여 검색 품질이 좋아져요. (선택)
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
           <Label htmlFor="src-tags">태그 (쉼표 구분)</Label>
           <Input
             id="src-tags"
@@ -198,9 +214,6 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             onChange={(e) => setTagsRaw(e.target.value)}
             placeholder="예) 내신, 수능대비, 중요"
           />
-          <p className="text-[11px] text-zinc-500">
-            단원은 PDF의 목차에서 자동 추출돼요. 태그는 자유 분류용입니다.
-          </p>
         </div>
 
         <div className="space-y-1.5">

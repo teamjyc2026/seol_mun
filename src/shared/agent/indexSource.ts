@@ -32,7 +32,7 @@ export async function indexSource(sourceId: string): Promise<{
   const { data: source, error: srcErr } = await supabase
     .from('sources')
     .select(
-      'id, file_path, title, subject, grade, publisher, edition, author, source_type, tags',
+      'id, file_path, title, subject, grade, publisher, edition, author, source_type, units, tags',
     )
     .eq('id', sourceId)
     .single();
@@ -88,6 +88,7 @@ export async function indexSource(sourceId: string): Promise<{
       edition: source.edition,
       author: source.author,
       source_type: source.source_type,
+      bookKeywords: source.units,
       tags: source.tags,
       title: source.title,
     };

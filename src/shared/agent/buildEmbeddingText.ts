@@ -2,9 +2,12 @@
  * Build the text that actually gets embedded for a chunk:
  * a metadata header followed by the chunk content.
  *
- * Including subject / grade / publisher / chapterPath in the embedding
- * gives the retriever a much better signal for queries like
- * "고1 임진왜란 객관식" where the keywords may not appear in body text.
+ * Two distinct chapter-like signals can appear in the header:
+ *   단원:        — auto-derived per-chunk (from PDF outline / heuristic).
+ *                  Precise to the page.
+ *   책키워드:    — book-level keywords typed by the admin at upload time.
+ *                  Always included for every chunk; useful when the
+ *                  auto path is empty or for broader semantic matching.
  */
 export type EmbedMeta = {
   subject?: string | null;
@@ -13,7 +16,10 @@ export type EmbedMeta = {
   edition?: string | null;
   author?: string | null;
   source_type?: string | null;
+  /** per-chunk chapter, derived from PDF outline / heuristic */
   chapterPath?: string[] | null;
+  /** book-level keywords supplied by admin (fallback / supplementary) */
+  bookKeywords?: string[] | null;
   tags?: string[] | null;
   title?: string | null;
   page?: number | null;
@@ -30,6 +36,8 @@ export function buildEmbeddingText(meta: EmbedMeta, content: string): string {
   if (meta.author) parts.push(`저자:${meta.author}`);
   const chapter = (meta.chapterPath ?? []).filter(Boolean);
   if (chapter.length) parts.push(`단원:${chapter.join(' > ')}`);
+  const bookKeywords = (meta.bookKeywords ?? []).filter(Boolean);
+  if (bookKeywords.length) parts.push(`책키워드:${bookKeywords.join(',')}`);
   const tags = (meta.tags ?? []).filter(Boolean);
   if (tags.length) parts.push(`태그:${tags.join(',')}`);
   if (meta.page != null) parts.push(`페이지:${meta.page}`);
