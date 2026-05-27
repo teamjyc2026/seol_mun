@@ -8,13 +8,11 @@ import type { Source } from '@/entities/source';
 import {
   ChatInput,
   MessageBubble,
-  SourceDrawer,
   type ChatMessage,
 } from '@/widgets/agent-chat';
 import { useSendAgentMessage } from '@/features/send-agent-message';
 
 export function AgentPage({ initialSources }: { initialSources: Source[] }) {
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -91,14 +89,6 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
               <FileText className="h-3.5 w-3.5" />
               문제
             </Link>
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
-              title="빠른 핀/업로드"
-            >
-              핀
-            </button>
           </div>
         </header>
 
@@ -141,12 +131,6 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
           />
         </div>
       </div>
-
-      <SourceDrawer
-        sources={initialSources}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
     </main>
   );
 }
