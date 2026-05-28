@@ -79,7 +79,7 @@ export function AdminDashboard({ responses }: { responses: Row[] }) {
   return (
     <main className="min-h-svh bg-zinc-50">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900">
               설문 응답 대시보드
@@ -88,30 +88,33 @@ export function AdminDashboard({ responses }: { responses: Row[] }) {
               제출된 응답을 확인하고 엑셀로 내보내거나 문항별로 집계해 볼 수 있어요.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/admin/agent"
+              title="에이전트"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-sm font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100"
             >
               <Bot className="h-3.5 w-3.5" />
-              에이전트
+              <span className="hidden sm:inline">에이전트</span>
             </Link>
             <Link
               href="/admin/new"
+              title="응답 추가"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
             >
               <Plus className="h-3.5 w-3.5" />
-              응답 추가
+              <span className="hidden sm:inline">응답 추가</span>
             </Link>
             <ExportButton />
             <button
               type="button"
               onClick={logout}
               disabled={loggingOut}
+              title="로그아웃"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
             >
               <LogOut className="h-3.5 w-3.5" />
-              로그아웃
+              <span className="hidden sm:inline">로그아웃</span>
             </button>
           </div>
         </header>
