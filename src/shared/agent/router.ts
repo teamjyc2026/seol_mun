@@ -26,7 +26,7 @@ const toolDeclarations: FunctionDeclaration[] = [
   {
     name: 'generate_problem',
     description:
-      '국사 문제(객관식/단답/서술)를 만든다. 단원·난이도·개수·유형을 인자로 받는다. 결과는 출처(citation) 포함.',
+      '선택된 과목의 문제(객관식/단답/서술)를 만든다. 단원·난이도·개수·유형을 인자로 받는다. 결과는 출처(citation) 포함.',
     parameters: {
       type: Type.OBJECT,
       properties: {
@@ -107,7 +107,6 @@ function collectCitations(results: ToolResult[]): Citation[] {
       }
     }
   }
-  // dedupe by sourceId+page+snippet
   const seen = new Set<string>();
   return out.filter((c) => {
     const k = `${c.sourceId}|${c.page}|${c.snippet}`;
@@ -117,27 +116,53 @@ function collectCitations(results: ToolResult[]): Citation[] {
   });
 }
 
-export async function runAgent({
-  conversationId,
-  message,
-  pinnedSourceIds,
-  studentId,
-}: {
+function buildAugmentedMessage(
+  message: string,
+  ctx: AgentContext,
+): string {
+  const hints: string[] = [];
+  hints.push(`과목: ${ctx.subject}`);
+  if (ctx.studentId) hints.push(`학생 ID: ${ctx.studentId}`);
+  if (ctx.pinnedSourceIds.length > 0)
+    hints.push(`핀된 소스 ${ctx.pinnedSourceIds.length}개에서만 검색`);
+  return `${message}\n\n(맥락: ${hints.join(', ')} — 도구 호출 시 이 값을 그대로 사용하세요.)`;
+}
+
+async function resolveSourceTitles(citations: Citation[]): Promise<void> {
+  if (citations.length === 0) return;
+  const supabase = getSupabaseServer();
+  const ids = Array.from(new Set(citations.map((c) => c.sourceId)));
+  const { data } = await supabase.from('sources').select('id, title').in('id', ids);
+  const map = new Map((data ?? []).map((r) => [r.id, r.title as string]));
+  for (const c of citations) {
+    if (!c.sourceTitle) c.sourceTitle = map.get(c.sourceId);
+  }
+}
+
+/**
+ * Run tools (sync). Returns the tool results, the user-augmented message,
+ * and the citation list. Caller can then stream the wrap-up.
+ */
+export async function runAgentTools(args: {
   conversationId: string;
   message: string;
   pinnedSourceIds: string[];
   studentId: string | null;
-}): Promise<AgentReply> {
-  const ctx: AgentContext = { conversationId, pinnedSourceIds, studentId };
+  subject: string;
+}): Promise<{
+  ctx: AgentContext;
+  augmentedMessage: string;
+  toolResults: ToolResult[];
+  citations: Citation[];
+}> {
+  const ctx: AgentContext = {
+    conversationId: args.conversationId,
+    pinnedSourceIds: args.pinnedSourceIds,
+    studentId: args.studentId,
+    subject: args.subject,
+  };
   const client = getGemini();
-
-  const contextHints: string[] = [];
-  if (studentId) contextHints.push(`학생 ID: ${studentId}`);
-  if (pinnedSourceIds.length > 0)
-    contextHints.push(`핀된 소스 ${pinnedSourceIds.length}개에서만 검색`);
-  const augmentedMessage = contextHints.length
-    ? `${message}\n\n(맥락: ${contextHints.join(', ')} — 도구 호출 시 이 값을 그대로 사용하세요.)`
-    : message;
+  const augmentedMessage = buildAugmentedMessage(args.message, ctx);
 
   const first = await client.models.generateContent({
     model: GEMINI_GENERATION_MODEL,
@@ -162,54 +187,67 @@ export async function runAgent({
       toolResults.push(result);
     } catch (e) {
       const text = e instanceof Error ? e.message : String(e);
-      toolResults.push({
-        kind: 'search',
-        chunks: [],
-      });
-      // we surface the error in the assistant's final text
       console.error(`[agent] tool ${fc.name} failed:`, text);
     }
   }
 
-  let finalText = first.text ?? '';
-  if (toolResults.length > 0) {
-    // Second pass: feed tool results back to the model for a natural language wrap-up.
-    const wrap = await client.models.generateContent({
-      model: GEMINI_GENERATION_MODEL,
-      contents: [
-        { role: 'user', parts: [{ text: augmentedMessage }] },
-        {
-          role: 'user',
-          parts: [
-            {
-              text: `도구 실행 결과(JSON):\n${JSON.stringify(toolResults).slice(0, 8000)}\n\n위 결과를 사용자에게 한국어 2~5문장으로 친근하게 정리해줘. 출처는 본문 안에 자연스럽게 언급(예: "교과서 42쪽")해도 좋다.`,
-            },
-          ],
-        },
-      ],
-      config: { systemInstruction: SYSTEM_PROMPT, temperature: 0.4 },
-    });
-    finalText = wrap.text ?? finalText;
-  }
-
   const citations = collectCitations(toolResults);
+  await resolveSourceTitles(citations);
 
-  // resolve source titles for citations (UI uses sourceTitle)
-  if (citations.length > 0) {
-    const supabase = getSupabaseServer();
-    const ids = Array.from(new Set(citations.map((c) => c.sourceId)));
-    const { data } = await supabase
-      .from('sources')
-      .select('id, title')
-      .in('id', ids);
-    const map = new Map((data ?? []).map((r) => [r.id, r.title as string]));
-    for (const c of citations) {
-      if (!c.sourceTitle) c.sourceTitle = map.get(c.sourceId);
-    }
+  return { ctx, augmentedMessage, toolResults, citations };
+}
+
+/** Stream the natural-language wrap-up after tools ran. */
+export async function* streamWrapup(args: {
+  augmentedMessage: string;
+  toolResults: ToolResult[];
+  initialText: string;
+}): AsyncGenerator<string, void, void> {
+  if (args.toolResults.length === 0) {
+    if (args.initialText) yield args.initialText;
+    return;
   }
+  const client = getGemini();
+  const stream = await client.models.generateContentStream({
+    model: GEMINI_GENERATION_MODEL,
+    contents: [
+      { role: 'user', parts: [{ text: args.augmentedMessage }] },
+      {
+        role: 'user',
+        parts: [
+          {
+            text: `도구 실행 결과(JSON):\n${JSON.stringify(args.toolResults).slice(0, 8000)}\n\n위 결과를 사용자에게 한국어 2~5문장으로 친근하게 정리해줘. 출처는 본문 안에 자연스럽게 언급(예: "교과서 42쪽")해도 좋다.`,
+          },
+        ],
+      },
+    ],
+    config: { systemInstruction: SYSTEM_PROMPT, temperature: 0.4 },
+  });
+  for await (const chunk of stream) {
+    const text = chunk.text ?? '';
+    if (text) yield text;
+  }
+}
 
+/** Convenience: collect everything into a single AgentReply (non-streaming path). */
+export async function runAgent(args: {
+  conversationId: string;
+  message: string;
+  pinnedSourceIds: string[];
+  studentId: string | null;
+  subject: string;
+}): Promise<AgentReply> {
+  const { augmentedMessage, toolResults, citations } = await runAgentTools(args);
+  let text = '';
+  for await (const chunk of streamWrapup({
+    augmentedMessage,
+    toolResults,
+    initialText: '',
+  })) {
+    text += chunk;
+  }
   return {
-    text: finalText || '결과를 정리하지 못했어요.',
+    text: text || '결과를 정리하지 못했어요.',
     toolResults,
     citations,
   };

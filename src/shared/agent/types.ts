@@ -54,4 +54,11 @@ export type AgentContext = {
   conversationId: string;
   pinnedSourceIds: string[];
   studentId: string | null;
+  subject: string;
 };
+
+export type StreamEvent =
+  | { kind: 'meta'; conversationId: string; toolResults: ToolResult[]; citations: Citation[] }
+  | { kind: 'token'; text: string }
+  | { kind: 'error'; message: string }
+  | { kind: 'done' };

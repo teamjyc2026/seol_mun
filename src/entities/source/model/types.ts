@@ -24,6 +24,7 @@ export type Source = {
   title: string;
   source_type: SourceType;
   subject: string;
+  subjects: string[];
   grade: Grade | null;
   publisher: string | null;
   year: number | null;
@@ -60,6 +61,7 @@ export type SourceMetadataPatch = Partial<{
   title: string;
   source_type: SourceType;
   subject: string;
+  subjects: string[];
   grade: Grade | null;
   publisher: string | null;
   year: number | null;

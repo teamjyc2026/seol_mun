@@ -27,6 +27,7 @@ export async function generateProblemTool(
   const chunks = await searchChunks(retrievalQuery, {
     k: Math.min(12, Math.max(8, args.count * 2)),
     sourceIds: ctx.pinnedSourceIds,
+    subject: ctx.subject,
   });
 
   if (chunks.length === 0) {
@@ -63,7 +64,7 @@ export async function generateProblemTool(
     .join('\n\n');
 
   const sys = buildProblemSystemPrompt({
-    subject: '국사',
+    subject: ctx.subject,
     topic: args.topic,
     difficulty: args.difficulty,
     type: args.type,
@@ -155,7 +156,8 @@ export async function generateProblemTool(
   // persist
   if (drafts.length > 0) {
     const rows = drafts.map((d) => ({
-      subject: '국사',
+      subject: ctx.subject,
+      subjects: [ctx.subject],
       topic: d.topic,
       difficulty: d.difficulty,
       problem_type: d.problem_type,

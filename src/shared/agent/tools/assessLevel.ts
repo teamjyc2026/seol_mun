@@ -47,7 +47,7 @@ export async function assessLevelTool(
       kind: 'assess_level',
       result: {
         studentId,
-        subject: '국사',
+        subject: ctx.subject,
         levelOverall: 0,
         samples: 0,
         byTopic: [],
@@ -84,7 +84,7 @@ export async function assessLevelTool(
   const upserts = [
     {
       student_id: studentId,
-      subject: '국사',
+      subject: ctx.subject,
       topic: null as string | null,
       score: overall,
       samples: rows.length,
@@ -92,7 +92,7 @@ export async function assessLevelTool(
     },
     ...byTopic.map((t) => ({
       student_id: studentId,
-      subject: '국사',
+      subject: ctx.subject,
       topic: t.topic,
       score: t.score,
       samples: t.samples,

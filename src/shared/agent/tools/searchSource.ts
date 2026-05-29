@@ -16,6 +16,7 @@ export async function searchSourceTool(
   const chunks = await searchChunks(args.query, {
     k: args.k,
     sourceIds: ctx.pinnedSourceIds,
+    subject: ctx.subject,
   });
   return {
     kind: 'search',

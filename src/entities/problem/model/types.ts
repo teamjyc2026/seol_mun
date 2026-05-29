@@ -29,9 +29,14 @@ export type Problem = {
   id: string;
   created_at: string;
   subject: string;
+  subjects?: string[];
   topic: string | null;
   difficulty: Difficulty | null;
   problem_type: ProblemType | null;
+  /** shared passage / reading text when multiple problems share one source text */
+  passage: string | null;
+  /** uuid grouping problems that share the same passage */
+  passage_set_id: string | null;
   question: string;
   choices: ProblemChoice[] | null;
   answer: string;

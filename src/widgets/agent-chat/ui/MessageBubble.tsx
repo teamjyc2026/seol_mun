@@ -9,24 +9,33 @@ import { CitationChip } from './CitationChip';
 
 export type ChatMessage =
   | { role: 'user'; text: string }
-  | { role: 'assistant'; reply: AgentReply };
+  | { role: 'assistant'; reply: AgentReply; streaming?: boolean };
 
 export function MessageBubble({ msg }: { msg: ChatMessage }) {
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-zinc-900 px-4 py-2.5 text-sm text-white">
+        <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-zinc-900 px-4 py-2.5 text-sm text-white whitespace-pre-wrap">
           {msg.text}
         </div>
       </div>
     );
   }
   const r = msg.reply;
+  const streaming = msg.streaming;
   return (
     <div className="space-y-3">
-      <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-zinc-100 px-4 py-2.5 text-sm leading-relaxed text-zinc-800 whitespace-pre-wrap">
-        {r.text}
-      </div>
+      {r.text || streaming ? (
+        <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-zinc-100 px-4 py-2.5 text-sm leading-relaxed text-zinc-800 whitespace-pre-wrap">
+          {r.text}
+          {streaming ? (
+            <span
+              className="ml-0.5 inline-block h-3 w-[2px] translate-y-[2px] animate-pulse bg-zinc-500"
+              aria-hidden
+            />
+          ) : null}
+        </div>
+      ) : null}
       <ToolCards results={r.toolResults} />
       {r.citations.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">

@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SOURCE_TYPES, GRADES, type SourceType, type Grade } from '@/entities/source';
+import { SUBJECTS, type Subject } from '@/shared/config/subjects';
+import { cn } from '@/shared/lib/cn';
 import { uploadSource } from '../api/uploadSource';
 
 function splitCommas(v: string): string[] {
@@ -23,6 +25,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [sourceType, setSourceType] = useState<SourceType>('교과서');
+  const [subjects, setSubjects] = useState<Subject[]>(['국사']);
   const [grade, setGrade] = useState<Grade | ''>('');
   const [publisher, setPublisher] = useState('');
   const [year, setYear] = useState('');
@@ -33,13 +36,21 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [unitsRaw, setUnitsRaw] = useState('');
   const [tagsRaw, setTagsRaw] = useState('');
 
+  function toggleSubject(s: Subject) {
+    setSubjects((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
+    );
+  }
+
   const mutation = useMutation({
     mutationFn: () => {
       if (!file) throw new Error('PDF 파일을 선택해 주세요.');
+      if (subjects.length === 0) throw new Error('과목을 하나 이상 선택해 주세요.');
       return uploadSource({
         file,
         title: title || file.name.replace(/\.pdf$/i, ''),
         source_type: sourceType,
+        subjects,
         grade: grade || null,
         publisher: publisher || null,
         year: year ? Number(year) : null,
@@ -103,6 +114,34 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="예) 한국사 교과서 미래엔 2024"
           />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>과목 (필수, 여러 개 선택 가능)</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {SUBJECTS.map((s) => {
+              const active = subjects.includes(s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => toggleSubject(s)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                    active
+                      ? 'border-zinc-900 bg-zinc-900 text-white'
+                      : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                  )}
+                >
+                  {s}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-zinc-500">
+            한 지문이 여러 과목에 걸친 경우 (예: 영어로 된 역사 지문) 둘 다 선택해
+            주세요.
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">

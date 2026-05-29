@@ -28,6 +28,7 @@ const metadataSchema = z.object({
   title: z.string().min(1).max(200),
   source_type: z.enum(SOURCE_TYPES),
   subject: z.string().min(1).max(50).default('국사'),
+  subjects: z.array(z.string().min(1).max(50)).max(20).optional(),
   grade: z.enum(GRADES).nullable().optional(),
   publisher: z.string().max(100).nullable().optional(),
   year: z.coerce.number().int().min(1900).max(2100).nullable().optional(),
@@ -96,10 +97,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const subjectsCsv = csvToArray(form!.get('subjects')?.toString());
   const rawMeta = {
     title: form!.get('title')?.toString() ?? file.name.replace(/\.pdf$/i, ''),
     source_type: form!.get('source_type')?.toString(),
-    subject: form!.get('subject')?.toString() || '국사',
+    subject:
+      form!.get('subject')?.toString() ||
+      (subjectsCsv[0] ?? '국사'),
+    subjects: subjectsCsv.length ? subjectsCsv : undefined,
     grade: form!.get('grade')?.toString() || undefined,
     publisher: form!.get('publisher')?.toString() || null,
     year: form!.get('year')?.toString() || undefined,
@@ -144,6 +149,7 @@ export async function POST(req: NextRequest) {
         title: meta.title,
         source_type: meta.source_type,
         subject: meta.subject,
+        subjects: meta.subjects ?? [meta.subject],
         grade: meta.grade ?? null,
         publisher: meta.publisher ?? null,
         year: meta.year ?? null,

@@ -3,7 +3,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
-import { runAgent } from '@/shared/agent/router';
+import { runAgentTools, streamWrapup } from '@/shared/agent/router';
+import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
+import type { StreamEvent } from '@/shared/agent/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,11 +16,16 @@ const schema = z.object({
   message: z.string().min(1).max(4000),
   pinnedSourceIds: z.array(z.string().uuid()).default([]),
   studentId: z.string().min(1).optional(),
+  subject: z.string().min(1).max(50).optional(),
 });
 
 async function requireAdmin() {
   const store = await cookies();
   return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
+}
+
+function encodeEvent(event: StreamEvent): string {
+  return `data: ${JSON.stringify(event)}\n\n`;
 }
 
 export async function POST(req: NextRequest) {
@@ -37,8 +44,8 @@ export async function POST(req: NextRequest) {
   }
 
   const supabase = getSupabaseServer();
+  const subject = body.subject || DEFAULT_SUBJECT;
 
-  // resolve / create conversation
   let conversationId = body.conversationId ?? null;
   if (!conversationId) {
     const title = body.message.slice(0, 30);
@@ -56,44 +63,88 @@ export async function POST(req: NextRequest) {
     conversationId = conv.id as string;
   }
 
-  // persist user message
   await supabase.from('agent_messages').insert({
     conversation_id: conversationId,
     role: 'user',
-    content: { text: body.message },
+    content: { text: body.message, subject },
     pinned_source_ids: body.pinnedSourceIds,
     student_id: body.studentId ?? null,
   });
 
-  try {
-    const reply = await runAgent({
-      conversationId,
-      message: body.message,
-      pinnedSourceIds: body.pinnedSourceIds,
-      studentId: body.studentId ?? null,
-    });
+  const convId = conversationId;
+  const encoder = new TextEncoder();
 
-    await supabase.from('agent_messages').insert({
-      conversation_id: conversationId,
-      role: 'assistant',
-      content: {
-        text: reply.text,
-        toolResults: reply.toolResults,
-        citations: reply.citations,
-      },
-    });
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (event: StreamEvent) => {
+        try {
+          controller.enqueue(encoder.encode(encodeEvent(event)));
+        } catch {
+          // controller already closed
+        }
+      };
+      try {
+        const { augmentedMessage, toolResults, citations } = await runAgentTools({
+          conversationId: convId,
+          message: body.message,
+          pinnedSourceIds: body.pinnedSourceIds,
+          studentId: body.studentId ?? null,
+          subject,
+        });
 
-    return NextResponse.json({ conversationId, reply });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    await supabase.from('agent_messages').insert({
-      conversation_id: conversationId,
-      role: 'assistant',
-      content: { text: `에이전트 오류: ${msg}` },
-    });
-    return NextResponse.json(
-      { message: '에이전트 실행 실패', details: msg },
-      { status: 500 },
-    );
-  }
+        send({
+          kind: 'meta',
+          conversationId: convId,
+          toolResults,
+          citations,
+        });
+
+        let finalText = '';
+        for await (const piece of streamWrapup({
+          augmentedMessage,
+          toolResults,
+          initialText: '',
+        })) {
+          finalText += piece;
+          send({ kind: 'token', text: piece });
+        }
+        if (!finalText) {
+          finalText = '결과를 정리하지 못했어요.';
+          send({ kind: 'token', text: finalText });
+        }
+
+        await supabase.from('agent_messages').insert({
+          conversation_id: convId,
+          role: 'assistant',
+          content: {
+            text: finalText,
+            toolResults,
+            citations,
+            subject,
+          },
+        });
+
+        send({ kind: 'done' });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        send({ kind: 'error', message: msg });
+        await supabase.from('agent_messages').insert({
+          conversation_id: convId,
+          role: 'assistant',
+          content: { text: `에이전트 오류: ${msg}` },
+        });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }

@@ -11,7 +11,7 @@ export type ListSourcesFilters = {
 };
 
 const COLUMNS =
-  'id, created_at, title, source_type, subject, grade, publisher, year, description, author, edition, isbn, language, units, tags, file_path, original_filename, file_size_bytes, total_pages, chunk_count, text_density, needs_ocr, indexing_status, indexing_error, indexed_at';
+  'id, created_at, title, source_type, subject, subjects, grade, publisher, year, description, author, edition, isbn, language, units, tags, file_path, original_filename, file_size_bytes, total_pages, chunk_count, text_density, needs_ocr, indexing_status, indexing_error, indexed_at';
 
 export async function listSources(
   filters: ListSourcesFilters = {},
@@ -21,7 +21,10 @@ export async function listSources(
     .from('sources')
     .select(COLUMNS)
     .order('created_at', { ascending: false });
-  if (filters.subject) q = q.eq('subject', filters.subject);
+  if (filters.subject) {
+    // match either legacy single subject or new array
+    q = q.or(`subject.eq.${filters.subject},subjects.cs.{${filters.subject}}`);
+  }
   if (filters.source_type) q = q.eq('source_type', filters.source_type);
   if (filters.status) q = q.eq('indexing_status', filters.status);
   if (filters.grade) q = q.eq('grade', filters.grade);

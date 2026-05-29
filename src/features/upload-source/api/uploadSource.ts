@@ -1,11 +1,15 @@
 import { api } from '@/shared/api/axios';
 import type { SourceType, Grade } from '@/entities/source';
+import type { Subject } from '@/shared/config/subjects';
 
 export type UploadSourceInput = {
   file: File;
   title: string;
   source_type: SourceType;
-  subject?: string;
+  /** Primary subject (kept for back-compat). */
+  subject?: Subject;
+  /** All applicable subjects. A single passage may belong to several. */
+  subjects?: Subject[];
   grade?: Grade | null;
   publisher?: string | null;
   year?: number | null;
@@ -13,9 +17,6 @@ export type UploadSourceInput = {
   author?: string | null;
   edition?: string | null;
   isbn?: string | null;
-  /** book-level supplementary keywords; auto-extracted chapter_path on
-   *  each chunk is preferred for precise retrieval, but these keywords
-   *  always get added to every chunk's embedding header. */
   units?: string[];
   tags?: string[];
 };
@@ -25,7 +26,15 @@ export async function uploadSource(input: UploadSourceInput): Promise<{ id: stri
   fd.append('file', input.file);
   fd.append('title', input.title);
   fd.append('source_type', input.source_type);
-  if (input.subject) fd.append('subject', input.subject);
+  const subjects = input.subjects && input.subjects.length
+    ? input.subjects
+    : input.subject
+      ? [input.subject]
+      : [];
+  if (subjects.length) {
+    fd.append('subjects', subjects.join(','));
+    fd.append('subject', subjects[0]);
+  }
   if (input.grade) fd.append('grade', input.grade);
   if (input.publisher) fd.append('publisher', input.publisher);
   if (input.year != null) fd.append('year', String(input.year));

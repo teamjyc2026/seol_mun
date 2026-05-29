@@ -66,13 +66,23 @@ export function ProblemLibraryPage({
               📝 문제 라이브러리
             </h1>
           </div>
-          <Link
-            href="/admin/agent/problems/new"
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-sm font-medium text-white shadow-md transition hover:bg-zinc-800"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            새 문제
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/agent/problems/new-set"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+              title="지문 + 여러 문제"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">지문 묶음</span>
+            </Link>
+            <Link
+              href="/admin/agent/problems/new"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-sm font-medium text-white shadow-md transition hover:bg-zinc-800"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">새 문제</span>
+            </Link>
+          </div>
         </header>
 
         <div className="mb-4 grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
