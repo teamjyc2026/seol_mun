@@ -8,8 +8,9 @@ import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SOURCE_TYPES, GRADES, type SourceType, type Grade } from '@/entities/source';
-import { SUBJECTS, type Subject } from '@/shared/config/subjects';
+import { SUBJECTS } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
+import { useSubject } from '@/shared/store/subject';
 import { uploadSource } from '../api/uploadSource';
 
 function splitCommas(v: string): string[] {
@@ -25,7 +26,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [sourceType, setSourceType] = useState<SourceType>('교과서');
-  const [subject, setSubject] = useState<Subject>('국사');
+  const { subject, setSubject } = useSubject();
   const [grade, setGrade] = useState<Grade | ''>('');
   const [publisher, setPublisher] = useState('');
   const [year, setYear] = useState('');

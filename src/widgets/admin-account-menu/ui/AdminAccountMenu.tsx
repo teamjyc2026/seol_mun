@@ -16,6 +16,7 @@ export function AdminAccountMenu({ className }: { className?: string }) {
   const [editing, setEditing] = useState(false);
   const [nickname, setNickname] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -27,7 +28,8 @@ export function AdminAccountMenu({ className }: { className?: string }) {
           setNickname(d.nickname);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -75,6 +77,12 @@ export function AdminAccountMenu({ className }: { className?: string }) {
     router.refresh();
   }
 
+  // Reserve the chip's footprint while loading so the header doesn't shift.
+  if (loading) {
+    return (
+      <div className={cn('skeleton-shimmer h-8 w-28 rounded-full', className)} aria-hidden />
+    );
+  }
   if (!account) return null;
 
   return (
@@ -82,12 +90,12 @@ export function AdminAccountMenu({ className }: { className?: string }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+        className="inline-flex h-8 max-w-[10rem] items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50"
       >
-        <span className="grid h-5 w-5 place-items-center rounded-full bg-zinc-900 text-[10px] text-white">
+        <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-zinc-900 text-[10px] text-white">
           {account.nickname.slice(0, 1).toUpperCase()}
         </span>
-        <span className="max-w-[8rem] truncate">{account.nickname}</span>
+        <span className="min-w-0 flex-1 truncate text-left">{account.nickname}</span>
       </button>
 
       {open ? (

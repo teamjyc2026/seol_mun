@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, BookOpen, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Source } from '@/entities/source';
-import { SUBJECTS, DEFAULT_SUBJECT, type Subject } from '@/shared/config/subjects';
+import { SUBJECTS, type Subject } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
+import { useSubject } from '@/shared/store/subject';
 import {
   ChatInput,
   MessageBubble,
@@ -15,10 +16,8 @@ import {
 import { streamAgentMessage } from '@/features/send-agent-message';
 import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
-const SUBJECT_LS_KEY = 'seolmun:agent:subject';
-
 export function AgentPage({ initialSources }: { initialSources: Source[] }) {
-  const [subject, setSubject] = useState<Subject>(DEFAULT_SUBJECT);
+  const { subject, setSubject } = useSubject();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
@@ -26,24 +25,8 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
 
-  useEffect(() => {
-    try {
-      const v = window.localStorage.getItem(SUBJECT_LS_KEY);
-      if (v && (SUBJECTS as readonly string[]).includes(v)) {
-        setSubject(v as Subject);
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
-
   function pickSubject(s: Subject) {
     setSubject(s);
-    try {
-      window.localStorage.setItem(SUBJECT_LS_KEY, s);
-    } catch {
-      // ignore
-    }
   }
 
   const pinnedSources = useMemo(

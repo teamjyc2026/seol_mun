@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Save, X } from 'lucide-react';
@@ -19,6 +19,7 @@ import {
 } from '@/entities/problem';
 import { SUBJECTS, type Subject } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
+import { useSubject } from '@/shared/store/subject';
 import { RichTextPreview, RICH_TEXT_HINT } from '@/shared/ui/RichText';
 import { createProblemSet, type ProblemSetSubProblem } from '@/features/create-problem';
 
@@ -51,12 +52,20 @@ function emptyBlock(): SubBlock {
 
 export function ProblemSetEditorPage() {
   const router = useRouter();
-  const [subjects, setSubjects] = useState<Subject[]>(['국사']);
+  const { subject } = useSubject();
+  const [subjects, setSubjects] = useState<Subject[]>([subject]);
   const [passage, setPassage] = useState('');
   const [topic, setTopic] = useState('');
   const [blocks, setBlocks] = useState<SubBlock[]>([emptyBlock()]);
 
+  // Default to the shared 과목 until the user customizes the selection.
+  const userPickedSubjects = useRef(false);
+  useEffect(() => {
+    if (!userPickedSubjects.current) setSubjects([subject]);
+  }, [subject]);
+
   function toggleSubject(s: Subject) {
+    userPickedSubjects.current = true;
     setSubjects((prev) =>
       prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
     );
