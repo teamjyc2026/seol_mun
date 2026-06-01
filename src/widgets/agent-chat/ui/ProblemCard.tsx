@@ -4,20 +4,27 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { ProblemDraft } from '@/shared/agent/types';
 import { cn } from '@/shared/lib/cn';
+import { RichText } from '@/shared/ui/RichText';
 import { CitationChip } from './CitationChip';
 
 export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: number }) {
   const [open, setOpen] = useState(false);
   return (
     <article className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+      {problem.passage ? (
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[14px] leading-relaxed text-zinc-800">
+          <RichText text={problem.passage} />
+        </div>
+      ) : null}
       <header className="flex items-start gap-2">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-900 text-xs font-bold text-white">
           {index + 1}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[15px] leading-relaxed text-zinc-900 whitespace-pre-wrap">
-            {problem.question}
-          </p>
+          <RichText
+            text={problem.question}
+            className="text-[15px] leading-relaxed text-zinc-900"
+          />
           <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-zinc-500">
             <span className="rounded-sm bg-zinc-100 px-1.5 py-0.5">{problem.problem_type}</span>
             <span className="rounded-sm bg-zinc-100 px-1.5 py-0.5">{problem.difficulty}</span>
@@ -33,7 +40,7 @@ export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: 
           {problem.choices.map((c) => (
             <li key={c.label} className="text-sm text-zinc-700">
               <span className="mr-1.5 font-mono text-zinc-500">{c.label}.</span>
-              {c.text}
+              <RichText text={c.text} />
             </li>
           ))}
         </ul>
@@ -51,10 +58,10 @@ export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: 
         <div className="space-y-2 rounded-md bg-zinc-50 p-3 text-sm">
           <p>
             <span className="mr-1 font-semibold text-emerald-700">정답</span>
-            <span className="text-zinc-800">{problem.answer}</span>
+            <RichText text={problem.answer} className="text-zinc-800" />
           </p>
           {problem.explanation ? (
-            <p className="text-zinc-600 whitespace-pre-wrap">{problem.explanation}</p>
+            <RichText text={problem.explanation} className="block text-zinc-600" />
           ) : null}
         </div>
       ) : null}

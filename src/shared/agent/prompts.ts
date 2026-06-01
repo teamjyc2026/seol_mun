@@ -29,7 +29,15 @@ export function buildProblemSystemPrompt(opts: {
 4) 서술형은 2~4문장 분량의 답을 요구하는 질문 + 모범 답안.
 5) 각 문제마다 explanation(2~4문장)을 짧고 분명하게 작성.
 6) 각 문제마다 사용된 REFERENCES 인덱스를 citation_indices에 [번호] 배열로 표시한다(1-based).
-7) 출력은 지정된 JSON 스키마만 그대로.`;
+7) 시각 서식이 필요하면(특히 영어 지문·어법·어휘·문장삽입·글순서·빈칸추론) question/choices/answer/explanation 텍스트 안에 아래 HTML 유사 태그를 그대로 써라. 불필요하면 쓰지 마라.
+   - <u>밑줄</u> , 번호 달린 밑줄은 <u n="1">...</u> (어법/어휘 선택지)
+   - <box>네모</box> (어휘 택1)
+   - <num>③</num> (문장 삽입 위치 표시)
+   - <p label="A">문단</p> (글의 순서 배열용 (A)(B)(C) 문단)
+   - <blank/> (빈칸추론의 빈칸)
+   - <b>굵게</b>
+   화이트리스트 외 태그·실제 HTML 금지. 일반 부등호 <, > 는 그대로 둬도 된다.
+8) 출력은 지정된 JSON 스키마만 그대로.`;
 }
 
 export function buildEvaluationPrompt() {

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedQuery } from '@/shared/lib/embedding';
+import { stripRichText } from '@/shared/lib/richText';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -38,12 +39,12 @@ function buildProblemEmbedText(p: {
   if (p.difficulty) meta.push(`난이도:${p.difficulty}`);
   if (p.problem_type) meta.push(`유형:${p.problem_type}`);
   if (meta.length) parts.push(`[${meta.join(' / ')}]`);
-  parts.push(p.question);
+  parts.push(stripRichText(p.question));
   if (p.choices?.length) {
-    parts.push(p.choices.map((c) => `${c.label}. ${c.text}`).join('\n'));
+    parts.push(p.choices.map((c) => `${c.label}. ${stripRichText(c.text)}`).join('\n'));
   }
-  parts.push(`정답: ${p.answer}`);
-  if (p.explanation) parts.push(`해설: ${p.explanation}`);
+  parts.push(`정답: ${stripRichText(p.answer)}`);
+  if (p.explanation) parts.push(`해설: ${stripRichText(p.explanation)}`);
   return parts.join('\n\n');
 }
 

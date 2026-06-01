@@ -18,6 +18,7 @@ import {
   type ProblemType,
 } from '@/entities/problem';
 import type { Source } from '@/entities/source';
+import { RichTextPreview, RICH_TEXT_HINT } from '@/shared/ui/RichText';
 import { SourceAttachmentPicker } from './SourceAttachmentPicker';
 
 export type ProblemFormValue = {
@@ -172,6 +173,8 @@ export function ProblemForm({
           placeholder="문제 본문"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
+        <p className="text-[10px] text-zinc-400">{RICH_TEXT_HINT}</p>
+        <RichTextPreview value={value.question} />
       </div>
 
       {value.problem_type === 'objective' ? (
@@ -254,6 +257,7 @@ export function ProblemForm({
           placeholder="(선택) 풀이 과정·근거"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
+        <RichTextPreview value={value.explanation} />
       </div>
 
       <div className="space-y-1.5">

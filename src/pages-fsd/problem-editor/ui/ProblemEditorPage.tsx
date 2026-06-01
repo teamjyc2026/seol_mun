@@ -101,7 +101,7 @@ export function ProblemEditorPage({
               <ArrowLeft className="h-4 w-4" /> 라이브러리
             </Link>
             <h1 className="text-lg font-bold tracking-tight text-zinc-900">
-              {isEdit ? '문제 편집' : '새 문제 추가'}
+              {isEdit ? '문제 편집' : '낱개 문제 추가'}
             </h1>
           </div>
           {isEdit ? (

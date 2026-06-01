@@ -13,6 +13,7 @@ import {
 } from '@/entities/problem';
 import { DeleteProblemButton } from '@/features/delete-problem';
 import { api } from '@/shared/api/axios';
+import { stripRichText } from '@/shared/lib/richText';
 
 function useEmbedToggle(id: string) {
   const router = useRouter();
@@ -109,7 +110,7 @@ export function ProblemTable({ problems }: { problems: Problem[] }) {
                 </span>
               ) : null}
             </div>
-            <p className="line-clamp-2 text-sm text-zinc-800">{p.question}</p>
+            <p className="line-clamp-2 text-sm text-zinc-800">{stripRichText(p.question)}</p>
             {p.citations.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {p.citations.slice(0, 4).map((c, i) => (
