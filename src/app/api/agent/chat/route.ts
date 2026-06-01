@@ -78,13 +78,14 @@ export async function POST(req: NextRequest) {
         }
       };
       try {
-        const { augmentedMessage, toolResults, citations } = await runAgentTools({
-          conversationId: convId,
-          message: body.message,
-          pinnedSourceIds: body.pinnedSourceIds,
-          studentId: body.studentId ?? null,
-          subject,
-        });
+        const { augmentedMessage, toolResults, citations, directText } =
+          await runAgentTools({
+            conversationId: convId,
+            message: body.message,
+            pinnedSourceIds: body.pinnedSourceIds,
+            studentId: body.studentId ?? null,
+            subject,
+          });
 
         send({
           kind: 'meta',
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
         for await (const piece of streamWrapup({
           augmentedMessage,
           toolResults,
-          initialText: '',
+          initialText: directText,
         })) {
           finalText += piece;
           send({ kind: 'token', text: piece });

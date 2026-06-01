@@ -154,6 +154,8 @@ export async function runAgentTools(args: {
   augmentedMessage: string;
   toolResults: ToolResult[];
   citations: Citation[];
+  /** Direct text answer from the model when it chose not to call any tool. */
+  directText: string;
 }> {
   const ctx: AgentContext = {
     conversationId: args.conversationId,
@@ -174,8 +176,14 @@ export async function runAgentTools(args: {
     },
   });
 
-  const calls =
-    first.candidates?.[0]?.content?.parts?.filter((p) => 'functionCall' in p) ?? [];
+  const parts = first.candidates?.[0]?.content?.parts ?? [];
+  const calls = parts.filter((p) => 'functionCall' in p);
+  // Keep any direct text the model produced when it didn't call a tool, so an
+  // off-topic / no-tool question still gets a real answer instead of a blank.
+  const directText = parts
+    .map((p) => (p as { text?: string }).text ?? '')
+    .join('')
+    .trim();
 
   const toolResults: ToolResult[] = [];
   for (const part of calls) {
@@ -194,7 +202,7 @@ export async function runAgentTools(args: {
   const citations = collectCitations(toolResults);
   await resolveSourceTitles(citations);
 
-  return { ctx, augmentedMessage, toolResults, citations };
+  return { ctx, augmentedMessage, toolResults, citations, directText };
 }
 
 /** Stream the natural-language wrap-up after tools ran. */
@@ -237,12 +245,13 @@ export async function runAgent(args: {
   studentId: string | null;
   subject: string;
 }): Promise<AgentReply> {
-  const { augmentedMessage, toolResults, citations } = await runAgentTools(args);
+  const { augmentedMessage, toolResults, citations, directText } =
+    await runAgentTools(args);
   let text = '';
   for await (const chunk of streamWrapup({
     augmentedMessage,
     toolResults,
-    initialText: '',
+    initialText: directText,
   })) {
     text += chunk;
   }
