@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Edit, Zap, ZapOff } from 'lucide-react';
+import { Edit, Database, DatabaseZap } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -54,7 +54,11 @@ function EmbedButton({ problem }: { problem: Problem }) {
           : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700',
       )}
     >
-      {isEmbedded ? <Zap className="h-3.5 w-3.5" /> : <ZapOff className="h-3.5 w-3.5" />}
+      {isEmbedded ? (
+        <DatabaseZap className="h-3.5 w-3.5" />
+      ) : (
+        <Database className="h-3.5 w-3.5" />
+      )}
     </button>
   );
 }
@@ -105,7 +109,7 @@ export function ProblemTable({ problems }: { problems: Problem[] }) {
               ) : null}
               {p.embedded_at ? (
                 <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                  <Zap className="h-2.5 w-2.5" /> 임베딩됨
+                  <DatabaseZap className="h-2.5 w-2.5" /> 임베딩됨
                 </span>
               ) : null}
               <span className="rounded-md bg-zinc-50 px-1.5 py-0.5 text-[10px] text-zinc-500">

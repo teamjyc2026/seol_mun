@@ -60,9 +60,17 @@ function ToolCards({ results }: { results: ToolResult[] }) {
   return (
     <div className="space-y-3">
       {results.map((r, i) => {
-        if (r.kind === 'generate_problem' && r.problems.length > 0) {
+        if (
+          (r.kind === 'generate_problem' || r.kind === 'search_problem') &&
+          r.problems.length > 0
+        ) {
           return (
             <div key={i} className="space-y-3">
+              {r.kind === 'search_problem' ? (
+                <p className="text-[11px] font-medium text-zinc-500">
+                  📂 저장된 문제 {r.problems.length}개
+                </p>
+              ) : null}
               {r.problems.map((p, idx) => (
                 <ProblemCard key={p.id ?? idx} problem={p} index={idx} />
               ))}

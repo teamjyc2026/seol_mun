@@ -77,7 +77,25 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   }
   const supabase = getSupabaseServer();
   // Keep the subjects[] array in sync when the primary subject changes.
-  const update = body.subject ? { ...body, subjects: [body.subject] } : body;
+  const update: Record<string, unknown> = body.subject
+    ? { ...body, subjects: [body.subject] }
+    : { ...body };
+  // Editing content makes any stored embedding stale → drop it so the agent
+  // never returns outdated text. (Re-embed with ⚡ to make it searchable again.)
+  const CONTENT_KEYS = [
+    'subject',
+    'topic',
+    'difficulty',
+    'problem_type',
+    'question',
+    'choices',
+    'answer',
+    'explanation',
+  ] as const;
+  if (CONTENT_KEYS.some((k) => k in body)) {
+    update.embedding = null;
+    update.embedded_at = null;
+  }
   const { data, error } = await supabase
     .from('problems')
     .update(update)

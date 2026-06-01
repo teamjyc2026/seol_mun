@@ -2,9 +2,10 @@ import 'server-only';
 import { Type, type FunctionDeclaration } from '@google/genai';
 import { GEMINI_GENERATION_MODEL, getGemini } from '@/shared/config/gemini';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
-import { SYSTEM_PROMPT } from './prompts';
+import { buildSystemPrompt } from './prompts';
 import type { AgentContext, AgentReply, Citation, ToolResult } from './types';
 import { searchSourceTool } from './tools/searchSource';
+import { searchProblemTool } from './tools/searchProblem';
 import { generateProblemTool } from './tools/generateProblem';
 import { evaluateAnswerTool } from './tools/evaluateAnswer';
 import { assessLevelTool } from './tools/assessLevel';
@@ -19,6 +20,19 @@ const toolDeclarations: FunctionDeclaration[] = [
       properties: {
         query: { type: Type.STRING, description: '검색어' },
         k: { type: Type.INTEGER, description: '반환할 청크 수 (기본 8)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'search_problem',
+    description:
+      '이미 만들어 임베딩한 기존 문제를 과목·유사도로 검색한다. 사용자가 "(올린/만든) 문제 찾아줘/보여줘", "비슷한 문제" 등 기존 문제 조회를 원할 때. 새로 만드는 게 아니라 저장된 문제를 찾는 용도.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        query: { type: Type.STRING, description: '검색어 (주제·키워드·문제 내용)' },
+        k: { type: Type.INTEGER, description: '반환할 문제 수 (기본 5)' },
       },
       required: ['query'],
     },
@@ -79,6 +93,8 @@ async function runTool(
   switch (name) {
     case 'search_source':
       return searchSourceTool(args, ctx);
+    case 'search_problem':
+      return searchProblemTool(args, ctx);
     case 'generate_problem':
       return generateProblemTool(args, ctx);
     case 'evaluate_answer':
@@ -93,7 +109,7 @@ async function runTool(
 function collectCitations(results: ToolResult[]): Citation[] {
   const out: Citation[] = [];
   for (const r of results) {
-    if (r.kind === 'generate_problem') {
+    if (r.kind === 'generate_problem' || r.kind === 'search_problem') {
       for (const p of r.problems) out.push(...p.citations);
     }
     if (r.kind === 'search') {
@@ -170,7 +186,7 @@ export async function runAgentTools(args: {
     model: GEMINI_GENERATION_MODEL,
     contents: [{ role: 'user', parts: [{ text: augmentedMessage }] }],
     config: {
-      systemInstruction: SYSTEM_PROMPT,
+      systemInstruction: buildSystemPrompt(args.subject),
       tools: [{ functionDeclarations: toolDeclarations }],
       temperature: 0.3,
     },
@@ -210,6 +226,7 @@ export async function* streamWrapup(args: {
   augmentedMessage: string;
   toolResults: ToolResult[];
   initialText: string;
+  subject?: string;
 }): AsyncGenerator<string, void, void> {
   if (args.toolResults.length === 0) {
     if (args.initialText) yield args.initialText;
@@ -229,7 +246,7 @@ export async function* streamWrapup(args: {
         ],
       },
     ],
-    config: { systemInstruction: SYSTEM_PROMPT, temperature: 0.4 },
+    config: { systemInstruction: buildSystemPrompt(args.subject), temperature: 0.4 },
   });
   for await (const chunk of stream) {
     const text = chunk.text ?? '';
@@ -252,6 +269,7 @@ export async function runAgent(args: {
     augmentedMessage,
     toolResults,
     initialText: directText,
+    subject: args.subject,
   })) {
     text += chunk;
   }

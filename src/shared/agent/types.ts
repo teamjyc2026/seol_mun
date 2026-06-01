@@ -43,6 +43,7 @@ export type LevelResult = {
 export type ToolResult =
   | { kind: 'search'; chunks: (SourceChunk & { similarity: number })[] }
   | { kind: 'generate_problem'; problems: ProblemDraft[] }
+  | { kind: 'search_problem'; problems: ProblemDraft[] }
   | { kind: 'evaluate_answer'; result: EvaluationResult }
   | { kind: 'assess_level'; result: LevelResult };
 

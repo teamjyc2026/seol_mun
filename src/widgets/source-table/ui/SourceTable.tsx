@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Trash2, DatabaseBackup, FileText, Pencil, User } from 'lucide-react';
+import { Trash2, DatabaseZap, FileText, Pencil, User } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/cn';
@@ -158,7 +158,7 @@ function SourceRow({ source: s }: { source: Source }) {
               onClick={() => reindex.mutate()}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:opacity-40"
             >
-              <DatabaseBackup className="h-3.5 w-3.5" />
+              <DatabaseZap className="h-3.5 w-3.5" />
             </button>
           </Tooltip>
           <button

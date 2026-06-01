@@ -47,7 +47,7 @@ export async function evaluateAnswerTool(
     model: GEMINI_GENERATION_MODEL,
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
     config: {
-      systemInstruction: buildEvaluationPrompt(),
+      systemInstruction: buildEvaluationPrompt(ctx.subject),
       responseMimeType: 'application/json',
       responseSchema: {
         type: Type.OBJECT,

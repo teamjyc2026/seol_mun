@@ -99,6 +99,7 @@ export async function POST(req: NextRequest) {
           augmentedMessage,
           toolResults,
           initialText: directText,
+          subject,
         })) {
           finalText += piece;
           send({ kind: 'token', text: piece });

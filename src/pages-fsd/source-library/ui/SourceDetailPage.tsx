@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Download, DatabaseBackup, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, DatabaseZap, Trash2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import type { Source, SourceChunk } from '@/entities/source';
@@ -85,7 +85,7 @@ export function SourceDetailPage({
                 disabled={reindex.isPending}
                 className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
               >
-                <DatabaseBackup className="h-3 w-3" /> 재인덱싱
+                <DatabaseZap className="h-3 w-3" /> 재인덱싱
               </button>
             </Tooltip>
             <button
