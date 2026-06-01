@@ -1,5 +1,6 @@
 import 'server-only';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
+import { nicknamesByIds } from '@/shared/api/authors';
 import type { IndexingStatus, Source, SourceType } from '../model/types';
 
 export type ListSourcesFilters = {
@@ -11,7 +12,15 @@ export type ListSourcesFilters = {
 };
 
 const COLUMNS =
-  'id, created_at, title, source_type, subject, subjects, grade, publisher, year, description, author, edition, isbn, language, units, tags, file_path, original_filename, file_size_bytes, total_pages, chunk_count, text_density, needs_ocr, indexing_status, indexing_error, indexed_at';
+  'id, created_at, title, source_type, subject, subjects, grade, publisher, year, description, author, edition, isbn, language, units, tags, file_path, original_filename, file_size_bytes, total_pages, chunk_count, text_density, needs_ocr, indexing_status, indexing_error, indexed_at, created_by';
+
+async function attachAuthors(rows: Source[]): Promise<Source[]> {
+  const map = await nicknamesByIds(rows.map((r) => r.created_by));
+  return rows.map((r) => ({
+    ...r,
+    author_nickname: r.created_by ? (map.get(r.created_by) ?? null) : null,
+  }));
+}
 
 export async function listSources(
   filters: ListSourcesFilters = {},
@@ -39,7 +48,7 @@ export async function listSources(
   }
   const { data, error } = await q;
   if (error) throw new Error(error.message);
-  return (data ?? []) as Source[];
+  return attachAuthors((data ?? []) as Source[]);
 }
 
 export async function getSource(id: string): Promise<Source | null> {
@@ -50,5 +59,7 @@ export async function getSource(id: string): Promise<Source | null> {
     .eq('id', id)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return (data as Source | null) ?? null;
+  if (!data) return null;
+  const [withAuthor] = await attachAuthors([data as Source]);
+  return withAuthor ?? null;
 }

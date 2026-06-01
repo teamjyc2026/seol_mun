@@ -14,6 +14,7 @@ import {
 import { DeleteProblemButton } from '@/features/delete-problem';
 import { api } from '@/shared/api/axios';
 import { stripRichText } from '@/shared/lib/richText';
+import { formatDate } from '@/shared/lib/formatDate';
 
 function useEmbedToggle(id: string) {
   const router = useRouter();
@@ -104,11 +105,12 @@ export function ProblemTable({ problems }: { problems: Problem[] }) {
                   <Zap className="h-2.5 w-2.5" /> 임베딩됨
                 </span>
               ) : null}
-              {p.created_by ? (
-                <span className="rounded-md bg-zinc-50 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                  by {p.author_nickname ?? (p.created_by === 'agent' ? 'AI' : '관리자')}
-                </span>
-              ) : null}
+              <span className="rounded-md bg-zinc-50 px-1.5 py-0.5 text-[10px] text-zinc-500">
+                {p.created_by
+                  ? `${p.author_nickname ?? (p.created_by === 'agent' ? 'AI' : '관리자')} · `
+                  : ''}
+                {formatDate(p.created_at)}
+              </span>
             </div>
             <p className="line-clamp-2 text-sm text-zinc-800">{stripRichText(p.question)}</p>
             {p.citations.length > 0 ? (

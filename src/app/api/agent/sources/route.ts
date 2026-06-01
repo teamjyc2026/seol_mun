@@ -10,7 +10,7 @@ import {
   type IndexingStatus,
   type SourceType,
 } from '@/entities/source/model/types';
-import { requireUploader } from '@/shared/config/auth';
+import { getUploaderId } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { indexSource } from '@/shared/agent/indexSource';
 
@@ -45,7 +45,7 @@ function csvToArray(input: string | undefined | null): string[] {
 }
 
 export async function GET(req: NextRequest) {
-  if (!(await requireUploader())) {
+  if (!(await getUploaderId())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const url = new URL(req.url);
@@ -69,7 +69,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireUploader())) {
+  const uploaderId = await getUploaderId();
+  if (!uploaderId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 
@@ -157,6 +158,7 @@ export async function POST(req: NextRequest) {
         original_filename: file.name,
         file_size_bytes: file.size,
         indexing_status: 'pending',
+        created_by: uploaderId,
       })
       .select('id')
       .single();

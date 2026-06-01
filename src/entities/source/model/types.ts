@@ -45,6 +45,9 @@ export type Source = {
   indexing_status: IndexingStatus;
   indexing_error: string | null;
   indexed_at: string | null;
+  created_by: string | null;
+  /** resolved uploader nickname for created_by (uuid), attached at fetch time */
+  author_nickname?: string | null;
 };
 
 export type SourceChunk = {

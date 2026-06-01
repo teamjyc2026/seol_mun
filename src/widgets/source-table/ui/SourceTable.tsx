@@ -6,6 +6,7 @@ import { Trash2, RefreshCw, FileText } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/cn';
+import { formatDate } from '@/shared/lib/formatDate';
 import type { Source } from '@/entities/source';
 import { deleteSource } from '@/features/delete-source';
 import { reindexSource } from '@/features/reindex-source';
@@ -86,6 +87,10 @@ export function SourceTable({ sources }: { sources: Source[] }) {
                 <span>·</span>
                 <span>
                   {s.total_pages ?? '?'}p · {s.chunk_count} chunks
+                </span>
+                <span>·</span>
+                <span>
+                  {s.author_nickname ?? (s.created_by ? '관리자' : '—')} 올림 · {formatDate(s.created_at)}
                 </span>
               </div>
               {s.units.length > 0 ? (

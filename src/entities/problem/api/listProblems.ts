@@ -1,5 +1,6 @@
 import 'server-only';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
+import { nicknamesByIds } from '@/shared/api/authors';
 import type {
   Difficulty,
   Problem,
@@ -17,21 +18,11 @@ export type ListProblemsFilters = {
 const COLUMNS =
   'id, created_at, subject, subjects, topic, difficulty, problem_type, passage, passage_set_id, question, choices, answer, explanation, citations, notes, created_by, conversation_id, embedded_at';
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Resolve uuid `created_by` values to admin nicknames in one batched query. */
 async function attachAuthors(rows: Problem[]): Promise<Problem[]> {
-  const ids = [
-    ...new Set(rows.map((r) => r.created_by).filter((v): v is string => !!v && UUID_RE.test(v))),
-  ];
-  if (ids.length === 0) return rows;
-  const supabase = getSupabaseServer();
-  const { data } = await supabase.from('admin_users').select('id, nickname').in('id', ids);
-  const byId = new Map((data ?? []).map((u) => [u.id as string, u.nickname as string]));
+  const map = await nicknamesByIds(rows.map((r) => r.created_by));
   return rows.map((r) => ({
     ...r,
-    author_nickname: r.created_by ? (byId.get(r.created_by) ?? null) : null,
+    author_nickname: r.created_by ? (map.get(r.created_by) ?? null) : null,
   }));
 }
 
