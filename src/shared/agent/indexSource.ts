@@ -15,6 +15,28 @@ import { buildEmbeddingText, type EmbedMeta } from './buildEmbeddingText';
 const OCR_DENSITY_THRESHOLD = 20;
 const OCR_TOTAL_CHARS_MIN = 40;
 
+/**
+ * Strip characters that Postgres/JSON reject from extracted PDF text:
+ * NUL + other C0/C1 control chars (keep tab/newline/CR) and unpaired
+ * surrogate halves. Without this, chunk inserts fail with "unsupported
+ * Unicode escape sequence" (SQLSTATE 22P05) and the source is marked failed.
+ */
+function sanitizeText(s: string): string {
+  if (!s) return s;
+  let out = '';
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    if (c === 0x09 || c === 0x0a || c === 0x0d) {
+      out += ch;
+      continue;
+    }
+    if (c <= 0x1f || (c >= 0x7f && c <= 0x9f)) continue; // NUL + C0/C1 controls
+    if (c >= 0xd800 && c <= 0xdfff) continue; // lone surrogate half
+    out += ch;
+  }
+  return out;
+}
+
 export async function indexSource(sourceId: string): Promise<{
   chunks: number;
   totalPages: number;
@@ -104,8 +126,8 @@ export async function indexSource(sourceId: string): Promise<{
     const embedInputs: string[] = [];
     let idx = 0;
     for (const p of pages) {
-      const chapterPath = chapterPathForPage(p.page, outline, heuristic);
-      const split = splitWithOverlap(p.text, { size: 800, overlap: 100 });
+      const chapterPath = chapterPathForPage(p.page, outline, heuristic).map(sanitizeText);
+      const split = splitWithOverlap(sanitizeText(p.text), { size: 800, overlap: 100 });
       for (const c of split) {
         rows.push({
           source_id: sourceId,

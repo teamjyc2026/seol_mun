@@ -21,7 +21,10 @@ export type UploadSourceInput = {
   tags?: string[];
 };
 
-export async function uploadSource(input: UploadSourceInput): Promise<{ id: string }> {
+export async function uploadSource(
+  input: UploadSourceInput,
+  onProgress?: (pct: number) => void,
+): Promise<{ id: string }> {
   const fd = new FormData();
   fd.append('file', input.file);
   fd.append('title', input.title);
@@ -47,6 +50,11 @@ export async function uploadSource(input: UploadSourceInput): Promise<{ id: stri
   const { data } = await api.post<{ id: string }>('/agent/sources', fd, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 300_000,
+    onUploadProgress: (e) => {
+      if (onProgress && e.total) {
+        onProgress(Math.round((e.loaded / e.total) * 100));
+      }
+    },
   });
   return data;
 }

@@ -36,25 +36,38 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [isbn, setIsbn] = useState('');
   const [unitsRaw, setUnitsRaw] = useState('');
   const [tagsRaw, setTagsRaw] = useState('');
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState<'upload' | 'index'>('upload');
 
   const mutation = useMutation({
+    onMutate: () => {
+      setProgress(0);
+      setPhase('upload');
+    },
     mutationFn: () => {
       if (!file) throw new Error('PDF 파일을 선택해 주세요.');
-      return uploadSource({
-        file,
-        title: title || file.name.replace(/\.pdf$/i, ''),
-        source_type: sourceType,
-        subjects: [subject],
-        grade: grade || null,
-        publisher: publisher || null,
-        year: year ? Number(year) : null,
-        description: description || null,
-        author: author || null,
-        edition: edition || null,
-        isbn: isbn || null,
-        units: splitCommas(unitsRaw),
-        tags: splitCommas(tagsRaw),
-      });
+      return uploadSource(
+        {
+          file,
+          title: title || file.name.replace(/\.pdf$/i, ''),
+          source_type: sourceType,
+          subjects: [subject],
+          grade: grade || null,
+          publisher: publisher || null,
+          year: year ? Number(year) : null,
+          description: description || null,
+          author: author || null,
+          edition: edition || null,
+          isbn: isbn || null,
+          units: splitCommas(unitsRaw),
+          tags: splitCommas(tagsRaw),
+        },
+        (pct) => {
+          setProgress(pct);
+          // bytes done → server now chunks + embeds (no byte stream for that)
+          if (pct >= 100) setPhase('index');
+        },
+      );
     },
     onSuccess: () => {
       toast.success('업로드 + 인덱싱 완료');
@@ -257,6 +270,25 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           />
         </div>
 
+        {mutation.isPending ? (
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500">
+              <span>{phase === 'upload' ? '파일 전송 중…' : '인덱싱(임베딩) 중…'}</span>
+              <span>{phase === 'upload' ? `${progress}%` : '거의 다 됐어요'}</span>
+            </div>
+            <div className="relative h-2 w-full overflow-hidden rounded-full bg-zinc-100">
+              {phase === 'upload' ? (
+                <div
+                  className="h-full rounded-full bg-zinc-900 transition-[width] duration-150"
+                  style={{ width: `${progress}%` }}
+                />
+              ) : (
+                <span className="progress-indeterminate" />
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-center justify-end gap-2 pt-2">
           <button
             type="button"
@@ -273,7 +305,11 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white shadow-md transition hover:bg-zinc-800 disabled:opacity-50"
           >
             <Upload className="h-3.5 w-3.5" />
-            {mutation.isPending ? '업로드·인덱싱 중…' : '업로드'}
+            {mutation.isPending
+              ? phase === 'upload'
+                ? `전송 ${progress}%`
+                : '인덱싱 중…'
+              : '업로드'}
           </button>
         </div>
       </div>
