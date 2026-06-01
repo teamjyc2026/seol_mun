@@ -76,9 +76,11 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     );
   }
   const supabase = getSupabaseServer();
+  // Keep the subjects[] array in sync when the primary subject changes.
+  const update = body.subject ? { ...body, subjects: [body.subject] } : body;
   const { data, error } = await supabase
     .from('problems')
-    .update(body)
+    .update(update)
     .eq('id', id)
     .select('id')
     .single();

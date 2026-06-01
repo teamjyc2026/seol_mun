@@ -53,22 +53,20 @@ function emptyBlock(): SubBlock {
 export function ProblemSetEditorPage() {
   const router = useRouter();
   const { subject } = useSubject();
-  const [subjects, setSubjects] = useState<Subject[]>([subject]);
+  const [selSubject, setSelSubject] = useState<Subject>(subject);
   const [passage, setPassage] = useState('');
   const [topic, setTopic] = useState('');
   const [blocks, setBlocks] = useState<SubBlock[]>([emptyBlock()]);
 
-  // Default to the shared 과목 until the user customizes the selection.
-  const userPickedSubjects = useRef(false);
+  // Default to the shared 과목 until the user picks one.
+  const userPickedSubject = useRef(false);
   useEffect(() => {
-    if (!userPickedSubjects.current) setSubjects([subject]);
+    if (!userPickedSubject.current) setSelSubject(subject);
   }, [subject]);
 
-  function toggleSubject(s: Subject) {
-    userPickedSubjects.current = true;
-    setSubjects((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
-    );
+  function pickSubject(s: Subject) {
+    userPickedSubject.current = true;
+    setSelSubject(s);
   }
   function updateBlock(i: number, patch: Partial<SubBlock>) {
     setBlocks((prev) => prev.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
@@ -108,7 +106,6 @@ export function ProblemSetEditorPage() {
 
   const mutation = useMutation({
     mutationFn: () => {
-      if (subjects.length === 0) throw new Error('과목을 하나 이상 선택해 주세요.');
       if (!passage.trim()) throw new Error('지문을 입력해 주세요.');
       const problems: ProblemSetSubProblem[] = blocks.map((b) => ({
         topic: b.topic.trim() || topic.trim() || null,
@@ -131,8 +128,8 @@ export function ProblemSetEditorPage() {
         throw new Error(`문제 ${missingA + 1}의 정답을 입력해 주세요.`);
       }
       return createProblemSet({
-        subject: subjects[0],
-        subjects,
+        subject: selSubject,
+        subjects: [selSubject],
         passage: passage.trim(),
         shared: { topic: topic.trim() || null },
         problems,
@@ -170,15 +167,15 @@ export function ProblemSetEditorPage() {
 
         <section className="mb-4 space-y-3 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="space-y-1.5">
-            <Label>과목 (필수, 여러 개 가능)</Label>
+            <Label>과목 (필수)</Label>
             <div className="flex flex-wrap gap-1.5">
               {SUBJECTS.map((s) => {
-                const active = subjects.includes(s);
+                const active = selSubject === s;
                 return (
                   <button
                     key={s}
                     type="button"
-                    onClick={() => toggleSubject(s)}
+                    onClick={() => pickSubject(s)}
                     className={cn(
                       'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
                       active

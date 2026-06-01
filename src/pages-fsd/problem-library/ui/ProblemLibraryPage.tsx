@@ -14,9 +14,11 @@ import {
   type ProblemType,
 } from '@/entities/problem';
 import { ProblemTable } from '@/widgets/problem-table';
+import { SUBJECTS } from '@/shared/config/subjects';
 
 type LocalFilters = {
   search: string;
+  subject: string;
   difficulty: Difficulty | '';
   problem_type: ProblemType | '';
   topic: string;
@@ -24,6 +26,7 @@ type LocalFilters = {
 
 const INITIAL: LocalFilters = {
   search: '',
+  subject: '',
   difficulty: '',
   problem_type: '',
   topic: '',
@@ -40,6 +43,12 @@ export function ProblemLibraryPage({
     const term = filters.search.trim().toLowerCase();
     const topic = filters.topic.trim().toLowerCase();
     return initialProblems.filter((p) => {
+      if (
+        filters.subject &&
+        p.subject !== filters.subject &&
+        !(p.subjects ?? []).includes(filters.subject)
+      )
+        return false;
       if (filters.difficulty && p.difficulty !== filters.difficulty) return false;
       if (filters.problem_type && p.problem_type !== filters.problem_type) return false;
       if (topic && !(p.topic ?? '').toLowerCase().includes(topic)) return false;
@@ -94,6 +103,18 @@ export function ProblemLibraryPage({
             placeholder="단원"
             className="h-9 w-32"
           />
+          <select
+            value={filters.subject}
+            onChange={(e) => setFilters((f) => ({ ...f, subject: e.target.value }))}
+            className="h-9 rounded-lg border border-zinc-200 bg-white px-2 text-xs"
+          >
+            <option value="">(모든 과목)</option>
+            {SUBJECTS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
           <select
             value={filters.difficulty}
             onChange={(e) =>

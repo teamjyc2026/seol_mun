@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Save, Trash2 } from 'lucide-react';
@@ -17,6 +17,7 @@ import {
 import { createProblem } from '@/features/create-problem';
 import { updateProblem } from '@/features/update-problem';
 import { deleteProblem } from '@/features/delete-problem';
+import { useSubject } from '@/shared/store/subject';
 
 export function ProblemEditorPage({
   sources,
@@ -27,11 +28,21 @@ export function ProblemEditorPage({
 }) {
   const router = useRouter();
   const isEdit = !!initialProblem;
+  const { subject } = useSubject();
   const [value, setValue] = useState<ProblemFormValue>(
     initialProblem ? fromProblem(initialProblem) : emptyValue(),
   );
 
+  // New problem: default 과목 to the shared store value until the user picks one.
+  const userPickedSubject = useRef(false);
+  useEffect(() => {
+    if (!isEdit && !userPickedSubject.current) {
+      setValue((v) => (v.subject === subject ? v : { ...v, subject }));
+    }
+  }, [isEdit, subject]);
+
   const payload = () => ({
+    subject: value.subject,
     topic: value.topic.trim() || null,
     difficulty: value.difficulty || null,
     problem_type: value.problem_type,
@@ -118,7 +129,14 @@ export function ProblemEditorPage({
           ) : null}
         </header>
 
-        <ProblemForm value={value} onChange={setValue} sources={sources} />
+        <ProblemForm
+          value={value}
+          onChange={(next) => {
+            if (next.subject !== value.subject) userPickedSubject.current = true;
+            setValue(next);
+          }}
+          sources={sources}
+        />
 
         <div className="mt-6 flex items-center justify-end gap-2">
           <Link

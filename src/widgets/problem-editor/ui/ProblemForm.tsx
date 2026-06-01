@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/shared/api/axios';
@@ -18,10 +17,13 @@ import {
   type ProblemType,
 } from '@/entities/problem';
 import type { Source } from '@/entities/source';
+import { SUBJECTS, DEFAULT_SUBJECT } from '@/shared/config/subjects';
+import { cn } from '@/shared/lib/cn';
 import { RichTextPreview, RichTextHelp } from '@/shared/ui/RichText';
 import { SourceAttachmentPicker } from './SourceAttachmentPicker';
 
 export type ProblemFormValue = {
+  subject: string;
   topic: string;
   difficulty: Difficulty | '';
   problem_type: ProblemType;
@@ -35,6 +37,7 @@ export type ProblemFormValue = {
 
 export function emptyValue(): ProblemFormValue {
   return {
+    subject: DEFAULT_SUBJECT,
     topic: '',
     difficulty: 'medium',
     problem_type: 'objective',
@@ -54,6 +57,7 @@ export function emptyValue(): ProblemFormValue {
 
 export function fromProblem(p: Problem): ProblemFormValue {
   return {
+    subject: p.subject ?? DEFAULT_SUBJECT,
     topic: p.topic ?? '',
     difficulty: (p.difficulty ?? 'medium') as Difficulty,
     problem_type: (p.problem_type ?? 'objective') as ProblemType,
@@ -108,6 +112,30 @@ export function ProblemForm({
 
   return (
     <div className="space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <div className="space-y-1.5">
+        <Label>과목 (필수)</Label>
+        <div className="flex flex-wrap gap-1.5">
+          {SUBJECTS.map((s) => {
+            const active = value.subject === s;
+            return (
+              <button
+                key={s}
+                type="button"
+                onClick={() => set('subject', s)}
+                className={cn(
+                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                  active
+                    ? 'border-zinc-900 bg-zinc-900 text-white'
+                    : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                )}
+              >
+                {s}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1.5 col-span-3 sm:col-span-1">
           <Label htmlFor="p-topic">
