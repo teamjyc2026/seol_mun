@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { GRADES, SOURCE_TYPES } from '@/entities/source/model/types';
-import { requireAdmin } from '@/shared/config/auth';
+import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -28,7 +28,7 @@ const patchSchema = z
   .partial();
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;

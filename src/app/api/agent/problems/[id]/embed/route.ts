@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { requireAdmin } from '@/shared/config/auth';
+import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedQuery } from '@/shared/lib/embedding';
 import { stripRichText } from '@/shared/lib/richText';
@@ -43,7 +43,7 @@ function buildProblemEmbedText(p: {
 }
 
 export async function POST(_req: NextRequest, ctx: Ctx) {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -82,7 +82,7 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;

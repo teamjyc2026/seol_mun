@@ -8,7 +8,7 @@ import {
   listProblems,
   type ListProblemsFilters,
 } from '@/entities/problem/api/listProblems';
-import { getSessionUserId } from '@/shared/config/auth';
+import { getUploaderId } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -70,7 +70,7 @@ const createSetSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  if (!(await getSessionUserId())) {
+  if (!(await getUploaderId())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const url = new URL(req.url);
@@ -97,7 +97,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const userId = await getSessionUserId();
+  const userId = await getUploaderId();
   if (!userId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest) {
 
 /** PUT /api/agent/problems  with body={passage, problems:[...]} creates a set. */
 export async function PUT(req: NextRequest) {
-  const userId = await getSessionUserId();
+  const userId = await getUploaderId();
   if (!userId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }

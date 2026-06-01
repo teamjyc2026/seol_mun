@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAdmin } from '@/shared/config/auth';
+import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
  * either flavor.
  */
 export async function GET() {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const supabase = getSupabaseServer();

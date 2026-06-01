@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { requireAdmin } from '@/shared/config/auth';
+import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
 import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
@@ -23,7 +23,7 @@ function encodeEvent(event: StreamEvent): string {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 

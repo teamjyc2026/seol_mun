@@ -2,11 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Bot, Plus } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bot, LogOut, Plus } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { ResponseRow as Row } from '@/entities/response';
 import { ExportButton } from '@/features/admin-export';
-import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 import {
   FilterBar,
   type DateRange,
@@ -30,11 +30,13 @@ const RANGE_MS: Record<DateRange, number | null> = {
 };
 
 export function AdminDashboard({ responses }: { responses: Row[] }) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('list');
   const [query, setQuery] = useState('');
   const [range, setRange] = useState<DateRange>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [sort, setSort] = useState<SortKey>('created_desc');
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -68,6 +70,12 @@ export function AdminDashboard({ responses }: { responses: Row[] }) {
     [responses],
   );
 
+  async function logout() {
+    setLoggingOut(true);
+    await fetch('/api/admin/logout', { method: 'POST' });
+    router.replace('/admin/login');
+  }
+
   return (
     <main className="min-h-svh bg-zinc-50">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
@@ -98,7 +106,16 @@ export function AdminDashboard({ responses }: { responses: Row[] }) {
               <span className="hidden sm:inline">응답 추가</span>
             </Link>
             <ExportButton />
-            <AdminAccountMenu />
+            <button
+              type="button"
+              onClick={logout}
+              disabled={loggingOut}
+              title="로그아웃"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 transition hover:bg-zinc-100 disabled:opacity-50"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">로그아웃</span>
+            </button>
           </div>
         </header>
 

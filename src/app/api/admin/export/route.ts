@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { giftLabel } from '@/entities/response';
 import { listResponses } from '@/entities/response/api/listResponses';
 import { formatAnswer, parts, questions } from '@/entities/survey';
-import { getSessionUserId } from '@/shared/config/auth';
+import { isAdmin } from '@/shared/config/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,7 +21,7 @@ function fnameTs() {
 }
 
 export async function GET() {
-  if (!(await getSessionUserId())) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 

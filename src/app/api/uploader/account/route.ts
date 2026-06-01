@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import {
-  getSessionUserId,
+  getUploaderId,
   hashPassword,
   verifyPassword,
 } from '@/shared/config/auth';
@@ -10,7 +10,7 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 export const runtime = 'nodejs';
 
 export async function GET() {
-  const id = await getSessionUserId();
+  const id = await getUploaderId();
   if (!id) return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   const supabase = getSupabaseServer();
   const { data } = await supabase
@@ -33,7 +33,7 @@ const patchSchema = z
   });
 
 export async function PATCH(req: NextRequest) {
-  const id = await getSessionUserId();
+  const id = await getUploaderId();
   if (!id) return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
 
   let parsed;

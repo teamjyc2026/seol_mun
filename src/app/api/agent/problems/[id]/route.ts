@@ -4,7 +4,7 @@ import {
   DIFFICULTIES,
   PROBLEM_TYPES,
 } from '@/entities/problem/model/types';
-import { requireAdmin } from '@/shared/config/auth';
+import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -40,7 +40,7 @@ const patchSchema = z
   .partial();
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -59,7 +59,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 }
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -89,7 +89,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
 }
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
-  if (!(await requireAdmin())) {
+  if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;

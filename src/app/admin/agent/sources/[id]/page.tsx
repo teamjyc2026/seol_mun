@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getSource } from '@/entities/source/api/listSources';
 import { getSourceChunks } from '@/entities/source/api/getSourceChunks';
 import { SourceDetailPage } from '@/pages-fsd/source-library';
-import { getSessionUserId } from '@/shared/config/auth';
+import { getUploaderId } from '@/shared/config/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,8 +10,8 @@ export const dynamic = 'force-dynamic';
 type Ctx = { params: Promise<{ id: string }> };
 
 export default async function Page({ params }: Ctx) {
-  if (!(await getSessionUserId())) {
-    redirect('/admin/login');
+  if (!(await getUploaderId())) {
+    redirect('/admin/login?as=uploader');
   }
   const { id } = await params;
   const source = await getSource(id);

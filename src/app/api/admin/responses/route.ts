@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { responsePayloadSchema } from '@/entities/response/model/payloadSchema';
-import { requireAdmin } from '@/shared/config/auth';
+import { isAdmin } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
  * responses can be recorded after the public survey closes.
  */
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) {
+  if (!(await isAdmin())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 

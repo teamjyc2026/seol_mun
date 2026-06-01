@@ -19,7 +19,7 @@ export function AdminAccountMenu({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch('/api/admin/account')
+    fetch('/api/uploader/account')
       .then((r) => (r.ok ? r.json() : null))
       .then((d: Account | null) => {
         if (d) {
@@ -50,7 +50,7 @@ export function AdminAccountMenu({ className }: { className?: string }) {
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/admin/account', {
+      const res = await fetch('/api/uploader/account', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nickname: next }),
@@ -70,7 +70,7 @@ export function AdminAccountMenu({ className }: { className?: string }) {
   }
 
   async function logout() {
-    await fetch('/api/admin/logout', { method: 'POST' });
+    await fetch('/api/uploader/logout', { method: 'POST' });
     router.replace('/admin/login');
     router.refresh();
   }

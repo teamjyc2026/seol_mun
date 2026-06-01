@@ -1,7 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { ADMIN_COOKIE, ADMIN_COOKIE_MAX_AGE } from '@/shared/config/admin';
-import { INVITE_CODE, createSessionToken, hashPassword } from '@/shared/config/auth';
+import {
+  INVITE_CODE,
+  UPLOADER_COOKIE,
+  UPLOADER_COOKIE_MAX_AGE,
+  createSessionToken,
+  hashPassword,
+} from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -55,12 +60,12 @@ export async function POST(req: NextRequest) {
   }
 
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(ADMIN_COOKIE, createSessionToken(user.id), {
+  res.cookies.set(UPLOADER_COOKIE, createSessionToken(user.id), {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
-    maxAge: ADMIN_COOKIE_MAX_AGE,
+    maxAge: UPLOADER_COOKIE_MAX_AGE,
   });
   return res;
 }
