@@ -5,8 +5,12 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { buildSystemPrompt } from './prompts';
 import type { AgentContext, AgentReply, Citation, ToolResult } from './types';
 import { searchSourceTool } from './tools/searchSource';
-import { searchProblemTool } from './tools/searchProblem';
+import { searchProblemTool, toProblemDrafts } from './tools/searchProblem';
+import { searchProblems } from '@/entities/problem/api/searchProblems';
 import { generateProblemTool } from './tools/generateProblem';
+
+/** Min cosine similarity for an auto-surfaced saved problem (no explicit ask). */
+const AUTO_PROBLEM_THRESHOLD = 0.78;
 import { evaluateAnswerTool } from './tools/evaluateAnswer';
 import { assessLevelTool } from './tools/assessLevel';
 
@@ -212,6 +216,24 @@ export async function runAgentTools(args: {
     } catch (e) {
       const text = e instanceof Error ? e.message : String(e);
       console.error(`[agent] tool ${fc.name} failed:`, text);
+    }
+  }
+
+  // Deterministic fallback: if the model chose no tool (would just answer or
+  // refuse), auto-search saved problems and surface a strong match so users
+  // don't have to explicitly say "문제에서 찾아줘".
+  if (toolResults.length === 0) {
+    try {
+      const matches = await searchProblems(args.message, {
+        subject: ctx.subject,
+        k: 5,
+      });
+      const strong = matches.filter((m) => m.similarity >= AUTO_PROBLEM_THRESHOLD);
+      if (strong.length > 0) {
+        toolResults.push({ kind: 'search_problem', problems: toProblemDrafts(strong) });
+      }
+    } catch (e) {
+      console.error('[agent] auto search_problem failed:', e);
     }
   }
 
