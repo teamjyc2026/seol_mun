@@ -20,7 +20,7 @@ import {
 import { SUBJECTS, type Subject } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
 import { useSubject } from '@/shared/store/subject';
-import { RichTextPreview, RICH_TEXT_HINT } from '@/shared/ui/RichText';
+import { RichTextPreview, RichTextHelp } from '@/shared/ui/RichText';
 import { createProblemSet, type ProblemSetSubProblem } from '@/features/create-problem';
 
 type SubBlock = {
@@ -214,8 +214,9 @@ export function ProblemSetEditorPage() {
               className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
             />
             <p className="text-[10px] text-zinc-500">
-              {passage.length.toLocaleString()}자 · {RICH_TEXT_HINT}
+              {passage.length.toLocaleString()}자
             </p>
+            <RichTextHelp />
             <RichTextPreview value={passage} label="지문 미리보기" />
           </div>
         </section>

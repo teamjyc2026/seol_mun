@@ -1,8 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, BookOpen, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Source } from '@/entities/source';
 import { SUBJECTS, type Subject } from '@/shared/config/subjects';
@@ -14,7 +12,6 @@ import {
   type ChatMessage,
 } from '@/widgets/agent-chat';
 import { streamAgentMessage } from '@/features/send-agent-message';
-import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
 export function AgentPage({ initialSources }: { initialSources: Source[] }) {
   const { subject, setSubject } = useSubject();
@@ -145,37 +142,10 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
   return (
     <main className="min-h-svh bg-zinc-50">
       <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6">
-        <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin"
-              className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-zinc-600 transition hover:bg-zinc-100"
-            >
-              <ArrowLeft className="h-4 w-4" /> 대시보드
-            </Link>
-            <h1 className="text-base font-bold tracking-tight text-zinc-900 sm:text-lg">
-              🤖 학습 에이전트 · {subject}
-            </h1>
-          </div>
-          <div className="flex items-center gap-1">
-            <Link
-              href="/admin/agent/sources"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
-              title="교재 업로드"
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              교재 업로드
-            </Link>
-            <Link
-              href="/admin/agent/problems"
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
-              title="문제 업로드"
-            >
-              <FileText className="h-3.5 w-3.5" />
-              문제 업로드
-            </Link>
-            <AdminAccountMenu />
-          </div>
+        <header className="flex items-center">
+          <h1 className="text-base font-bold tracking-tight text-zinc-900 sm:text-lg">
+            🤖 학습 에이전트 · {subject}
+          </h1>
         </header>
 
         <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">

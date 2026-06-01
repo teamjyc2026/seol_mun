@@ -2,6 +2,7 @@
 
 import type { AgentReply, ToolResult } from '@/shared/agent/types';
 import { cn } from '@/shared/lib/cn';
+import { openSourcePdf } from '@/features/open-source-pdf';
 import { ProblemCard } from './ProblemCard';
 import { EvaluationCard } from './EvaluationCard';
 import { LevelCard } from './LevelCard';
@@ -40,7 +41,11 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
       {r.citations.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {r.citations.slice(0, 6).map((c, i) => (
-            <CitationChip key={i} citation={c} />
+            <CitationChip
+              key={i}
+              citation={c}
+              onClick={(cit) => openSourcePdf(cit.sourceId, cit.page)}
+            />
           ))}
           {r.citations.length > 6 ? (
             <span className="text-[10px] text-zinc-400">+{r.citations.length - 6} more</span>

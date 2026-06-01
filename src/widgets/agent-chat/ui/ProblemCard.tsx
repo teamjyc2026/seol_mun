@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { ProblemDraft } from '@/shared/agent/types';
 import { cn } from '@/shared/lib/cn';
 import { RichText } from '@/shared/ui/RichText';
+import { openSourcePdf } from '@/features/open-source-pdf';
 import { CitationChip } from './CitationChip';
 
 export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: number }) {
@@ -73,7 +74,11 @@ export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: 
           </p>
           <div className="flex flex-wrap gap-1.5">
             {problem.citations.map((c, i) => (
-              <CitationChip key={i} citation={c} />
+              <CitationChip
+                key={i}
+                citation={c}
+                onClick={(cit) => openSourcePdf(cit.sourceId, cit.page)}
+              />
             ))}
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DIFFICULTIES,
@@ -14,7 +14,6 @@ import {
   type ProblemType,
 } from '@/entities/problem';
 import { ProblemTable } from '@/widgets/problem-table';
-import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
 type LocalFilters = {
   search: string;
@@ -56,17 +55,9 @@ export function ProblemLibraryPage({
     <main className="min-h-svh bg-zinc-50">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
         <header className="mb-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin/agent"
-              className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-zinc-600 transition hover:bg-zinc-100"
-            >
-              <ArrowLeft className="h-4 w-4" /> 에이전트
-            </Link>
-            <h1 className="text-lg font-bold tracking-tight text-zinc-900">
-              📝 문제 업로드
-            </h1>
-          </div>
+          <h1 className="text-lg font-bold tracking-tight text-zinc-900">
+            📝 문제 업로드
+          </h1>
           <div className="flex items-center gap-2">
             <Link
               href="/admin/agent/problems/new-set"
@@ -84,7 +75,6 @@ export function ProblemLibraryPage({
               <Plus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">낱개 문제</span>
             </Link>
-            <AdminAccountMenu />
           </div>
         </header>
 

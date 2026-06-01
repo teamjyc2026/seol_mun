@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Trash2, RefreshCw, FileText } from 'lucide-react';
+import { Trash2, DatabaseBackup, FileText } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/cn';
 import { formatDate } from '@/shared/lib/formatDate';
+import { Tooltip } from '@/shared/ui/Tooltip';
 import type { Source } from '@/entities/source';
 import { deleteSource } from '@/features/delete-source';
 import { reindexSource } from '@/features/reindex-source';
@@ -122,15 +123,17 @@ export function SourceTable({ sources }: { sources: Source[] }) {
               ) : null}
             </div>
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                title="재인덱싱"
-                disabled={reindex.isPending}
-                onClick={() => reindex.mutate(s.id)}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:opacity-40"
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-              </button>
+              <Tooltip label="교재를 다시 분석해 임베딩을 DB에 새로 적재해요">
+                <button
+                  type="button"
+                  aria-label="재인덱싱"
+                  disabled={reindex.isPending}
+                  onClick={() => reindex.mutate(s.id)}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100 disabled:opacity-40"
+                >
+                  <DatabaseBackup className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
               <button
                 type="button"
                 title="삭제"

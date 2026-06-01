@@ -1,8 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import type { Source } from '@/entities/source';
 import { UploadDialog } from '@/features/upload-source';
 import {
@@ -53,17 +52,9 @@ export function SourceLibraryPage({ initialSources }: { initialSources: Source[]
     <main className="min-h-svh bg-zinc-50">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
         <header className="mb-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin/agent"
-              className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-zinc-600 transition hover:bg-zinc-100"
-            >
-              <ArrowLeft className="h-4 w-4" /> 에이전트
-            </Link>
-            <h1 className="text-lg font-bold tracking-tight text-zinc-900">
-              📚 교재 업로드
-            </h1>
-          </div>
+          <h1 className="text-lg font-bold tracking-tight text-zinc-900">
+            📚 교재 업로드
+          </h1>
           <button
             type="button"
             onClick={() => setUploadOpen(true)}

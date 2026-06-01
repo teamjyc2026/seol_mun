@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Download, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, DatabaseBackup, Save, Trash2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import { reindexSource } from '@/features/reindex-source';
 import { api } from '@/shared/api/axios';
 import { SUBJECTS } from '@/shared/config/subjects';
 import { formatDate } from '@/shared/lib/formatDate';
+import { Tooltip } from '@/shared/ui/Tooltip';
 import { StatusBadge } from '@/widgets/source-table';
 
 export function SourceDetailPage({
@@ -132,14 +133,16 @@ export function SourceDetailPage({
             >
               <Download className="h-3 w-3" /> PDF
             </button>
-            <button
-              type="button"
-              onClick={() => reindex.mutate()}
-              disabled={reindex.isPending}
-              className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
-            >
-              <RefreshCw className="h-3 w-3" /> 재인덱싱
-            </button>
+            <Tooltip label="교재를 다시 분석해 임베딩을 DB에 새로 적재해요" side="bottom">
+              <button
+                type="button"
+                onClick={() => reindex.mutate()}
+                disabled={reindex.isPending}
+                className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+              >
+                <DatabaseBackup className="h-3 w-3" /> 재인덱싱
+              </button>
+            </Tooltip>
             <button
               type="button"
               onClick={() => {
