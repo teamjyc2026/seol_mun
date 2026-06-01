@@ -14,6 +14,7 @@ import {
   type ProblemType,
 } from '@/entities/problem';
 import { ProblemTable } from '@/widgets/problem-table';
+import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
 type LocalFilters = {
   search: string;
@@ -83,6 +84,7 @@ export function ProblemLibraryPage({
               <Plus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">낱개 문제</span>
             </Link>
+            <AdminAccountMenu />
           </div>
         </header>
 

@@ -1,19 +1,13 @@
-import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getSourceChunks } from '@/entities/source/api/getSourceChunks';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { requireAdmin } from '@/shared/config/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const idSchema = z.string().uuid();
 type Ctx = { params: Promise<{ id: string }> };
-
-async function requireAdmin() {
-  const store = await cookies();
-  return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
-}
 
 export async function GET(_req: NextRequest, ctx: Ctx) {
   if (!(await requireAdmin())) {

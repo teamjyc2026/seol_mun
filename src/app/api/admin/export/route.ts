@@ -1,10 +1,9 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { giftLabel } from '@/entities/response';
 import { listResponses } from '@/entities/response/api/listResponses';
 import { formatAnswer, parts, questions } from '@/entities/survey';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { getSessionUserId } from '@/shared/config/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -22,8 +21,7 @@ function fnameTs() {
 }
 
 export async function GET() {
-  const cookieStore = await cookies();
-  if (cookieStore.get(ADMIN_COOKIE)?.value !== ADMIN_COOKIE_VALUE) {
+  if (!(await getSessionUserId())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 

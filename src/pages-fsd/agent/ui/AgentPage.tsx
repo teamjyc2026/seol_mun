@@ -13,6 +13,7 @@ import {
   type ChatMessage,
 } from '@/widgets/agent-chat';
 import { streamAgentMessage } from '@/features/send-agent-message';
+import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
 const SUBJECT_LS_KEY = 'seolmun:agent:subject';
 
@@ -190,6 +191,7 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
               <FileText className="h-3.5 w-3.5" />
               문제
             </Link>
+            <AdminAccountMenu />
           </div>
         </header>
 

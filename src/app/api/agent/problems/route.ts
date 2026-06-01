@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import {
@@ -9,16 +8,11 @@ import {
   listProblems,
   type ListProblemsFilters,
 } from '@/entities/problem/api/listProblems';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { getSessionUserId } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-async function requireAdmin() {
-  const store = await cookies();
-  return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
-}
 
 const choiceSchema = z.object({
   label: z.string().min(1).max(8),
@@ -76,7 +70,7 @@ const createSetSchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
-  if (!(await requireAdmin())) {
+  if (!(await getSessionUserId())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const url = new URL(req.url);
@@ -103,7 +97,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireAdmin())) {
+  const userId = await getSessionUserId();
+  if (!userId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   let body;
@@ -133,7 +128,7 @@ export async function POST(req: NextRequest) {
       explanation: body.explanation ?? null,
       notes: body.notes ?? null,
       citations: body.citations ?? [],
-      created_by: 'admin',
+      created_by: userId,
     })
     .select('id')
     .single();
@@ -145,7 +140,8 @@ export async function POST(req: NextRequest) {
 
 /** PUT /api/agent/problems  with body={passage, problems:[...]} creates a set. */
 export async function PUT(req: NextRequest) {
-  if (!(await requireAdmin())) {
+  const userId = await getSessionUserId();
+  if (!userId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   let body;
@@ -182,7 +178,7 @@ export async function PUT(req: NextRequest) {
     explanation: p.explanation ?? null,
     notes: p.notes ?? null,
     citations: p.citations.length ? p.citations : (shared.citations ?? []),
-    created_by: 'admin',
+    created_by: userId,
   }));
   const { data, error } = await supabase
     .from('problems')

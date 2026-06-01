@@ -1,7 +1,6 @@
-import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { requireAdmin } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
 import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
@@ -18,11 +17,6 @@ const schema = z.object({
   studentId: z.string().min(1).optional(),
   subject: z.string().min(1).max(50).optional(),
 });
-
-async function requireAdmin() {
-  const store = await cookies();
-  return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
-}
 
 function encodeEvent(event: StreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;

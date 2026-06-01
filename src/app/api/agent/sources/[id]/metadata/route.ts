@@ -1,8 +1,7 @@
-import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { GRADES, SOURCE_TYPES } from '@/entities/source/model/types';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { requireAdmin } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -10,11 +9,6 @@ export const dynamic = 'force-dynamic';
 
 const idSchema = z.string().uuid();
 type Ctx = { params: Promise<{ id: string }> };
-
-async function requireAdmin() {
-  const store = await cookies();
-  return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
-}
 
 const patchSchema = z
   .object({

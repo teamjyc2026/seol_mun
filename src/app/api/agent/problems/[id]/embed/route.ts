@@ -1,7 +1,6 @@
-import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { requireAdmin } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedQuery } from '@/shared/lib/embedding';
 import { stripRichText } from '@/shared/lib/richText';
@@ -11,11 +10,6 @@ export const dynamic = 'force-dynamic';
 
 const idSchema = z.string().uuid();
 type Ctx = { params: Promise<{ id: string }> };
-
-async function requireAdmin() {
-  const store = await cookies();
-  return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
-}
 
 /**
  * Build the text we embed for a problem. We include topic + question +

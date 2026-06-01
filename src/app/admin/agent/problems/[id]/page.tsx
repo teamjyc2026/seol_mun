@@ -1,9 +1,8 @@
-import { cookies } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { getProblem } from '@/entities/problem/api/listProblems';
 import { listSources } from '@/entities/source/api/listSources';
 import { ProblemEditorPage } from '@/pages-fsd/problem-editor';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { getSessionUserId } from '@/shared/config/auth';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,8 +10,7 @@ export const dynamic = 'force-dynamic';
 type Ctx = { params: Promise<{ id: string }> };
 
 export default async function Page({ params }: Ctx) {
-  const store = await cookies();
-  if (store.get(ADMIN_COOKIE)?.value !== ADMIN_COOKIE_VALUE) {
+  if (!(await getSessionUserId())) {
     redirect('/admin/login');
   }
   const { id } = await params;

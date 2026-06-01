@@ -44,6 +44,8 @@ export type Problem = {
   citations: ProblemCitation[];
   notes: string | null;
   created_by: string | null;
+  /** resolved nickname of the admin in created_by (uuid), attached at fetch time */
+  author_nickname?: string | null;
   conversation_id: string | null;
   embedded_at: string | null;
 };

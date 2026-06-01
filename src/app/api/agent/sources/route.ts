@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import {
@@ -11,18 +10,13 @@ import {
   type IndexingStatus,
   type SourceType,
 } from '@/entities/source/model/types';
-import { ADMIN_COOKIE, ADMIN_COOKIE_VALUE } from '@/shared/config/admin';
+import { requireAdmin } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { indexSource } from '@/shared/agent/indexSource';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
-
-async function requireAdmin() {
-  const store = await cookies();
-  return store.get(ADMIN_COOKIE)?.value === ADMIN_COOKIE_VALUE;
-}
 
 const metadataSchema = z.object({
   title: z.string().min(1).max(200),

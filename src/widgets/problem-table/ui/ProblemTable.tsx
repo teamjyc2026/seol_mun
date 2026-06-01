@@ -106,7 +106,7 @@ export function ProblemTable({ problems }: { problems: Problem[] }) {
               ) : null}
               {p.created_by ? (
                 <span className="rounded-md bg-zinc-50 px-1.5 py-0.5 text-[10px] text-zinc-500">
-                  by {p.created_by}
+                  by {p.author_nickname ?? (p.created_by === 'agent' ? 'AI' : '관리자')}
                 </span>
               ) : null}
             </div>
