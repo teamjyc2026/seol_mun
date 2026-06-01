@@ -20,6 +20,8 @@ import { editSourceMetadata } from '@/features/edit-source-metadata';
 import { deleteSource } from '@/features/delete-source';
 import { reindexSource } from '@/features/reindex-source';
 import { api } from '@/shared/api/axios';
+import { SUBJECTS } from '@/shared/config/subjects';
+import { formatDate } from '@/shared/lib/formatDate';
 import { StatusBadge } from '@/widgets/source-table';
 
 export function SourceDetailPage({
@@ -152,6 +154,11 @@ export function SourceDetailPage({
           </div>
         </header>
 
+        <p className="-mt-3 mb-4 text-xs text-zinc-500">
+          {source.author_nickname ?? (source.created_by ? '관리자' : '—')} 올림 ·{' '}
+          {formatDate(source.created_at)}
+        </p>
+
         {source.indexing_error ? (
           <div
             className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
@@ -172,6 +179,22 @@ export function SourceDetailPage({
                 value={form.title}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
               />
+            </Field>
+            <Field label="과목">
+              <select
+                value={form.subject}
+                onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+                className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm"
+              >
+                {SUBJECTS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-zinc-500">
+                저장하면 즉시 반영돼요. 에이전트는 선택한 과목의 교재만 검색합니다.
+              </p>
             </Field>
             <div className="grid grid-cols-2 gap-2">
               <Field label="유형">

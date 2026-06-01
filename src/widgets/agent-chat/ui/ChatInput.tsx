@@ -45,12 +45,19 @@ export function ChatInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          // Enter = 전송, Shift+Enter = 줄바꿈.
+          // 한글 등 IME 조합 중 Enter(확정)는 전송하지 않는다.
+          if (
+            e.key === 'Enter' &&
+            !e.shiftKey &&
+            !e.nativeEvent.isComposing &&
+            e.keyCode !== 229
+          ) {
             e.preventDefault();
             onSend();
           }
         }}
-        placeholder="예) 임진왜란 객관식 3문제 만들어줘 (⌘+Enter 전송)"
+        placeholder="예) 임진왜란 객관식 3문제 만들어줘 (Enter 전송 · Shift+Enter 줄바꿈)"
         rows={3}
         className="min-h-[60px] w-full resize-y border-0 bg-transparent text-sm leading-relaxed outline-none placeholder:text-zinc-400"
       />
