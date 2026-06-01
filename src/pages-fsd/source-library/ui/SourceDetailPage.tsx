@@ -115,7 +115,7 @@ export function SourceDetailPage({
               href="/admin/agent/sources"
               className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-zinc-600 transition hover:bg-zinc-100"
             >
-              <ArrowLeft className="h-4 w-4" /> 라이브러리
+              <ArrowLeft className="h-4 w-4" /> 교재 업로드
             </Link>
             <h1 className="truncate text-lg font-bold tracking-tight text-zinc-900">
               {source.title}

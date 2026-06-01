@@ -64,7 +64,7 @@ export function ProblemLibraryPage({
               <ArrowLeft className="h-4 w-4" /> 에이전트
             </Link>
             <h1 className="text-lg font-bold tracking-tight text-zinc-900">
-              📝 문제 라이브러리
+              📝 문제 업로드
             </h1>
           </div>
           <div className="flex items-center gap-2">

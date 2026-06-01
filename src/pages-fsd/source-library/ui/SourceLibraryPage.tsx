@@ -61,7 +61,7 @@ export function SourceLibraryPage({ initialSources }: { initialSources: Source[]
               <ArrowLeft className="h-4 w-4" /> 에이전트
             </Link>
             <h1 className="text-lg font-bold tracking-tight text-zinc-900">
-              📚 소스 라이브러리
+              📚 교재 업로드
             </h1>
           </div>
           <button

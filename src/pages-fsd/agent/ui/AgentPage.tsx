@@ -178,18 +178,18 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
             <Link
               href="/admin/agent/sources"
               className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
-              title="소스 라이브러리"
+              title="교재 업로드"
             >
               <BookOpen className="h-3.5 w-3.5" />
-              소스 {subjectFilteredSources.length}/{initialSources.length}
+              교재 업로드
             </Link>
             <Link
               href="/admin/agent/problems"
               className="inline-flex h-8 items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 text-xs font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
-              title="문제 라이브러리"
+              title="문제 업로드"
             >
               <FileText className="h-3.5 w-3.5" />
-              문제
+              문제 업로드
             </Link>
             <AdminAccountMenu />
           </div>
