@@ -19,6 +19,11 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
 const metadataSchema = z.object({
+  // Storage path produced by POST /agent/sources/upload-url — the browser
+  // uploads the PDF straight to Supabase, so only the path reaches us here.
+  path: z.string().regex(/^[0-9a-f-]{36}\.pdf$/i, 'invalid path'),
+  original_filename: z.string().min(1).max(300),
+  file_size_bytes: z.coerce.number().int().min(0).max(50 * 1024 * 1024).nullable().optional(),
   title: z.string().min(1).max(200),
   source_type: z.enum(SOURCE_TYPES),
   subject: z.string().min(1).max(50).default('국사'),
@@ -33,16 +38,6 @@ const metadataSchema = z.object({
   units: z.array(z.string().min(1).max(80)).max(40).optional(),
   tags: z.array(z.string().min(1).max(40)).max(40).optional(),
 });
-
-const MAX_BYTES = 50 * 1024 * 1024;
-
-function csvToArray(input: string | undefined | null): string[] {
-  if (!input) return [];
-  return input
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 export async function GET(req: NextRequest) {
   if (!(await getUploaderId())) {
@@ -74,66 +69,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 
-  const form = await req.formData().catch(() => null);
-  const file = form?.get('file');
-  if (!(file instanceof File)) {
+  const json = await req.json().catch(() => null);
+  const parsed = metadataSchema.safeParse(json);
+  if (!parsed.success) {
     return NextResponse.json(
-      { message: 'file is required (multipart)' },
+      { message: '메타데이터가 올바르지 않습니다.', details: parsed.error.message },
       { status: 400 },
     );
   }
-  if (!file.name.toLowerCase().endsWith('.pdf')) {
-    return NextResponse.json({ message: 'PDF만 업로드 가능합니다.' }, { status: 400 });
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json(
-      { message: `파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(1)}MB > 50MB).` },
-      { status: 413 },
-    );
-  }
-
-  const subjectsCsv = csvToArray(form!.get('subjects')?.toString());
-  const rawMeta = {
-    title: form!.get('title')?.toString() ?? file.name.replace(/\.pdf$/i, ''),
-    source_type: form!.get('source_type')?.toString(),
-    subject:
-      form!.get('subject')?.toString() ||
-      (subjectsCsv[0] ?? '국사'),
-    subjects: subjectsCsv.length ? subjectsCsv : undefined,
-    grade: form!.get('grade')?.toString() || undefined,
-    publisher: form!.get('publisher')?.toString() || null,
-    year: form!.get('year')?.toString() || undefined,
-    description: form!.get('description')?.toString() || null,
-    author: form!.get('author')?.toString() || null,
-    edition: form!.get('edition')?.toString() || null,
-    isbn: form!.get('isbn')?.toString() || null,
-    units: csvToArray(form!.get('units')?.toString()),
-    tags: csvToArray(form!.get('tags')?.toString()),
-  };
-
-  let meta;
-  try {
-    meta = metadataSchema.parse(rawMeta);
-  } catch (e) {
-    return NextResponse.json(
-      { message: '메타데이터가 올바르지 않습니다.', details: String(e) },
-      { status: 400 },
-    );
-  }
+  const meta = parsed.data;
 
   const supabase = getSupabaseServer();
-  const id = crypto.randomUUID();
-  const path = `${id}.pdf`;
+  const id = meta.path.replace(/\.pdf$/i, '');
+  const path = meta.path;
 
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
-    const { error: upErr } = await supabase.storage
+    // Confirm the browser actually uploaded the object to the signed path.
+    const { data: head, error: headErr } = await supabase.storage
       .from('sources')
-      .upload(path, buf, { contentType: 'application/pdf', upsert: false });
-    if (upErr) {
+      .info(path);
+    if (headErr || !head) {
       return NextResponse.json(
-        { message: '스토리지 업로드 실패', details: upErr.message },
-        { status: 500 },
+        { message: '업로드된 파일을 찾을 수 없습니다. 다시 시도해 주세요.', details: headErr?.message },
+        { status: 400 },
       );
     }
 
@@ -155,8 +113,8 @@ export async function POST(req: NextRequest) {
         units: meta.units ?? [],
         tags: meta.tags ?? [],
         file_path: path,
-        original_filename: file.name,
-        file_size_bytes: file.size,
+        original_filename: meta.original_filename,
+        file_size_bytes: meta.file_size_bytes ?? head.size ?? null,
         indexing_status: 'pending',
         created_by: uploaderId,
       })
