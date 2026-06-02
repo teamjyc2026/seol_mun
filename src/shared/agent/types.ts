@@ -1,5 +1,5 @@
 import type { SourceChunk } from '@/entities/source/model/types';
-import type { AgentId, Audience } from './agents/types';
+import type { AgentId, Audience, ProblemPeek } from './agents/types';
 
 export type Citation = {
   sourceId: string;
@@ -62,6 +62,8 @@ export type AgentContext = {
   studentId: string | null;
   subject: string;
   audience: Audience;
+  /** Specialist peek constraints for search_problem (undefined = unconstrained). */
+  problemPeek?: ProblemPeek;
 };
 
 export type StreamEvent =

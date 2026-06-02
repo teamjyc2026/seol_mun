@@ -113,15 +113,7 @@ export async function runAgentTools(args: {
   agent: AgentId;
 }> {
   const audience: Audience = args.audience ?? 'teacher';
-  const ctx: AgentContext = {
-    conversationId: args.conversationId,
-    pinnedSourceIds: args.pinnedSourceIds,
-    studentId: args.studentId,
-    subject: args.subject,
-    audience,
-  };
   const client = getGemini();
-  const augmentedMessage = buildAugmentedMessage(args.message, ctx);
 
   // Supervisor: pick the specialist, then expose only its (audience-gated) tools.
   const { agent } = await classifyAgent(args.message, {
@@ -130,6 +122,16 @@ export async function runAgentTools(args: {
   });
   const profile = getProfile(agent);
   const allowed = resolveAllowedTools(profile, audience);
+
+  const ctx: AgentContext = {
+    conversationId: args.conversationId,
+    pinnedSourceIds: args.pinnedSourceIds,
+    studentId: args.studentId,
+    subject: args.subject,
+    audience,
+    problemPeek: profile.problemPeek,
+  };
+  const augmentedMessage = buildAugmentedMessage(args.message, ctx);
 
   const first = await client.models.generateContent({
     model: GEMINI_GENERATION_MODEL,

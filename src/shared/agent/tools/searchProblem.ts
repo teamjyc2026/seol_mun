@@ -36,9 +36,15 @@ export async function searchProblemTool(
   ctx: AgentContext,
 ): Promise<ToolResult> {
   const args = searchProblemInput.parse(raw);
+  const peek = ctx.problemPeek;
   const matches = await searchProblems(args.query, {
-    k: args.k,
+    k: peek?.limit ?? args.k,
     subject: ctx.subject,
   });
-  return { kind: 'search_problem', problems: toProblemDrafts(matches) };
+  // Specialist peek (grammar/vocab/socratic): only surface relevant matches,
+  // and at most `limit`, so an off-topic saved problem never tags along.
+  const result = peek
+    ? matches.filter((m) => m.similarity >= peek.minSimilarity).slice(0, peek.limit)
+    : matches;
+  return { kind: 'search_problem', problems: toProblemDrafts(result) };
 }

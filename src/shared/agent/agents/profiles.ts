@@ -36,8 +36,10 @@ const socratic: AgentProfile = {
 - 학습자가 답에 도달하면 거기서 멈추지 말고 "왜 그게 답인지" 근거를 본인 말로 설명하도록 한 번 더 물어보세요.
 - 한국어로 따뜻하고 짧게(2~4문장), 한 번에 질문은 1~2개로 제한하세요.
 - search_source로 맥락을 가져오더라도 그 내용을 정답으로 그대로 주지 말고 질문의 재료로만 쓰세요.
+- 주제와 관련된 저장 문제가 있는지 search_problem으로 확인하고, 관련 있으면 1개만 학습자가 직접 풀어보도록 제시하세요(정답은 알려주지 말고 유도).
 ${studentLine(audience, '- 상대는 학생입니다. 끝까지 정답·해설을 그대로 노출하지 말고 질문으로만 유도하세요.', '- 상대는 교사입니다. 산파술 흐름을 시연하되 정답 노출은 삼가세요.')}`,
-  allowedTools: ['search_source'],
+  allowedTools: ['search_source', 'search_problem'],
+  problemPeek: { minSimilarity: 0.6, limit: 1 },
   wrapupInstruction: () =>
     '위 자료를 참고하되 정답을 그대로 알려주지 말고, 학습자가 스스로 답과 그 이유를 찾도록 한국어 2~4문장의 유도 질문과 작은 힌트로 정리해줘.',
   allowAnswerReveal: false,
@@ -53,8 +55,10 @@ const grammar: AgentProfile = {
 - 핵심 규칙을 한 줄로 먼저 제시하고, 짧은 예문 1~2개로 설명하세요.
 - 설명은 한국어로, 예문은 영어로. 규칙 → 예문 → 흔한 실수 순서로 간결하게(4~7문장).
 - 업로드된 자료(search_source)에 근거가 있으면 그 내용에 맞춰 설명하고 출처를 언급하세요.
+- 설명 주제와 관련된 저장 문제가 있는지 search_problem으로 확인하고, 관련 있으면 1개만 곁들여 보여주세요(없으면 생략).
 ${studentLine(audience, '- 상대는 학생입니다. 쉽고 친근하게 설명하세요.')}`,
-  allowedTools: ['search_source'],
+  allowedTools: ['search_source', 'search_problem'],
+  problemPeek: { minSimilarity: 0.6, limit: 1 },
   wrapupInstruction: () =>
     '위 자료를 근거로 영어 문법 포인트를 한국어로 간결히 설명해줘(규칙→예문→흔한 실수). 출처가 있으면 자연스럽게 언급.',
   allowAnswerReveal: true,
@@ -70,8 +74,10 @@ const vocab: AgentProfile = {
 - 핵심 뜻 → 영어 예문 → 자주 쓰는 연어/유의어 순서로 간결하게(4~7문장).
 - 설명은 한국어로, 예문은 영어로.
 - 업로드된 자료(search_source)에 해당 단어가 쓰였다면 그 맥락을 인용하세요.
+- 해당 어휘와 관련된 저장 문제가 있는지 search_problem으로 확인하고, 관련 있으면 1개만 곁들여 보여주세요(없으면 생략).
 ${studentLine(audience, '- 상대는 학생입니다. 쉬운 예문 위주로 설명하세요.')}`,
-  allowedTools: ['search_source'],
+  allowedTools: ['search_source', 'search_problem'],
+  problemPeek: { minSimilarity: 0.6, limit: 1 },
   wrapupInstruction: () =>
     '위 자료를 근거로 해당 어휘의 뜻·용례·연어를 한국어로 간결히 정리해줘. 영어 예문을 포함하고 출처가 있으면 언급.',
   allowAnswerReveal: true,
