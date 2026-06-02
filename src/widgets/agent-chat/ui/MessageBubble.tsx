@@ -1,6 +1,7 @@
 'use client';
 
 import type { AgentReply, ToolResult } from '@/shared/agent/types';
+import { AGENT_LABELS, AGENT_TEXT_CLASS } from '@/shared/agent/agents/styles';
 import { cn } from '@/shared/lib/cn';
 import { openSourcePdf } from '@/features/open-source-pdf';
 import { ProblemCard } from './ProblemCard';
@@ -24,10 +25,19 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
   }
   const r = msg.reply;
   const streaming = msg.streaming;
+  const styled = !!r.agent && r.agent !== 'general';
   return (
     <div className="space-y-3">
       {r.text || streaming ? (
-        <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-zinc-100 px-4 py-2.5 text-sm leading-relaxed text-zinc-800 whitespace-pre-wrap">
+        <div
+          className={cn(
+            'max-w-[85%] rounded-2xl rounded-bl-sm bg-zinc-100 px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap',
+            styled ? AGENT_TEXT_CLASS[r.agent!] : 'text-zinc-800',
+          )}
+        >
+          {styled ? (
+            <span className="font-bold">[{AGENT_LABELS[r.agent!]}] </span>
+          ) : null}
           {r.text}
           {streaming ? (
             <span

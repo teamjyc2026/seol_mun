@@ -81,6 +81,7 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
                       ...m,
                       reply: {
                         ...m.reply,
+                        agent: e.agent,
                         toolResults: e.toolResults,
                         citations: e.citations,
                       },

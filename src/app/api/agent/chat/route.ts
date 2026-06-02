@@ -78,18 +78,21 @@ export async function POST(req: NextRequest) {
         }
       };
       try {
-        const { augmentedMessage, toolResults, citations, directText } =
+        // This route is uploader-gated → always the teacher audience.
+        const { augmentedMessage, toolResults, citations, directText, profile, agent } =
           await runAgentTools({
             conversationId: convId,
             message: body.message,
             pinnedSourceIds: body.pinnedSourceIds,
             studentId: body.studentId ?? null,
             subject,
+            audience: 'teacher',
           });
 
         send({
           kind: 'meta',
           conversationId: convId,
+          agent,
           toolResults,
           citations,
         });
@@ -100,6 +103,8 @@ export async function POST(req: NextRequest) {
           toolResults,
           initialText: directText,
           subject,
+          profile,
+          audience: 'teacher',
         })) {
           finalText += piece;
           send({ kind: 'token', text: piece });
@@ -114,6 +119,7 @@ export async function POST(req: NextRequest) {
           role: 'assistant',
           content: {
             text: finalText,
+            agent,
             toolResults,
             citations,
             subject,

@@ -1,4 +1,5 @@
 import type { SourceChunk } from '@/entities/source/model/types';
+import type { AgentId, Audience } from './agents/types';
 
 export type Citation = {
   sourceId: string;
@@ -51,6 +52,8 @@ export type AgentReply = {
   text: string;
   toolResults: ToolResult[];
   citations: Citation[];
+  /** Which specialist produced this reply (undefined on older messages). */
+  agent?: AgentId;
 };
 
 export type AgentContext = {
@@ -58,10 +61,11 @@ export type AgentContext = {
   pinnedSourceIds: string[];
   studentId: string | null;
   subject: string;
+  audience: Audience;
 };
 
 export type StreamEvent =
-  | { kind: 'meta'; conversationId: string; toolResults: ToolResult[]; citations: Citation[] }
+  | { kind: 'meta'; conversationId: string; agent: AgentId; toolResults: ToolResult[]; citations: Citation[] }
   | { kind: 'token'; text: string }
   | { kind: 'error'; message: string }
   | { kind: 'done' };
