@@ -47,25 +47,32 @@ export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: 
         </ul>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 text-xs font-medium text-zinc-600 hover:text-zinc-900"
-      >
-        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        정답 · 해설
-      </button>
-      {open ? (
-        <div className="space-y-2 rounded-md bg-zinc-50 p-3 text-sm">
-          <p>
-            <span className="mr-1 font-semibold text-emerald-700">정답</span>
-            <RichText text={problem.answer} className="text-zinc-800" />
-          </p>
-          {problem.explanation ? (
-            <RichText text={problem.explanation} className="block text-zinc-600" />
+      {problem.answer ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs font-medium text-zinc-600 hover:text-zinc-900"
+          >
+            {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+            정답 · 해설
+          </button>
+          {open ? (
+            <div className="space-y-2 rounded-md bg-zinc-50 p-3 text-sm">
+              <p>
+                <span className="mr-1 font-semibold text-emerald-700">정답</span>
+                <RichText text={problem.answer} className="text-zinc-800" />
+              </p>
+              {problem.explanation ? (
+                <RichText text={problem.explanation} className="block text-zinc-600" />
+              ) : null}
+            </div>
           ) : null}
-        </div>
-      ) : null}
+        </>
+      ) : (
+        // 출제 모드: 정답은 마스킹되어 내려옴 — 답하면 에이전트가 채점해준다.
+        <p className="text-xs text-zinc-400">✏️ 먼저 풀어보세요 — 답을 보내면 채점해드려요</p>
+      )}
 
       {problem.citations.length > 0 ? (
         <div className="border-t border-zinc-100 pt-3">

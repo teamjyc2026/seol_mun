@@ -5,7 +5,9 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
 import { extractAndSaveMemories } from '@/shared/agent/memory';
+import { maskProblemAnswers } from '@/shared/agent/maskAnswers';
 import type { AgentId } from '@/shared/agent/agents/types';
+import type { ToolResult } from '@/shared/agent/types';
 import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
 import type { StreamEvent } from '@/shared/agent/types';
 
@@ -48,14 +50,39 @@ async function loadHistory(
   const history: Anthropic.MessageParam[] = [];
   let lastAgent: AgentId | null = null;
   for (const r of rows) {
-    const content = r.content as { text?: string; agent?: AgentId } | null;
-    const text = (content?.text ?? '').slice(0, HISTORY_TURN_CHARS).trim();
+    const content = r.content as {
+      text?: string;
+      agent?: AgentId;
+      toolResults?: ToolResult[];
+    } | null;
+    let text = (content?.text ?? '').slice(0, HISTORY_TURN_CHARS).trim();
     if (!text) continue;
     if (r.role !== 'user' && r.role !== 'assistant') continue;
     // Claude requires the first message to be a user turn.
     if (history.length === 0 && r.role === 'assistant') continue;
+    if (r.role === 'assistant') {
+      // 클라이언트에는 마스킹돼 나갔지만, 채점을 위해 그 턴에 출제된 문제의
+      // 정답·해설을 모델에게만 비공개 메모로 전달한다.
+      const problems = (content?.toolResults ?? []).flatMap((tr) =>
+        tr.kind === 'search_problem' || tr.kind === 'generate_problem'
+          ? tr.problems
+          : [],
+      );
+      const notes = problems
+        .filter((p) => p.answer)
+        .slice(0, 5)
+        .map(
+          (p, i) =>
+            `문제${i + 1} "${p.question.slice(0, 60)}" → 정답: ${p.answer}${
+              p.explanation ? ` / 해설: ${String(p.explanation).slice(0, 300)}` : ''
+            }`,
+        );
+      if (notes.length > 0) {
+        text += `\n\n[비공개 채점 메모 — 학생 메시지에 답이 오기 전까지 절대 노출 금지]\n${notes.join('\n')}`;
+      }
+      if (content?.agent) lastAgent = content.agent;
+    }
     history.push({ role: r.role, content: text });
-    if (r.role === 'assistant' && content?.agent) lastAgent = content.agent;
   }
   return { history, lastAgent };
 }
@@ -141,11 +168,14 @@ export async function POST(req: NextRequest) {
           lastAgent,
         });
 
+        // 출제 시 정답·해설은 클라이언트로 내려보내지 않는다(마스킹).
+        // 원본은 아래 agent_messages 저장분에 남아 다음 턴 채점에 쓰인다.
+        const maskedToolResults = maskProblemAnswers(toolResults);
         send({
           kind: 'meta',
           conversationId: convId,
           agent,
-          toolResults,
+          toolResults: maskedToolResults,
           citations,
         });
 
