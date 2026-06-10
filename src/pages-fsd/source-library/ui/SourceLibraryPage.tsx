@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Plus } from 'lucide-react';
+import Link from 'next/link';
+import { PencilLine, Plus } from 'lucide-react';
 import type { Source } from '@/entities/source';
 import { UploadDialog } from '@/features/upload-source';
 import {
@@ -55,14 +56,23 @@ export function SourceLibraryPage({ initialSources }: { initialSources: Source[]
           <h1 className="text-lg font-bold tracking-tight text-zinc-900">
             📚 교재 업로드
           </h1>
-          <button
-            type="button"
-            onClick={() => setUploadOpen(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-sm font-medium text-white shadow-md transition hover:bg-zinc-800"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            소스 업로드
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/admin/agent/sources/new-text"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+              직접 기입
+            </Link>
+            <button
+              type="button"
+              onClick={() => setUploadOpen(true)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-sm font-medium text-white shadow-md transition hover:bg-zinc-800"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              소스 업로드
+            </button>
+          </div>
         </header>
 
         <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">

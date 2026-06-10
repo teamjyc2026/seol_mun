@@ -138,8 +138,11 @@ async function extractProblems(
   const { problems } = await claudeJson<{ problems: ExtractedProblem[] }>({
     system: `너는 한국 고등학교 시험지 디지털화 전문가다. 스캔본 문제지에서 모든 문제를 빠짐없이 구조화 추출한다.
 - question: 발문 전체(번호 제외). 영어 지문 문제면 발문만 넣고 지문은 passage에.
-- passage: 여러 문제가 공유하는 지문/제시문 전체 텍스트. 공유 문제들은 동일한 passageKey(예: "p1")를 부여. 단독 지문도 passage에 넣고 passageKey는 생략.
-- choices: 객관식이면 보기 전부 (label: "①"~"⑤"), 주관식이면 생략.
+- passage: [필수 규칙] 발문이 "윗글", "다음 글", "밑줄 친", "빈칸" 등 지문을 참조하면 passage를 반드시 채워라 — passage 없이 발문만 추출하면 그 문제는 풀 수 없는 쓰레기 데이터가 된다.
+  · 지문 안의 밑줄 친 어구는 라벨과 함께 굵게 유지: "ⓐ **diagnosing**" / "(A) **which**"
+  · 네모 안 선택 어구는 "[which / that]" 형태로 유지. 빈칸은 "______"로 유지.
+  · 여러 문제가 같은 지문을 공유하면 동일한 passageKey(예: "p1")를 부여하고 각 문제에 passage 전체를 그대로 반복해 넣어라.
+- choices: 객관식이면 보기 전부 (label: "①"~"⑤"), 주관식이면 생략. 보기가 ⓐ~ⓔ 참조뿐이면 text에 해당 어구도 같이: "ⓐ (diagnosing)".
 - answer: 정답 (객관식은 "①" 형식, 주관식은 정답 텍스트).
 - explanation: 해설 (정답지에 있으면 그대로, 없으면 직접 작성).
 - page: 해당 문제가 있는 문제지 페이지 번호(1부터).
@@ -235,6 +238,8 @@ async function ingestOne(args: {
   filePath: string;
   answerPath: string | null;
   schoolId: string;
+  /** 지문 참조 문제에 passage가 비어있는 소스만 골라 문제를 재추출. */
+  repairPassages?: boolean;
 }): Promise<void> {
   const supabase = getSupabaseServer();
   const filename = nfc(path.basename(args.filePath));
@@ -321,15 +326,32 @@ async function ingestOne(args: {
 
   if (!isProblemPdf(filename)) return;
 
-  // Resume support: skip problem extraction if this source already has them.
-  const { count: existingProblems } = await supabase
+  // Resume support: skip problem extraction if this source already has them —
+  // unless repair mode finds passage-referencing problems without a passage.
+  const { data: existingRows } = await supabase
     .from('problems')
-    .select('id', { count: 'exact', head: true })
+    .select('id, question, passage')
     .eq('created_by', 'ingest-script')
     .contains('citations', JSON.stringify([{ sourceId }]));
-  if ((existingProblems ?? 0) > 0) {
-    console.log(`  ↷ 문제 ${existingProblems}개 이미 등록됨 — 추출 스킵`);
-    return;
+  const existing = existingRows ?? [];
+  if (existing.length > 0) {
+    const broken = existing.filter(
+      (p) =>
+        /윗글|밑줄|빈칸|다음\s*글/.test(p.question as string) &&
+        !(p.passage as string | null),
+    );
+    if (!args.repairPassages || broken.length === 0) {
+      console.log(`  ↷ 문제 ${existing.length}개 이미 등록됨 — 추출 스킵`);
+      return;
+    }
+    console.log(
+      `  ♻ 지문 누락 ${broken.length}/${existing.length}개 — 기존 문제 삭제 후 재추출`,
+    );
+    const { error: delErr } = await supabase
+      .from('problems')
+      .delete()
+      .in('id', existing.map((p) => p.id as string));
+    if (delErr) throw new Error(`problems delete failed: ${delErr.message}`);
   }
 
   console.log(`  ③ 문제 추출·판독 중… ${args.answerPath ? '(정답지 페어)' : '(정답 AI 판독)'}`);
@@ -419,11 +441,14 @@ async function main() {
     const i = argv.indexOf('--school');
     return i >= 0 ? argv[i + 1] ?? SCHOOL_DEFAULT : SCHOOL_DEFAULT;
   })();
+  const repairPassages = argv.includes('--repair-passages');
   const folders = argv.filter(
     (a, i) => !a.startsWith('--') && argv[i - 1] !== '--only' && argv[i - 1] !== '--school',
   );
   if (folders.length === 0) {
-    console.error('usage: tsx scripts/ingest-exam-pdfs.ts <folder...> [--only substr] [--school name]');
+    console.error(
+      'usage: tsx scripts/ingest-exam-pdfs.ts <folder...> [--only substr] [--school name] [--repair-passages]',
+    );
     process.exit(1);
   }
 
@@ -454,6 +479,7 @@ async function main() {
         filePath: f,
         answerPath: answers.get(pairStem(f)) ?? null,
         schoolId,
+        repairPassages,
       });
     } catch (e) {
       failed++;

@@ -20,6 +20,7 @@ import type { Source } from '@/entities/source';
 import { SUBJECTS, DEFAULT_SUBJECT } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
 import { RichTextPreview, RichTextHelp } from '@/shared/ui/RichText';
+import { ImageCropOcr } from '@/shared/ui/ImageCropOcr';
 import { SourceAttachmentPicker } from './SourceAttachmentPicker';
 
 export type ProblemFormValue = {
@@ -201,6 +202,10 @@ export function ProblemForm({
           placeholder="문제 본문"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
+        <ImageCropOcr
+          label="문제를 이미지에서 글자 인식 (붙여넣기 · 크롭)"
+          onText={(t) => set('question', value.question ? `${value.question}\n${t}` : t)}
+        />
         <RichTextHelp />
         <RichTextPreview value={value.question} />
       </div>
@@ -284,6 +289,12 @@ export function ProblemForm({
           rows={3}
           placeholder="(선택) 풀이 과정·근거"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
+        />
+        <ImageCropOcr
+          label="해설을 이미지에서 글자 인식 (붙여넣기 · 크롭)"
+          onText={(t) =>
+            set('explanation', value.explanation ? `${value.explanation}\n${t}` : t)
+          }
         />
         <RichTextPreview value={value.explanation} />
       </div>
