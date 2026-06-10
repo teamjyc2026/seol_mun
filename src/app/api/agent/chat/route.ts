@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
+import { extractAndSaveMemories } from '@/shared/agent/memory';
 import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
 import type { StreamEvent } from '@/shared/agent/types';
 
@@ -16,6 +17,7 @@ const schema = z.object({
   pinnedSourceIds: z.array(z.string().uuid()).default([]),
   studentId: z.string().min(1).optional(),
   subject: z.string().min(1).max(50).optional(),
+  schoolId: z.string().uuid().nullable().optional(),
 });
 
 function encodeEvent(event: StreamEvent): string {
@@ -79,15 +81,23 @@ export async function POST(req: NextRequest) {
       };
       try {
         // This route is uploader-gated → always the teacher audience.
-        const { augmentedMessage, toolResults, citations, directText, profile, agent } =
-          await runAgentTools({
-            conversationId: convId,
-            message: body.message,
-            pinnedSourceIds: body.pinnedSourceIds,
-            studentId: body.studentId ?? null,
-            subject,
-            audience: 'teacher',
-          });
+        const {
+          augmentedMessage,
+          toolResults,
+          citations,
+          directText,
+          profile,
+          agent,
+          schoolName,
+        } = await runAgentTools({
+          conversationId: convId,
+          message: body.message,
+          pinnedSourceIds: body.pinnedSourceIds,
+          studentId: body.studentId ?? null,
+          subject,
+          audience: 'teacher',
+          schoolId: body.schoolId ?? null,
+        });
 
         send({
           kind: 'meta',
@@ -105,6 +115,8 @@ export async function POST(req: NextRequest) {
           subject,
           profile,
           audience: 'teacher',
+          studentId: body.studentId ?? null,
+          schoolName,
         })) {
           finalText += piece;
           send({ kind: 'token', text: piece });
@@ -127,6 +139,17 @@ export async function POST(req: NextRequest) {
         });
 
         send({ kind: 'done' });
+
+        // Memory-enabled profiles (companion/emotion): remember facts from
+        // this turn. Runs after 'done' so the UI never waits on it.
+        if (profile.useMemories) {
+          await extractAndSaveMemories({
+            studentId: body.studentId ?? null,
+            agent,
+            userMessage: body.message,
+            assistantText: finalText,
+          });
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         send({ kind: 'error', message: msg });

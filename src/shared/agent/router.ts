@@ -1,9 +1,11 @@
 import 'server-only';
-import { GEMINI_GENERATION_MODEL, getGemini } from '@/shared/config/gemini';
+import type Anthropic from '@anthropic-ai/sdk';
+import { CLAUDE_MODEL, getAnthropic } from '@/shared/config/anthropic';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import type { AgentContext, AgentReply, Citation, ToolResult } from './types';
 import type { AgentId, AgentProfile, Audience } from './agents/types';
 import { classifyAgent } from './agents/classify';
+import { formatMemories, loadMemories } from './memory';
 import {
   buildToolDeclarations,
   getProfile,
@@ -72,10 +74,59 @@ function buildAugmentedMessage(
 ): string {
   const hints: string[] = [];
   hints.push(`과목: ${ctx.subject}`);
+  if (ctx.schoolName) hints.push(`학교: ${ctx.schoolName} 자료 기반`);
   if (ctx.studentId) hints.push(`학생 ID: ${ctx.studentId}`);
   if (ctx.pinnedSourceIds.length > 0)
     hints.push(`핀된 소스 ${ctx.pinnedSourceIds.length}개에서만 검색`);
   return `${message}\n\n(맥락: ${hints.join(', ')} — 도구 호출 시 이 값을 그대로 사용하세요.)`;
+}
+
+/**
+ * Profile system prompt, plus the remembered-facts block for memory-enabled
+ * profiles (companion/emotion).
+ */
+async function buildAgentSystem(
+  profile: AgentProfile,
+  subject: string,
+  audience: Audience,
+  studentId: string | null,
+  schoolName?: string | null,
+): Promise<string> {
+  let system = profile.systemPrompt(subject, audience);
+  if (schoolName) {
+    system += `\n\n[학교 컨텍스트] 이 대화는 '${schoolName}'의 시험대비 자료를 기반으로 합니다. 답변할 때 search_source로 찾은 이 학교 자료와 저장된 문제를 최우선 근거로 사용하고, 자료에 없는 내용은 일반 지식임을 밝히세요.`;
+  }
+  if (profile.useMemories) {
+    const memories = await loadMemories(studentId);
+    system += formatMemories(memories);
+  }
+  return system;
+}
+
+/**
+ * 학교별 RAG: resolve the school's name and its indexed source ids so the
+ * turn's retrieval is scoped to that school's materials.
+ */
+async function resolveSchoolScope(
+  schoolId: string | null | undefined,
+): Promise<{ schoolName: string | null; sourceIds: string[] }> {
+  if (!schoolId) return { schoolName: null, sourceIds: [] };
+  const supabase = getSupabaseServer();
+  const { data: school } = await supabase
+    .from('schools')
+    .select('id, name')
+    .eq('id', schoolId)
+    .maybeSingle();
+  if (!school) return { schoolName: null, sourceIds: [] };
+  const { data: srcs } = await supabase
+    .from('sources')
+    .select('id')
+    .eq('school_id', schoolId)
+    .eq('indexing_status', 'ready');
+  return {
+    schoolName: school.name as string,
+    sourceIds: (srcs ?? []).map((r) => r.id as string),
+  };
 }
 
 async function resolveSourceTitles(citations: Citation[]): Promise<void> {
@@ -100,6 +151,8 @@ export async function runAgentTools(args: {
   studentId: string | null;
   subject: string;
   audience?: Audience;
+  /** 학교별 RAG: scope retrieval to this school's indexed sources. */
+  schoolId?: string | null;
 }): Promise<{
   ctx: AgentContext;
   augmentedMessage: string;
@@ -111,9 +164,11 @@ export async function runAgentTools(args: {
   profile: AgentProfile;
   /** The chosen specialist id (surfaced to the client). */
   agent: AgentId;
+  /** Resolved school name when schoolId was given (for the wrap-up call). */
+  schoolName: string | null;
 }> {
   const audience: Audience = args.audience ?? 'teacher';
-  const client = getGemini();
+  const client = getAnthropic();
 
   // Supervisor: pick the specialist, then expose only its (audience-gated) tools.
   const { agent } = await classifyAgent(args.message, {
@@ -123,48 +178,57 @@ export async function runAgentTools(args: {
   const profile = getProfile(agent);
   const allowed = resolveAllowedTools(profile, audience);
 
+  const school = await resolveSchoolScope(args.schoolId);
+  const pinnedSourceIds =
+    school.sourceIds.length > 0
+      ? Array.from(new Set([...args.pinnedSourceIds, ...school.sourceIds]))
+      : args.pinnedSourceIds;
+
   const ctx: AgentContext = {
     conversationId: args.conversationId,
-    pinnedSourceIds: args.pinnedSourceIds,
+    pinnedSourceIds,
     studentId: args.studentId,
     subject: args.subject,
     audience,
     problemPeek: profile.problemPeek,
+    schoolName: school.schoolName,
   };
   const augmentedMessage = buildAugmentedMessage(args.message, ctx);
+  const system = await buildAgentSystem(
+    profile,
+    args.subject,
+    audience,
+    args.studentId,
+    school.schoolName,
+  );
 
-  const first = await client.models.generateContent({
-    model: GEMINI_GENERATION_MODEL,
-    contents: [{ role: 'user', parts: [{ text: augmentedMessage }] }],
-    config: {
-      systemInstruction: profile.systemPrompt(args.subject, audience),
-      ...(allowed.length
-        ? { tools: [{ functionDeclarations: buildToolDeclarations(allowed) }] }
-        : {}),
-      temperature: 0.3,
-    },
+  const first = await client.messages.create({
+    model: CLAUDE_MODEL,
+    max_tokens: 4096,
+    system,
+    ...(allowed.length ? { tools: buildToolDeclarations(allowed) } : {}),
+    messages: [{ role: 'user', content: augmentedMessage }],
   });
 
-  const parts = first.candidates?.[0]?.content?.parts ?? [];
-  const calls = parts.filter((p) => 'functionCall' in p);
+  const calls = first.content.filter(
+    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+  );
   // Keep any direct text the model produced when it didn't call a tool, so an
   // off-topic / no-tool question still gets a real answer instead of a blank.
-  const directText = parts
-    .map((p) => (p as { text?: string }).text ?? '')
+  const directText = first.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
     .join('')
     .trim();
 
   const toolResults: ToolResult[] = [];
-  for (const part of calls) {
-    const fc = (part as { functionCall?: { name?: string; args?: unknown } })
-      .functionCall;
-    if (!fc?.name) continue;
+  for (const call of calls) {
     try {
-      const result = await runTool(fc.name, fc.args ?? {}, ctx);
+      const result = await runTool(call.name, call.input ?? {}, ctx);
       toolResults.push(result);
     } catch (e) {
       const text = e instanceof Error ? e.message : String(e);
-      console.error(`[agent] tool ${fc.name} failed:`, text);
+      console.error(`[agent] tool ${call.name} failed:`, text);
     }
   }
 
@@ -190,7 +254,34 @@ export async function runAgentTools(args: {
   const citations = collectCitations(toolResults);
   await resolveSourceTitles(citations);
 
-  return { ctx, augmentedMessage, toolResults, citations, directText, profile, agent };
+  return {
+    ctx,
+    augmentedMessage,
+    toolResults,
+    citations,
+    directText,
+    profile,
+    agent,
+    schoolName: school.schoolName,
+  };
+}
+
+/** Yield text deltas from a Claude streaming call. */
+async function* streamClaudeText(
+  client: Anthropic,
+  params: { system: string; messages: Anthropic.MessageParam[] },
+): AsyncGenerator<string, void, void> {
+  const stream = client.messages.stream({
+    model: CLAUDE_MODEL,
+    max_tokens: 8192,
+    system: params.system,
+    messages: params.messages,
+  });
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      if (event.delta.text) yield event.delta.text;
+    }
+  }
 }
 
 /** Stream the natural-language wrap-up after tools ran, in the profile's voice. */
@@ -201,10 +292,19 @@ export async function* streamWrapup(args: {
   subject?: string;
   profile: AgentProfile;
   audience?: Audience;
+  studentId?: string | null;
+  schoolName?: string | null;
 }): AsyncGenerator<string, void, void> {
   const audience: Audience = args.audience ?? 'teacher';
   const subject = args.subject ?? '학습';
-  const client = getGemini();
+  const client = getAnthropic();
+  const system = await buildAgentSystem(
+    args.profile,
+    subject,
+    audience,
+    args.studentId ?? null,
+    args.schoolName ?? null,
+  );
 
   if (args.toolResults.length === 0) {
     // Model already produced a direct answer in the profile's voice — use it.
@@ -214,44 +314,25 @@ export async function* streamWrapup(args: {
     }
     // Non-always-answer profiles stay silent rather than fabricate.
     if (!args.profile.alwaysAnswer) return;
-    // Socratic (and grammar/vocab): synthesize a turn from the question alone.
-    const stream = await client.models.generateContentStream({
-      model: GEMINI_GENERATION_MODEL,
-      contents: [{ role: 'user', parts: [{ text: args.augmentedMessage }] }],
-      config: {
-        systemInstruction: args.profile.systemPrompt(subject, audience),
-        temperature: 0.5,
-      },
+    // Socratic (and grammar/vocab/companion/emotion): synthesize a turn from
+    // the question alone.
+    yield* streamClaudeText(client, {
+      system,
+      messages: [{ role: 'user', content: args.augmentedMessage }],
     });
-    for await (const chunk of stream) {
-      const text = chunk.text ?? '';
-      if (text) yield text;
-    }
     return;
   }
 
-  const stream = await client.models.generateContentStream({
-    model: GEMINI_GENERATION_MODEL,
-    contents: [
-      { role: 'user', parts: [{ text: args.augmentedMessage }] },
+  yield* streamClaudeText(client, {
+    system,
+    messages: [
+      { role: 'user', content: args.augmentedMessage },
       {
         role: 'user',
-        parts: [
-          {
-            text: `도구 실행 결과(JSON):\n${JSON.stringify(args.toolResults).slice(0, 8000)}\n\n${args.profile.wrapupInstruction(audience)}`,
-          },
-        ],
+        content: `도구 실행 결과(JSON):\n${JSON.stringify(args.toolResults).slice(0, 8000)}\n\n${args.profile.wrapupInstruction(audience)}`,
       },
     ],
-    config: {
-      systemInstruction: args.profile.systemPrompt(subject, audience),
-      temperature: 0.4,
-    },
   });
-  for await (const chunk of stream) {
-    const text = chunk.text ?? '';
-    if (text) yield text;
-  }
 }
 
 /** Convenience: collect everything into a single AgentReply (non-streaming path). */
@@ -273,6 +354,7 @@ export async function runAgent(args: {
     subject: args.subject,
     profile,
     audience: args.audience,
+    studentId: args.studentId,
   })) {
     text += chunk;
   }

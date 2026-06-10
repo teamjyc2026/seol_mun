@@ -1,7 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
-import { Type } from '@google/genai';
-import { GEMINI_GENERATION_MODEL, getGemini } from '@/shared/config/gemini';
+import { claudeJson } from '@/shared/config/anthropic';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { buildEvaluationPrompt } from '../prompts';
 import type { AgentContext, ToolResult } from '../types';
@@ -42,28 +41,22 @@ export async function evaluateAnswerTool(
 
 위 문제·정답을 기준으로 학생 답안을 평가하라.`;
 
-  const client = getGemini();
-  const res = await client.models.generateContent({
-    model: GEMINI_GENERATION_MODEL,
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    config: {
-      systemInstruction: buildEvaluationPrompt(ctx.subject),
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          isCorrect: { type: Type.BOOLEAN },
-          score: { type: Type.NUMBER },
-          feedback: { type: Type.STRING },
-        },
-        required: ['isCorrect', 'score', 'feedback'],
-      },
-      temperature: 0.1,
-    },
-  });
-
   type EvalRaw = { isCorrect: boolean; score: number; feedback: string };
-  const parsed = JSON.parse(res.text ?? '{}') as EvalRaw;
+  const parsed = await claudeJson<EvalRaw>({
+    system: buildEvaluationPrompt(ctx.subject),
+    content: userPrompt,
+    schema: {
+      type: 'object',
+      properties: {
+        isCorrect: { type: 'boolean' },
+        score: { type: 'number' },
+        feedback: { type: 'string' },
+      },
+      required: ['isCorrect', 'score', 'feedback'],
+      additionalProperties: false,
+    },
+    maxTokens: 1024,
+  });
   const score = Math.max(0, Math.min(1, Number(parsed.score) || 0));
 
   const { data: attempt, error: insErr } = await supabase

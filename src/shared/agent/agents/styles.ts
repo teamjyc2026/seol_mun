@@ -10,6 +10,8 @@ export const AGENT_LABELS: Record<AgentId, string> = {
   grammar: '문법',
   vocab: '어휘',
   problem_finder: '문제',
+  companion: '잡담',
+  emotion: '감정',
   general: '',
 };
 
@@ -19,5 +21,7 @@ export const AGENT_TEXT_CLASS: Record<AgentId, string> = {
   grammar: 'text-emerald-700',
   vocab: 'text-amber-700',
   problem_finder: 'text-blue-700',
+  companion: 'text-pink-700',
+  emotion: 'text-rose-700',
   general: '',
 };

@@ -1,7 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
-import { Type } from '@google/genai';
-import { GEMINI_GENERATION_MODEL, getGemini } from '@/shared/config/gemini';
+import { claudeJson } from '@/shared/config/anthropic';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { searchChunks } from '@/entities/source/api/searchChunks';
 import { buildProblemSystemPrompt } from '../prompts';
@@ -74,47 +73,6 @@ export async function generateProblemTool(
 
   const userPrompt = `REFERENCES:\n${referencesBlock}\n\n위 자료만 사용해서 ${args.count}개의 ${args.type ?? 'objective'} 문제를 만들어라.`;
 
-  const client = getGemini();
-  const res = await client.models.generateContent({
-    model: GEMINI_GENERATION_MODEL,
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    config: {
-      systemInstruction: sys,
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          problems: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                question: { type: Type.STRING },
-                choices: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      label: { type: Type.STRING },
-                      text: { type: Type.STRING },
-                    },
-                    required: ['label', 'text'],
-                  },
-                },
-                answer: { type: Type.STRING },
-                explanation: { type: Type.STRING },
-                citation_indices: { type: Type.ARRAY, items: { type: Type.INTEGER } },
-              },
-              required: ['question', 'answer', 'explanation', 'citation_indices'],
-            },
-          },
-        },
-        required: ['problems'],
-      },
-      temperature: 0.4,
-    },
-  });
-
   type RawProblem = {
     question: string;
     choices?: { label: string; text: string }[];
@@ -123,12 +81,44 @@ export async function generateProblemTool(
     citation_indices: number[];
   };
 
-  let parsed: { problems: RawProblem[] };
-  try {
-    parsed = JSON.parse(res.text ?? '{}');
-  } catch {
-    throw new Error('모델이 JSON을 반환하지 않았습니다.');
-  }
+  const parsed = await claudeJson<{ problems: RawProblem[] }>({
+    system: sys,
+    content: userPrompt,
+    schema: {
+      type: 'object',
+      properties: {
+        problems: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              question: { type: 'string' },
+              choices: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    label: { type: 'string' },
+                    text: { type: 'string' },
+                  },
+                  required: ['label', 'text'],
+                  additionalProperties: false,
+                },
+              },
+              answer: { type: 'string' },
+              explanation: { type: 'string' },
+              citation_indices: { type: 'array', items: { type: 'integer' } },
+            },
+            required: ['question', 'answer', 'explanation', 'citation_indices'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['problems'],
+      additionalProperties: false,
+    },
+    maxTokens: 8192,
+  });
 
   const drafts: ProblemDraft[] = (parsed.problems ?? []).map((p) => {
     const citations: Citation[] = (p.citation_indices ?? [])

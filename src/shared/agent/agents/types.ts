@@ -1,5 +1,12 @@
 /** Specialist agent identifiers chosen by the supervisor (classifyAgent). */
-export type AgentId = 'socratic' | 'grammar' | 'vocab' | 'problem_finder' | 'general';
+export type AgentId =
+  | 'socratic'
+  | 'grammar'
+  | 'vocab'
+  | 'problem_finder'
+  | 'companion'
+  | 'emotion'
+  | 'general';
 
 /** Who is talking to the agent. Gates which tools/behaviors are allowed. */
 export type Audience = 'teacher' | 'student';
@@ -41,4 +48,9 @@ export type AgentProfile = {
   alwaysAnswer: boolean;
   /** Whether the 0.78 auto-surfaced-problem fallback may fire. */
   autoProblemFallback: boolean;
+  /**
+   * Inject per-user memories (agent_memories) into the system prompt and
+   * extract new ones after the turn (companion/emotion).
+   */
+  useMemories?: boolean;
 };

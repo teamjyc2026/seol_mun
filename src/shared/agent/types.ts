@@ -64,6 +64,8 @@ export type AgentContext = {
   audience: Audience;
   /** Specialist peek constraints for search_problem (undefined = unconstrained). */
   problemPeek?: ProblemPeek;
+  /** Set when the conversation is scoped to a school's RAG (학교별 RAG). */
+  schoolName?: string | null;
 };
 
 export type StreamEvent =
