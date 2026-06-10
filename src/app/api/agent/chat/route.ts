@@ -2,8 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
+import type Anthropic from '@anthropic-ai/sdk';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
 import { extractAndSaveMemories } from '@/shared/agent/memory';
+import type { AgentId } from '@/shared/agent/agents/types';
 import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
 import type { StreamEvent } from '@/shared/agent/types';
 
@@ -22,6 +24,40 @@ const schema = z.object({
 
 function encodeEvent(event: StreamEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+const HISTORY_TURNS = 12;
+const HISTORY_TURN_CHARS = 3000;
+
+/**
+ * Load prior turns of this conversation as Claude messages, plus the
+ * specialist that handled the last assistant turn (sticky tutoring loop).
+ */
+async function loadHistory(
+  supabase: ReturnType<typeof getSupabaseServer>,
+  conversationId: string,
+): Promise<{ history: Anthropic.MessageParam[]; lastAgent: AgentId | null }> {
+  const { data } = await supabase
+    .from('agent_messages')
+    .select('role, content')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(HISTORY_TURNS);
+  const rows = (data ?? []).reverse();
+
+  const history: Anthropic.MessageParam[] = [];
+  let lastAgent: AgentId | null = null;
+  for (const r of rows) {
+    const content = r.content as { text?: string; agent?: AgentId } | null;
+    const text = (content?.text ?? '').slice(0, HISTORY_TURN_CHARS).trim();
+    if (!text) continue;
+    if (r.role !== 'user' && r.role !== 'assistant') continue;
+    // Claude requires the first message to be a user turn.
+    if (history.length === 0 && r.role === 'assistant') continue;
+    history.push({ role: r.role, content: text });
+    if (r.role === 'assistant' && content?.agent) lastAgent = content.agent;
+  }
+  return { history, lastAgent };
 }
 
 export async function POST(req: NextRequest) {
@@ -43,6 +79,10 @@ export async function POST(req: NextRequest) {
   const subject = body.subject || DEFAULT_SUBJECT;
 
   let conversationId = body.conversationId ?? null;
+  // Load prior turns BEFORE inserting the current user message.
+  const { history, lastAgent } = conversationId
+    ? await loadHistory(supabase, conversationId)
+    : { history: [] as Anthropic.MessageParam[], lastAgent: null };
   if (!conversationId) {
     const title = body.message.slice(0, 30);
     const { data: conv, error } = await supabase
@@ -97,6 +137,8 @@ export async function POST(req: NextRequest) {
           subject,
           audience: 'teacher',
           schoolId: body.schoolId ?? null,
+          history,
+          lastAgent,
         });
 
         send({
@@ -117,6 +159,7 @@ export async function POST(req: NextRequest) {
           audience: 'teacher',
           studentId: body.studentId ?? null,
           schoolName,
+          history,
         })) {
           finalText += piece;
           send({ kind: 'token', text: piece });

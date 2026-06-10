@@ -153,6 +153,10 @@ export async function runAgentTools(args: {
   audience?: Audience;
   /** 학교별 RAG: scope retrieval to this school's indexed sources. */
   schoolId?: string | null;
+  /** Prior turns of this conversation (tutoring loop needs them). */
+  history?: Anthropic.MessageParam[];
+  /** Specialist that produced the last assistant turn (sticky routing). */
+  lastAgent?: AgentId | null;
 }): Promise<{
   ctx: AgentContext;
   augmentedMessage: string;
@@ -174,6 +178,7 @@ export async function runAgentTools(args: {
   const { agent } = await classifyAgent(args.message, {
     subject: args.subject,
     audience,
+    lastAgent: args.lastAgent ?? null,
   });
   const profile = getProfile(agent);
   const allowed = resolveAllowedTools(profile, audience);
@@ -207,7 +212,7 @@ export async function runAgentTools(args: {
     max_tokens: 4096,
     system,
     ...(allowed.length ? { tools: buildToolDeclarations(allowed) } : {}),
-    messages: [{ role: 'user', content: augmentedMessage }],
+    messages: [...(args.history ?? []), { role: 'user', content: augmentedMessage }],
   });
 
   const calls = first.content.filter(
@@ -294,6 +299,7 @@ export async function* streamWrapup(args: {
   audience?: Audience;
   studentId?: string | null;
   schoolName?: string | null;
+  history?: Anthropic.MessageParam[];
 }): AsyncGenerator<string, void, void> {
   const audience: Audience = args.audience ?? 'teacher';
   const subject = args.subject ?? '학습';
@@ -318,7 +324,10 @@ export async function* streamWrapup(args: {
     // the question alone.
     yield* streamClaudeText(client, {
       system,
-      messages: [{ role: 'user', content: args.augmentedMessage }],
+      messages: [
+        ...(args.history ?? []),
+        { role: 'user', content: args.augmentedMessage },
+      ],
     });
     return;
   }
@@ -326,6 +335,7 @@ export async function* streamWrapup(args: {
   yield* streamClaudeText(client, {
     system,
     messages: [
+      ...(args.history ?? []),
       { role: 'user', content: args.augmentedMessage },
       {
         role: 'user',
@@ -343,6 +353,9 @@ export async function runAgent(args: {
   studentId: string | null;
   subject: string;
   audience?: Audience;
+  schoolId?: string | null;
+  history?: Anthropic.MessageParam[];
+  lastAgent?: AgentId | null;
 }): Promise<AgentReply> {
   const { augmentedMessage, toolResults, citations, directText, profile, agent } =
     await runAgentTools(args);
@@ -355,6 +368,7 @@ export async function runAgent(args: {
     profile,
     audience: args.audience,
     studentId: args.studentId,
+    history: args.history,
   })) {
     text += chunk;
   }

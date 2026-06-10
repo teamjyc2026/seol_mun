@@ -4,6 +4,8 @@ export type AgentId =
   | 'grammar'
   | 'vocab'
   | 'problem_finder'
+  | 'recite'
+  | 'reading'
   | 'companion'
   | 'emotion'
   | 'general';

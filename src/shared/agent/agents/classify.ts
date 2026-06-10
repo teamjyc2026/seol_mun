@@ -16,6 +16,18 @@ const KEYWORD_RULES: { id: AgentId; patterns: RegExp[] }[] = [
     ],
   },
   {
+    // 본문 암기 확인 — outranks problem_finder so "본문 빈칸 테스트 내줘"
+    // starts a recitation check, not a problem search.
+    id: 'recite',
+    patterns: [
+      /본문\s*(외|암기)|암기\s*(확인|테스트|체크|검사)|외웠는지|외웠나|외운\s*거|빈칸\s*(테스트|퀴즈)|영작\s*(테스트|확인)/,
+    ],
+  },
+  {
+    id: 'reading',
+    patterns: [/독해|주제\s*(파악|찾)|요지|제목\s*추론|내용\s*(일치|불일치)|글의\s*(흐름|순서)|comprehension/i],
+  },
+  {
     // Explicit problem-search intent outranks topic keywords
     // ("관계대명사 문제 찾아줘" → problem_finder, not grammar).
     id: 'problem_finder',
@@ -48,12 +60,22 @@ const KEYWORD_RULES: { id: AgentId; patterns: RegExp[] }[] = [
  */
 export async function classifyAgent(
   message: string,
-  opts: { subject: string; audience: Audience },
-): Promise<{ agent: AgentId; confidence: number; via: 'keyword' | 'llm' | 'default' }> {
+  opts: { subject: string; audience: Audience; lastAgent?: AgentId | null },
+): Promise<{
+  agent: AgentId;
+  confidence: number;
+  via: 'keyword' | 'llm' | 'default' | 'history';
+}> {
   for (const rule of KEYWORD_RULES) {
     if (rule.patterns.some((re) => re.test(message))) {
       return { agent: rule.id, confidence: 0.9, via: 'keyword' };
     }
+  }
+  // Tutoring-loop continuation: a turn with no new intent ("③번이요",
+  // "casualties 아닌가?", "왜?") is almost always an answer/follow-up to the
+  // previous specialist — keep the same agent so the loop doesn't break.
+  if (opts.lastAgent && opts.lastAgent !== 'general') {
+    return { agent: opts.lastAgent, confidence: 0.7, via: 'history' };
   }
   // The grammar/vocab/socratic specialists are English-focused. For other
   // subjects, default to general immediately and skip the extra LLM call.
@@ -67,7 +89,7 @@ export async function classifyAgent(
       model: CLAUDE_MODEL,
       max_tokens: 256,
       system:
-        '사용자 메시지를 다음 중 하나로 분류해 JSON으로만 답하라: socratic(스스로 풀도록 유도/답을 직접 알려주지 말 것), grammar(영어 문법), vocab(영어 어휘·단어 뜻), problem_finder(문제 검색·출제), companion(인사·잡담·농담 등 학습과 무관한 가벼운 대화), emotion(스트레스·불안·슬픔 등 감정 표현이 중심), general(그 외).',
+        '사용자 메시지를 다음 중 하나로 분류해 JSON으로만 답하라: socratic(스스로 풀도록 유도/답을 직접 알려주지 말 것), grammar(영어 문법), vocab(영어 어휘·단어 뜻), problem_finder(문제 검색·출제), recite(교과서 본문 암기 확인·빈칸 테스트·영작 확인), reading(독해력 점검·주제/요지/추론 질문), companion(인사·잡담·농담 등 학습과 무관한 가벼운 대화), emotion(스트레스·불안·슬픔 등 감정 표현이 중심), general(그 외).',
       output_config: {
         format: {
           type: 'json_schema',
@@ -81,6 +103,8 @@ export async function classifyAgent(
                   'grammar',
                   'vocab',
                   'problem_finder',
+                  'recite',
+                  'reading',
                   'companion',
                   'emotion',
                   'general',
