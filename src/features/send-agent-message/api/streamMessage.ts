@@ -6,6 +6,8 @@ export type StreamMessageInput = {
   pinnedSourceIds: string[];
   studentId?: string;
   subject?: string;
+  /** 학교별 RAG: scope retrieval to this school's sources. */
+  schoolId?: string | null;
 };
 
 export type StreamHandlers = {

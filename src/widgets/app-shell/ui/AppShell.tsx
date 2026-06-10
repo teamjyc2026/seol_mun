@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Bot, BookOpen, FileText, Menu, X } from 'lucide-react';
+import { ArrowLeft, Bot, BookOpen, FileText, Menu, School, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
@@ -13,6 +13,7 @@ const NAV: NavItem[] = [
   { href: '/admin/agent', label: '에이전트', icon: Bot },
   { href: '/admin/agent/sources', label: '교재 업로드', icon: BookOpen },
   { href: '/admin/agent/problems', label: '문제 업로드', icon: FileText },
+  { href: '/admin/agent/schools', label: '학교 RAG', icon: School },
 ];
 
 function isActive(pathname: string, href: string): boolean {

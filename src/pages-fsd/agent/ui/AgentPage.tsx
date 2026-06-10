@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { Source } from '@/entities/source';
+import type { School } from '@/entities/school';
 import { SUBJECTS, type Subject } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
 import { useSubject } from '@/shared/store/subject';
@@ -13,13 +14,20 @@ import {
 } from '@/widgets/agent-chat';
 import { streamAgentMessage } from '@/features/send-agent-message';
 
-export function AgentPage({ initialSources }: { initialSources: Source[] }) {
+export function AgentPage({
+  initialSources,
+  initialSchools = [],
+}: {
+  initialSources: Source[];
+  initialSchools?: School[];
+}) {
   const { subject, setSubject } = useSubject();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [studentId, setStudentId] = useState('');
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
+  const [schoolId, setSchoolId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   function pickSubject(s: Subject) {
@@ -70,6 +78,7 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
           pinnedSourceIds: pinnedIds,
           studentId: studentId.trim() || undefined,
           subject,
+          schoolId,
         },
         {
           onMeta: (e) => {
@@ -172,6 +181,46 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
             })}
           </div>
         </div>
+
+        {initialSchools.length > 0 && (
+          <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">
+            <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
+              학교 RAG (선택 시 해당 학교 자료 기반으로 답변)
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSchoolId(null)}
+                className={cn(
+                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                  schoolId === null
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                )}
+              >
+                전체
+              </button>
+              {initialSchools.map((sch) => {
+                const active = sch.id === schoolId;
+                return (
+                  <button
+                    key={sch.id}
+                    type="button"
+                    onClick={() => setSchoolId(active ? null : sch.id)}
+                    className={cn(
+                      'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                      active
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                    )}
+                  >
+                    🏫 {sch.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm">
           <span className="text-xs font-medium text-zinc-500">학생ID</span>
