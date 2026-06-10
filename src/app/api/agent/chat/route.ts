@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { requireUploader } from '@/shared/config/auth';
+import { getStudentId, requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
@@ -88,7 +88,10 @@ async function loadHistory(
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireUploader())) {
+  // Two caller realms: uploader(교사/관리) or logged-in student(학습자).
+  const isUploader = await requireUploader();
+  const sessionStudentId = isUploader ? null : await getStudentId();
+  if (!isUploader && !sessionStudentId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 
@@ -104,8 +107,23 @@ export async function POST(req: NextRequest) {
 
   const supabase = getSupabaseServer();
   const subject = body.subject || DEFAULT_SUBJECT;
+  const audience = sessionStudentId ? 'student' : 'teacher';
+  // Students are always tracked under their own id — body.studentId is the
+  // teacher-side manual field only.
+  const studentId = sessionStudentId ?? body.studentId ?? null;
 
   let conversationId = body.conversationId ?? null;
+  if (conversationId && sessionStudentId) {
+    // Students may only continue their own conversations.
+    const { data: conv } = await supabase
+      .from('agent_conversations')
+      .select('id, student_id')
+      .eq('id', conversationId)
+      .maybeSingle();
+    if (!conv || conv.student_id !== sessionStudentId) {
+      return NextResponse.json({ message: 'forbidden' }, { status: 403 });
+    }
+  }
   // Load prior turns BEFORE inserting the current user message.
   const { history, lastAgent } = conversationId
     ? await loadHistory(supabase, conversationId)
@@ -114,7 +132,7 @@ export async function POST(req: NextRequest) {
     const title = body.message.slice(0, 30);
     const { data: conv, error } = await supabase
       .from('agent_conversations')
-      .insert({ title })
+      .insert({ title, student_id: sessionStudentId })
       .select('id')
       .single();
     if (error || !conv) {
@@ -131,7 +149,7 @@ export async function POST(req: NextRequest) {
     role: 'user',
     content: { text: body.message, subject },
     pinned_source_ids: body.pinnedSourceIds,
-    student_id: body.studentId ?? null,
+    student_id: studentId,
   });
 
   const convId = conversationId;
@@ -147,7 +165,6 @@ export async function POST(req: NextRequest) {
         }
       };
       try {
-        // This route is uploader-gated → always the teacher audience.
         const {
           augmentedMessage,
           toolResults,
@@ -160,9 +177,9 @@ export async function POST(req: NextRequest) {
           conversationId: convId,
           message: body.message,
           pinnedSourceIds: body.pinnedSourceIds,
-          studentId: body.studentId ?? null,
+          studentId,
           subject,
-          audience: 'teacher',
+          audience,
           schoolId: body.schoolId ?? null,
           history,
           lastAgent,
@@ -186,8 +203,8 @@ export async function POST(req: NextRequest) {
           initialText: directText,
           subject,
           profile,
-          audience: 'teacher',
-          studentId: body.studentId ?? null,
+          audience,
+          studentId,
           schoolName,
           history,
         })) {
@@ -213,14 +230,25 @@ export async function POST(req: NextRequest) {
 
         send({ kind: 'done' });
 
-        // Memory-enabled profiles (companion/emotion): remember facts from
-        // this turn. Runs after 'done' so the UI never waits on it.
+        // Memory extraction after 'done' (UI never waits on it):
+        // - companion/emotion: social facts/jokes/feelings
+        // - tutoring agents + identified student: strengths/weaknesses, so
+        //   future turns can re-quiz weak areas.
         if (profile.useMemories) {
           await extractAndSaveMemories({
-            studentId: body.studentId ?? null,
+            studentId,
             agent,
             userMessage: body.message,
             assistantText: finalText,
+            mode: 'social',
+          });
+        } else if (studentId) {
+          await extractAndSaveMemories({
+            studentId,
+            agent,
+            userMessage: body.message,
+            assistantText: finalText,
+            mode: 'learning',
           });
         }
       } catch (e) {

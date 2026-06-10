@@ -5,7 +5,7 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 import type { AgentContext, AgentReply, Citation, ToolResult } from './types';
 import type { AgentId, AgentProfile, Audience } from './agents/types';
 import { classifyAgent } from './agents/classify';
-import { formatMemories, loadMemories } from './memory';
+import { formatLearningMemories, formatMemories, loadMemories } from './memory';
 import {
   buildToolDeclarations,
   getProfile,
@@ -97,8 +97,13 @@ async function buildAgentSystem(
     system += `\n\n[학교 컨텍스트] 이 대화는 '${schoolName}'의 시험대비 자료를 기반으로 합니다. 답변할 때 search_source로 찾은 이 학교 자료와 저장된 문제를 최우선 근거로 사용하고, 자료에 없는 내용은 일반 지식임을 밝히세요.`;
   }
   if (profile.useMemories) {
+    // companion/emotion: 교감용 기억 전부 주입
     const memories = await loadMemories(studentId);
     system += formatMemories(memories);
+  } else if (studentId) {
+    // 튜터링 에이전트 + 식별된 학생: 강약점·진도 프로필 주입 → 약한 유형 우선 출제
+    const memories = await loadMemories(studentId);
+    system += formatLearningMemories(memories);
   }
   return system;
 }

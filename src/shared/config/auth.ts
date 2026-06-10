@@ -14,13 +14,20 @@ import {
 import { getSupabaseServer } from './supabase-server';
 
 /**
- * Two completely separate auth realms:
+ * Three completely separate auth realms:
  *  - Admin (설문 대시보드): shared password `aitutor!`, cookie `seolmun_admin=ok`.
  *  - Uploader (문제 올리는 사람): email account, cookie `seolmun_uploader=<token>`.
+ *  - Student (학습자): email account, cookie `seolmun_student=<token>` —
+ *    token payload is namespaced `student:<id>` so the two token kinds can
+ *    never be swapped across realms.
  */
 
 export const UPLOADER_COOKIE = 'seolmun_uploader';
 export const UPLOADER_COOKIE_MAX_AGE = 60 * 60 * 24 * 14; // 14d
+
+export const STUDENT_COOKIE = 'seolmun_student';
+export const STUDENT_COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30d
+const STUDENT_PREFIX = 'student:';
 
 /** Master invite code required to register an uploader account. */
 export const INVITE_CODE = ADMIN_PASSWORD;
@@ -86,7 +93,10 @@ export function verifySessionToken(token: string | undefined): string | null {
 
 export async function getUploaderId(): Promise<string | null> {
   const store = await cookies();
-  return verifySessionToken(store.get(UPLOADER_COOKIE)?.value);
+  const id = verifySessionToken(store.get(UPLOADER_COOKIE)?.value);
+  // A student token must never authenticate as an uploader.
+  if (id && id.startsWith(STUDENT_PREFIX)) return null;
+  return id;
 }
 
 export async function getUploader(): Promise<Uploader | null> {
@@ -104,4 +114,31 @@ export async function getUploader(): Promise<Uploader | null> {
 /** Boolean gate for API routes in the problem/agent area. */
 export async function requireUploader(): Promise<boolean> {
   return (await getUploaderId()) !== null;
+}
+
+// ---- student (email account) realm ----------------------------------------
+
+export type Student = { id: string; email: string; name: string; grade: string | null };
+
+export function createStudentSessionToken(studentId: string): string {
+  return createSessionToken(`${STUDENT_PREFIX}${studentId}`);
+}
+
+export async function getStudentId(): Promise<string | null> {
+  const store = await cookies();
+  const id = verifySessionToken(store.get(STUDENT_COOKIE)?.value);
+  if (!id || !id.startsWith(STUDENT_PREFIX)) return null;
+  return id.slice(STUDENT_PREFIX.length);
+}
+
+export async function getStudent(): Promise<Student | null> {
+  const id = await getStudentId();
+  if (!id) return null;
+  const supabase = getSupabaseServer();
+  const { data } = await supabase
+    .from('students')
+    .select('id, email, name, grade')
+    .eq('id', id)
+    .maybeSingle();
+  return (data as Student | null) ?? null;
 }
