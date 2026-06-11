@@ -51,6 +51,13 @@ export function AgentPage({
 
   async function onSend() {
     const text = input.trim();
+    if (!text) return;
+    setInput('');
+    await sendMessage(text);
+  }
+
+  /** 입력창 전송과 문제 카드의 "답 제출"이 공용으로 쓰는 전송 함수. */
+  async function sendMessage(text: string) {
     if (!text || sending) return;
     setSending(true);
 
@@ -68,7 +75,6 @@ export function AgentPage({
       assistantIndex = next.length - 1;
       return next;
     });
-    setInput('');
 
     try {
       await streamAgentMessage(
@@ -240,7 +246,9 @@ export function AgentPage({
               먼저 소스 PDF를 업로드하면 출처 인용까지 함께 나옵니다.
             </div>
           ) : (
-            messages.map((m, i) => <MessageBubble key={i} msg={m} />)
+            messages.map((m, i) => (
+              <MessageBubble key={i} msg={m} onSubmitAnswer={(t) => void sendMessage(t)} />
+            ))
           )}
         </div>
 

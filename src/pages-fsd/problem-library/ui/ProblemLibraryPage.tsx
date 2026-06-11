@@ -69,6 +69,13 @@ export function ProblemLibraryPage({
           </h1>
           <div className="flex items-center gap-2">
             <Link
+              href="/admin/agent/problems/from-pdf"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-sm font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100"
+              title="PDF에서 영역을 드래그해 문제 추출"
+            >
+              ✂️ <span className="hidden sm:inline">PDF에서 추출</span>
+            </Link>
+            <Link
               href="/admin/agent/problems/new-set"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
               title="지문 1개 + 딸린 문제 여러 개"

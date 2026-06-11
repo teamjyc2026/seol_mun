@@ -14,7 +14,14 @@ export type ChatMessage =
   | { role: 'user'; text: string }
   | { role: 'assistant'; reply: AgentReply; streaming?: boolean };
 
-export function MessageBubble({ msg }: { msg: ChatMessage }) {
+export function MessageBubble({
+  msg,
+  onSubmitAnswer,
+}: {
+  msg: ChatMessage;
+  /** 출제 카드에서 답 제출 시 채팅 메시지로 전송 (없으면 정적 카드). */
+  onSubmitAnswer?: (text: string) => void;
+}) {
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -47,7 +54,7 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
           ) : null}
         </div>
       ) : null}
-      <ToolCards results={r.toolResults} />
+      <ToolCards results={r.toolResults} onSubmitAnswer={onSubmitAnswer} />
       {r.citations.length > 0 ? (
         <div className="flex flex-wrap gap-1.5">
           {r.citations.slice(0, 6).map((c, i) => (
@@ -66,7 +73,13 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
   );
 }
 
-function ToolCards({ results }: { results: ToolResult[] }) {
+function ToolCards({
+  results,
+  onSubmitAnswer,
+}: {
+  results: ToolResult[];
+  onSubmitAnswer?: (text: string) => void;
+}) {
   return (
     <div className="space-y-3">
       {results.map((r, i) => {
@@ -82,7 +95,12 @@ function ToolCards({ results }: { results: ToolResult[] }) {
                 </p>
               ) : null}
               {r.problems.map((p, idx) => (
-                <ProblemCard key={p.id ?? idx} problem={p} index={idx} />
+                <ProblemCard
+                  key={p.id ?? idx}
+                  problem={p}
+                  index={idx}
+                  onSubmitAnswer={onSubmitAnswer}
+                />
               ))}
             </div>
           );

@@ -95,6 +95,13 @@ export function StudentAgentPage({
 
   async function onSend() {
     const text = input.trim();
+    if (!text) return;
+    setInput('');
+    await sendMessage(text);
+  }
+
+  /** 입력창 전송과 문제 카드의 "답 제출"이 공용으로 쓰는 전송 함수. */
+  async function sendMessage(text: string) {
     if (!text || sending) return;
     setSending(true);
 
@@ -112,7 +119,6 @@ export function StudentAgentPage({
       assistantIndex = next.length - 1;
       return next;
     });
-    setInput('');
 
     try {
       await streamAgentMessage(
@@ -275,7 +281,9 @@ export function StudentAgentPage({
               무엇이든 보내보세요. 틀린 유형은 기억해뒀다가 다시 물어봐드려요.
             </div>
           ) : (
-            messages.map((m, i) => <MessageBubble key={i} msg={m} />)
+            messages.map((m, i) => (
+              <MessageBubble key={i} msg={m} onSubmitAnswer={(t) => void sendMessage(t)} />
+            ))
           )}
         </div>
 

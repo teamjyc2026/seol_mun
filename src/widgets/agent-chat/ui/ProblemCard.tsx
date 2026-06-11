@@ -1,15 +1,41 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronUp, Send } from 'lucide-react';
 import type { ProblemDraft } from '@/shared/agent/types';
 import { cn } from '@/shared/lib/cn';
 import { RichText } from '@/shared/ui/RichText';
 import { openSourcePdf } from '@/features/open-source-pdf';
 import { CitationChip } from './CitationChip';
 
-export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: number }) {
+export function ProblemCard({
+  problem,
+  index,
+  onSubmitAnswer,
+}: {
+  problem: ProblemDraft;
+  index: number;
+  /** 출제 모드: 학생이 카드에서 직접 답을 제출 → 채팅 메시지로 전송. */
+  onSubmitAnswer?: (text: string) => void;
+}) {
   const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [typed, setTyped] = useState('');
+  const [submitted, setSubmitted] = useState<string | null>(null);
+
+  // 정답이 마스킹된(출제 중) 카드 + 콜백이 있을 때만 인터랙티브 폼.
+  const interactive = !!onSubmitAnswer && !problem.answer && !submitted;
+  const isObjective =
+    (problem.problem_type ?? 'objective') === 'objective' &&
+    !!problem.choices?.length;
+
+  function submit() {
+    const answer = isObjective ? picked : typed.trim();
+    if (!answer || !onSubmitAnswer) return;
+    setSubmitted(answer);
+    onSubmitAnswer(answer);
+  }
+
   return (
     <article className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
       {problem.passage ? (
@@ -38,16 +64,72 @@ export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: 
 
       {problem.choices && problem.choices.length > 0 ? (
         <ul className="space-y-1.5 pl-8">
-          {problem.choices.map((c) => (
-            <li key={c.label} className="text-sm text-zinc-700">
-              <span className="mr-1.5 font-mono text-zinc-500">{c.label}.</span>
-              <RichText text={c.text} />
-            </li>
-          ))}
+          {problem.choices.map((c) => {
+            const selected = picked === c.label;
+            return (
+              <li key={c.label}>
+                {interactive && isObjective ? (
+                  <button
+                    type="button"
+                    onClick={() => setPicked(c.label)}
+                    className={cn(
+                      'flex w-full items-start gap-1.5 rounded-md border px-2 py-1.5 text-left text-sm transition',
+                      selected
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-900'
+                        : 'border-transparent text-zinc-700 hover:bg-zinc-50',
+                    )}
+                  >
+                    <span className={cn('font-mono', selected ? 'text-indigo-600' : 'text-zinc-500')}>
+                      {c.label}.
+                    </span>
+                    <RichText text={c.text} />
+                  </button>
+                ) : (
+                  <span className="text-sm text-zinc-700">
+                    <span className="mr-1.5 font-mono text-zinc-500">{c.label}.</span>
+                    <RichText text={c.text} />
+                    {submitted === c.label ? (
+                      <span className="ml-1.5 text-xs text-indigo-600">← 내 답</span>
+                    ) : null}
+                  </span>
+                )}
+              </li>
+            );
+          })}
         </ul>
       ) : null}
 
-      {problem.answer ? (
+      {interactive ? (
+        <div className="flex items-center gap-2 border-t border-zinc-100 pt-3">
+          {!isObjective ? (
+            <input
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
+              }}
+              placeholder="답을 입력하세요"
+              className="min-w-0 flex-1 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm outline-none focus:border-indigo-400"
+            />
+          ) : (
+            <p className="flex-1 text-xs text-zinc-500">
+              {picked ? `선택: ${picked}` : '보기를 클릭해서 답을 선택하세요'}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={submit}
+            disabled={isObjective ? !picked : !typed.trim()}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+          >
+            <Send className="h-3 w-3" /> 답 제출
+          </button>
+        </div>
+      ) : submitted ? (
+        <p className="flex items-center gap-1 text-xs font-medium text-indigo-600">
+          <CheckCircle2 className="h-3.5 w-3.5" /> 제출됨: {submitted} — 채점을 기다리는 중…
+        </p>
+      ) : problem.answer ? (
         <>
           <button
             type="button"
@@ -70,7 +152,6 @@ export function ProblemCard({ problem, index }: { problem: ProblemDraft; index: 
           ) : null}
         </>
       ) : (
-        // 출제 모드: 정답은 마스킹되어 내려옴 — 답하면 에이전트가 채점해준다.
         <p className="text-xs text-zinc-400">✏️ 먼저 풀어보세요 — 답을 보내면 채점해드려요</p>
       )}
 
