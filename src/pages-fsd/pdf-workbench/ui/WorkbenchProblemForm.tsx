@@ -192,22 +192,31 @@ export function WorkbenchProblemForm({
       )}
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-zinc-700">정답 (필수)</label>
+        <label className="text-xs font-medium text-zinc-700">
+          정답 (필수{value.problem_type === 'objective' ? ' — 번호만' : ''})
+        </label>
         {value.problem_type === 'objective' ? (
-          <select
-            value={value.answer}
-            onChange={(e) => set('answer', e.target.value)}
-            className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm"
-          >
-            <option value="">정답 번호 선택</option>
-            {value.choices
-              .filter((c) => c.label.trim())
-              .map((c) => (
-                <option key={c.label} value={c.label}>
-                  {c.label} {c.text ? `· ${c.text.slice(0, 30)}` : ''}
-                </option>
-              ))}
-          </select>
+          // 번호만 저장 — 보기 내용이 나중에 바뀌어도 정답은 라벨로 유지된다.
+          <div className="flex flex-wrap gap-1">
+            {(value.choices.length
+              ? value.choices.map((c) => c.label).filter((l) => l.trim())
+              : ['①', '②', '③', '④', '⑤']
+            ).map((label) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => set('answer', value.answer === label ? '' : label)}
+                className={cn(
+                  'h-9 w-9 rounded-full border text-sm font-bold transition',
+                  value.answer === label
+                    ? 'border-emerald-600 bg-emerald-600 text-white'
+                    : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         ) : (
           <input
             value={value.answer}
