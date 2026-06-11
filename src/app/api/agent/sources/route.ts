@@ -37,6 +37,12 @@ const metadataSchema = z.object({
   isbn: z.string().max(40).nullable().optional(),
   units: z.array(z.string().min(1).max(80)).max(40).optional(),
   tags: z.array(z.string().min(1).max(40)).max(40).optional(),
+  school_id: z.string().uuid().nullable().optional(),
+  /**
+   * index: 업로드 직후 통PDF 자동 인덱싱 (기존 교재 업로드).
+   * workbench: PDF 워크벤치 — 등록만 하고 청크는 박스 단위로 수동 적재.
+   */
+  mode: z.enum(['index', 'workbench']).default('index'),
 });
 
 export async function GET(req: NextRequest) {
@@ -115,7 +121,9 @@ export async function POST(req: NextRequest) {
         file_path: path,
         original_filename: meta.original_filename,
         file_size_bytes: meta.file_size_bytes ?? head.size ?? null,
-        indexing_status: 'pending',
+        indexing_status: meta.mode === 'workbench' ? 'ready' : 'pending',
+        chunk_count: meta.mode === 'workbench' ? 0 : undefined,
+        school_id: meta.school_id ?? null,
         created_by: uploaderId,
       })
       .select('id')
@@ -126,6 +134,11 @@ export async function POST(req: NextRequest) {
         { message: 'DB 저장 실패', details: insErr?.message },
         { status: 500 },
       );
+    }
+
+    // 워크벤치 모드: 자동 인덱싱 없이 등록만 — 청크는 박스 저장으로 쌓인다.
+    if (meta.mode === 'workbench') {
+      return NextResponse.json({ id: row.id }, { status: 201 });
     }
 
     try {

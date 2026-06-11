@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Bot, BookOpen, FileText, Menu, School, X } from 'lucide-react';
+import { ArrowLeft, Bot, BookOpen, FileText, Menu, School, Scissors, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
@@ -11,6 +11,7 @@ type NavItem = { href: string; label: string; icon: typeof Bot };
 
 const NAV: NavItem[] = [
   { href: '/admin/agent', label: '에이전트', icon: Bot },
+  { href: '/admin/agent/workbench', label: 'PDF 워크벤치', icon: Scissors },
   { href: '/admin/agent/sources', label: '교재 업로드', icon: BookOpen },
   { href: '/admin/agent/problems', label: '문제 업로드', icon: FileText },
   { href: '/admin/agent/schools', label: '학교 RAG', icon: School },

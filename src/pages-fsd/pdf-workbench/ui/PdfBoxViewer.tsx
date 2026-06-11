@@ -8,11 +8,32 @@ import { cn } from '@/shared/lib/cn';
 /** 박스 좌표는 캔버스 내부 픽셀 기준 (리사이즈와 무관). */
 export type BoxRect = { x: number; y: number; w: number; h: number };
 
+export type BoxKind = 'problem' | 'concept' | 'passage';
+
 export type WorkBox = {
   id: string;
   page: number;
   rect: BoxRect;
+  kind: BoxKind;
   status: 'ocr' | 'ready' | 'failed' | 'saved';
+};
+
+export const KIND_LABEL: Record<BoxKind, string> = {
+  problem: '문제',
+  concept: '개념',
+  passage: '본문',
+};
+
+const KIND_BOX_CLASS: Record<BoxKind, string> = {
+  problem: 'border-indigo-500 bg-indigo-500/10',
+  concept: 'border-amber-500 bg-amber-500/10',
+  passage: 'border-emerald-500 bg-emerald-500/10',
+};
+
+const KIND_BADGE_CLASS: Record<BoxKind, string> = {
+  problem: 'bg-indigo-600',
+  concept: 'bg-amber-600',
+  passage: 'bg-emerald-600',
 };
 
 const RENDER_SCALE = 1.5;
@@ -154,13 +175,11 @@ export function PdfBoxViewer({
             key={b.id}
             className={cn(
               'absolute border-2',
-              b.status === 'saved'
-                ? 'border-emerald-500 bg-emerald-500/10'
-                : b.status === 'failed'
-                  ? 'border-rose-500 bg-rose-500/10'
-                  : selected
-                    ? 'border-indigo-600 bg-indigo-500/15'
-                    : 'border-indigo-400 bg-indigo-400/10',
+              b.status === 'failed'
+                ? 'border-rose-500 bg-rose-500/10'
+                : KIND_BOX_CLASS[b.kind],
+              selected && 'ring-2 ring-zinc-900/40',
+              b.status === 'saved' && 'opacity-80',
             )}
             style={d}
             onMouseDown={(e) => {
@@ -171,10 +190,10 @@ export function PdfBoxViewer({
             <span
               className={cn(
                 'absolute -left-px -top-6 inline-flex items-center gap-1 rounded-t-md px-1.5 py-0.5 text-[10px] font-bold text-white',
-                b.status === 'saved' ? 'bg-emerald-600' : 'bg-indigo-600',
+                KIND_BADGE_CLASS[b.kind],
               )}
             >
-              {i + 1}
+              {i + 1} {KIND_LABEL[b.kind]}
               {b.status === 'ocr' && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
               {b.status === 'saved' && '✓'}
             </span>

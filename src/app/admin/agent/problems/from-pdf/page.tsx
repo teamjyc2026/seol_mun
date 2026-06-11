@@ -1,15 +1,6 @@
 import { redirect } from 'next/navigation';
-import { listSources } from '@/entities/source/api/listSources';
-import { PdfWorkbenchPage } from '@/pages-fsd/pdf-workbench';
-import { getUploaderId } from '@/shared/config/auth';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-export default async function Page() {
-  if (!(await getUploaderId())) {
-    redirect('/admin/login?as=uploader');
-  }
-  const sources = await listSources({ status: 'ready' });
-  return <PdfWorkbenchPage sources={sources} />;
+// PDF 워크벤치는 문제 전용이 아니라 통합 도구 — 독립 라우트로 이동했다.
+export default function Page() {
+  redirect('/admin/agent/workbench');
 }
