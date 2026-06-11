@@ -10,6 +10,8 @@ export type ProblemMatch = {
   topic: string | null;
   difficulty: string | null;
   problem_type: string | null;
+  passage: string | null;
+  passage_set_id: string | null;
   question: string;
   choices: ProblemChoice[] | null;
   answer: string;

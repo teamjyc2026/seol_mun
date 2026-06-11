@@ -15,6 +15,7 @@ export const searchProblemInput = z.object({
 export function toProblemDrafts(matches: ProblemMatch[]): ProblemDraft[] {
   return matches.map((m) => ({
     id: m.id,
+    passage: m.passage,
     topic: m.topic,
     difficulty: (m.difficulty ?? 'medium') as ProblemDraft['difficulty'],
     problem_type: (m.problem_type ?? 'objective') as ProblemDraft['problem_type'],
