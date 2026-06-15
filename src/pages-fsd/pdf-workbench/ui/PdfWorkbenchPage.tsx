@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
 import {
@@ -17,6 +17,8 @@ import {
   PencilLine,
   Plus,
   RefreshCw,
+  RotateCcw,
+  RotateCw,
   Save,
   ScanText,
   Scissors,
@@ -41,6 +43,13 @@ const KIND_ICON: Record<BoxKind, typeof PencilLine> = {
   passage: BookOpen,
 };
 
+/** 드롭된 항목 중 PDF만 추려낸다. */
+function pdfFilesFromDrop(e: React.DragEvent): File[] {
+  return Array.from(e.dataTransfer.files).filter(
+    (f) => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'),
+  );
+}
+
 export function PdfWorkbenchPage() {
   const {
     canvasRef,
@@ -59,6 +68,7 @@ export function PdfWorkbenchPage() {
     refreshBoxes,
     startNewJob,
     patchBox,
+    rotateJob,
     onCreate,
     reocrSelected,
     deleteBox,
@@ -97,6 +107,7 @@ export function PdfWorkbenchPage() {
       opening: st.opening,
       pageNum: st.pageNum,
       numPages: st.numPages,
+      rotation: st.rotation,
       // 박스
       boxes: st.boxes,
       selectedId: st.selectedId,
@@ -125,6 +136,9 @@ export function PdfWorkbenchPage() {
       setSelectedId: st.setSelectedId,
     })),
   );
+
+  /** 드래그 호버 표시 (순수 UI). */
+  const [dragZone, setDragZone] = useState<'main' | 'attach' | null>(null);
 
   const selected = s.boxes.find((b) => b.id === s.selectedId) ?? null;
   /** 선택된 박스의 링크가 현재 열린 부속 PDF를 가리킬 때만 보조 뷰어에 표시. */
@@ -176,19 +190,37 @@ export function PdfWorkbenchPage() {
           <div className="mb-4 space-y-4 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
             <div
               className={cn(
-                'grid h-24 cursor-pointer place-items-center rounded-xl border-2 border-dashed text-sm',
-                s.pendingFile
-                  ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
-                  : 'border-zinc-300 text-zinc-400',
+                'grid h-24 cursor-pointer place-items-center rounded-xl border-2 border-dashed text-sm transition',
+                dragZone === 'main'
+                  ? 'border-indigo-500 bg-indigo-100 text-indigo-700'
+                  : s.pendingFile
+                    ? 'border-indigo-300 bg-indigo-50 text-indigo-700'
+                    : 'border-zinc-300 text-zinc-400',
               )}
               onClick={() => fileRef.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragZone('main');
+              }}
+              onDragLeave={() => setDragZone(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragZone(null);
+                const f = pdfFilesFromDrop(e)[0];
+                if (f) {
+                  s.setPendingFile(f);
+                  if (!s.title) s.setTitle(f.name.replace(/\.pdf$/i, '').normalize('NFC'));
+                }
+              }}
             >
               {s.pendingFile ? (
                 <span className="flex items-center gap-2">
                   <FileUp className="h-4 w-4" /> {s.pendingFile.name}
                 </span>
               ) : (
-                '여기를 클릭해서 PDF 선택'
+                <span className="text-center">
+                  여기로 PDF를 끌어다 놓거나 클릭해서 선택
+                </span>
               )}
             </div>
             <input
@@ -205,7 +237,30 @@ export function PdfWorkbenchPage() {
                 e.target.value = '';
               }}
             />
-            <div className="space-y-2">
+            <div
+              className={cn(
+                'space-y-2 rounded-xl transition',
+                dragZone === 'attach' && 'bg-indigo-50 p-2 ring-2 ring-indigo-300',
+              )}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragZone('attach');
+              }}
+              onDragLeave={() => setDragZone(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragZone(null);
+                const files = pdfFilesFromDrop(e);
+                if (files.length) {
+                  s.addPendingAttachments(
+                    files.map((file) => ({
+                      file,
+                      title: file.name.replace(/\.pdf$/i, '').normalize('NFC'),
+                    })),
+                  );
+                }
+              }}
+            >
               {s.pendingAttachments.map((att, i) => (
                 <div
                   key={`${att.file.name}-${i}`}
@@ -235,7 +290,7 @@ export function PdfWorkbenchPage() {
                 onClick={() => pendingAttachRef.current?.click()}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-xs text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
               >
-                <Plus className="h-3.5 w-3.5" /> 부속 PDF 추가 (답안지·해설 등 — 여러 개 가능)
+                <Plus className="h-3.5 w-3.5" /> 부속 PDF 추가 (드래그 또는 클릭 — 여러 개 가능)
               </button>
               <input
                 ref={pendingAttachRef}
@@ -673,6 +728,23 @@ export function PdfWorkbenchPage() {
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+            <span className="mx-1 h-4 w-px bg-zinc-200" />
+            <button
+              type="button"
+              onClick={() => void rotateJob(-90)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="왼쪽으로 90° 회전"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void rotateJob(90)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="오른쪽으로 90° 회전"
+            >
+              <RotateCw className="h-4 w-4" />
+            </button>
             <span className="ml-auto text-xs text-zinc-500">
               이 페이지 {pageBoxCount}개 · 저장 {savedCount}/{s.boxes.length}
             </span>
@@ -680,6 +752,7 @@ export function PdfWorkbenchPage() {
           <PdfBoxViewer
             doc={s.doc}
             pageNum={s.pageNum}
+            rotation={s.rotation}
             boxes={s.boxes}
             selectedId={s.selectedId}
             onSelect={s.setSelectedId}

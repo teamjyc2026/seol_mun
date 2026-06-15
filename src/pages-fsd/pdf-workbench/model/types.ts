@@ -57,7 +57,7 @@ export type JobSource = {
 };
 
 export type JobDetail = {
-  job: { id: string; title: string };
+  job: { id: string; title: string; rotation: number };
   source: JobSource;
   pdfUrl: string;
   attachments: Attachment[];

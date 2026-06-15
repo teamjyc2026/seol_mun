@@ -172,6 +172,47 @@ export function useWorkbenchController() {
     }
   }
 
+  /** PDF 90° 회전 — 박스 좌표도 함께 회전시켜 정합 유지 + 영속. */
+  async function rotateJob(delta: 90 | -90) {
+    const st = useWorkbenchStore.getState();
+    const { jobId, doc, rotation, boxes } = st;
+    if (!jobId || !doc) return;
+    const oldRotation = rotation;
+    const newRotation = ((oldRotation + delta) % 360 + 360) % 360;
+
+    // 각 박스를 자기 페이지의 (기존 회전 기준) 캔버스 크기로 회전 변환.
+    const pages = Array.from(new Set(boxes.map((b) => b.page)));
+    const dims = new Map<number, { w: number; h: number }>();
+    await Promise.all(
+      pages.map(async (p) => {
+        const vp = (await doc.getPage(p)).getViewport({ scale: 1.5, rotation: oldRotation });
+        dims.set(p, { w: vp.width, h: vp.height });
+      }),
+    );
+    const rotated = boxes.map((b) => {
+      const d = dims.get(b.page);
+      if (!d) return b;
+      const { x, y, w, h } = b.rect;
+      const rect =
+        delta === 90
+          ? { x: d.h - (y + h), y: x, w: h, h: w } // CW
+          : { x: y, y: d.w - (x + w), w: h, h: w }; // CCW
+      return { ...b, rect };
+    });
+
+    st.setBoxes(rotated);
+    st.setRotation(newRotation);
+
+    // 영속: 회전값 + 변경된 박스 rect (temp 제외).
+    void api.patch(`/agent/workbench/${jobId}`, { rotation: newRotation }).catch(() => {});
+    for (const b of rotated) {
+      if (b.id.startsWith('temp-')) continue;
+      void api
+        .patch(`/agent/workbench/${jobId}/boxes/${b.id}`, { rect: b.rect })
+        .catch(() => {});
+    }
+  }
+
   // ---------- 작업 열기 / 닫기 ----------
   async function openJob(id: string) {
     const st = useWorkbenchStore.getState();
@@ -192,6 +233,7 @@ export function useWorkbenchController() {
         source: data.source,
         doc: loaded,
         numPages: loaded.numPages,
+        rotation: data.job.rotation ?? 0,
       });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '작업을 열지 못했어요.');
@@ -629,6 +671,7 @@ export function useWorkbenchController() {
     refreshBoxes,
     startNewJob,
     patchBox,
+    rotateJob,
     onCreate,
     reocrSelected,
     deleteBox,

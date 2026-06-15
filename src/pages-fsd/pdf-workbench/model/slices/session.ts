@@ -12,6 +12,8 @@ export type SessionSlice = {
   opening: boolean;
   pageNum: number;
   numPages: number;
+  /** PDF 회전 (0/90/180/270). */
+  rotation: number;
 
   openSession: (s: {
     jobId: string;
@@ -19,10 +21,12 @@ export type SessionSlice = {
     source: JobSource;
     doc: PDFDocumentProxy;
     numPages: number;
+    rotation: number;
   }) => void;
   closeSession: () => void;
   setPage: (n: number) => void;
   setOpening: (v: boolean) => void;
+  setRotation: (r: number) => void;
 };
 
 export const createSessionSlice: StateCreator<
@@ -38,11 +42,21 @@ export const createSessionSlice: StateCreator<
   opening: false,
   pageNum: 1,
   numPages: 0,
+  rotation: 0,
 
-  openSession: ({ jobId, jobTitle, source, doc, numPages }) =>
-    set({ jobId, jobTitle, source, doc, numPages, pageNum: 1 }),
+  openSession: ({ jobId, jobTitle, source, doc, numPages, rotation }) =>
+    set({ jobId, jobTitle, source, doc, numPages, rotation, pageNum: 1 }),
   closeSession: () =>
-    set({ jobId: null, jobTitle: '', source: null, doc: null, numPages: 0, pageNum: 1 }),
+    set({
+      jobId: null,
+      jobTitle: '',
+      source: null,
+      doc: null,
+      numPages: 0,
+      pageNum: 1,
+      rotation: 0,
+    }),
   setPage: (pageNum) => set({ pageNum }),
   setOpening: (opening) => set({ opening }),
+  setRotation: (rotation) => set({ rotation }),
 });

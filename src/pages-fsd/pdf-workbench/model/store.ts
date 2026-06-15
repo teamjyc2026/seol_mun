@@ -41,6 +41,7 @@ export const useWorkbenchStore = create<WorkbenchState>()((...a) => {
         opening: false,
         pageNum: 1,
         numPages: 0,
+        rotation: 0,
         boxes: [],
         selectedId: null,
         saving: false,

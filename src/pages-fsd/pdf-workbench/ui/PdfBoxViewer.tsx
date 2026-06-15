@@ -90,6 +90,7 @@ function clampMove(orig: BoxRect, dx: number, dy: number, bound: { w: number; h:
 export function PdfBoxViewer({
   doc,
   pageNum,
+  rotation = 0,
   boxes,
   selectedId,
   onSelect,
@@ -100,6 +101,8 @@ export function PdfBoxViewer({
 }: {
   doc: PDFDocumentProxy;
   pageNum: number;
+  /** PDF 회전 (0/90/180/270). */
+  rotation?: number;
   boxes: WorkBox[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -126,7 +129,7 @@ export function PdfBoxViewer({
       try {
         const page = await doc.getPage(pageNum);
         if (cancelled) return;
-        const viewport = page.getViewport({ scale: RENDER_SCALE });
+        const viewport = page.getViewport({ scale: RENDER_SCALE, rotation });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         const ctx = canvas.getContext('2d')!;
@@ -141,7 +144,7 @@ export function PdfBoxViewer({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc, pageNum]);
+  }, [doc, pageNum, rotation]);
 
   function syncRatio() {
     const canvas = canvasRef.current;
