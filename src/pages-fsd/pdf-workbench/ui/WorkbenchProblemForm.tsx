@@ -82,7 +82,7 @@ export function WorkbenchProblemForm({
       <button
         type="button"
         onClick={() => onActiveChild(idx)}
-        title="보조 뷰어에서 잡는 정답·해설이 이 문제로 들어가요"
+        title="오른쪽 보조 뷰어(해설 PDF)에서 영역을 잡으면 그 정답·해설이 이 문제로 들어가요. (스캔은 보조 뷰어에서)"
         className={cn(
           'inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium transition',
           activeChild === idx
@@ -91,7 +91,7 @@ export function WorkbenchProblemForm({
         )}
       >
         <ScanText className="h-3 w-3" />
-        {activeChild === idx ? '풀이 받는 중' : '이 문제 풀이 받기'}
+        {activeChild === idx ? '✓ 여기로 받기' : '이 문제로 받기'}
       </button>
     );
 

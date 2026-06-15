@@ -1056,23 +1056,22 @@ export function useWorkbenchController() {
         toast.info('영역에서 정답·해설을 찾지 못했어요.');
         return;
       }
-      // 최신 problem 위에 병합. 해당 자식의 정답(비었을 때만)·해설(이어붙임).
       const cur =
         useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id) ?? selected;
-      const join = (prev: string, add?: string) =>
-        add ? (prev.trim() ? `${prev.trim()}\n\n${add}` : add) : prev;
       const sub = subProblemAt(cur.problem, childIdx);
       // 객관식이면 "specify" 같은 단어 정답을 보기 번호(②)로 매핑.
       const mappedAnswer = mapAnswer(sub, answer ?? '');
+      // grab = "이 영역이 이 문제의 풀이" — 새로 잡은 값으로 덮어쓴다(있을 때만).
+      // 그래야 영역을 다시 잡으면 정답·해설이 갱신된다(이어붙이거나 무시하지 않음).
       patchBox(selected.id, {
         problem: applyAnswerToSub(
           cur.problem,
           childIdx,
           {
-            answer: sub.answer || mappedAnswer || '',
-            explanation: join(sub.explanation, explanation),
+            answer: mappedAnswer || sub.answer || '',
+            explanation: explanation ?? sub.explanation,
           },
-          join(cur.problem.passage_translation, passage_translation),
+          passage_translation ?? cur.problem.passage_translation,
         ),
       });
       const label = childIdx > 0 ? `문제 ${childIdx + 1} ` : '';
