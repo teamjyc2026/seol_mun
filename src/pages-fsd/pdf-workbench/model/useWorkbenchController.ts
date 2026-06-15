@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { api } from '@/shared/api/axios';
 import { createProblem } from '@/features/create-problem';
+import { topicCategoriesFor } from '@/shared/config/topics';
 import type { BoxKind, BoxRect } from '../ui/PdfBoxViewer';
 import { KIND_LABEL } from '../ui/PdfBoxViewer';
 import { emptyProblemValue, type WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
@@ -426,10 +427,11 @@ export function useWorkbenchController() {
       let payload: BoxPayload;
       let patch: Partial<BoxData>;
       if (kind === 'problem') {
+        const subject = st.source?.subject ?? '';
         const res = await fetch('/api/agent/ocr/problem', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image, mediaType: 'image/png' }),
+          body: JSON.stringify({ image, mediaType: 'image/png', subject }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
         const { problem, usage } = (await res.json()) as {
@@ -437,9 +439,20 @@ export function useWorkbenchController() {
           usage?: TokenUsage;
         };
         reportUsage('문제 인식', usage);
+        // 분류는 기존 목록에 스냅 — topic이 목록에 있으면 그 대분류로 category 설정.
+        const tax = topicCategoriesFor(subject);
+        const matchedCat = problem.topic
+          ? tax.find((c) => c.topics.includes(problem.topic as string))
+          : undefined;
+        const category =
+          matchedCat?.category ??
+          (problem.category && tax.some((c) => c.category === problem.category)
+            ? problem.category
+            : box.problem.category);
         const value: WorkbenchProblemValue = {
           ...box.problem,
           problem_type: problem.problem_type,
+          category,
           topic: problem.topic ?? box.problem.topic,
           passage: problem.passage ?? '',
           question: problem.question,

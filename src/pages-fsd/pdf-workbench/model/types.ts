@@ -8,6 +8,7 @@ export type OcrProblem = {
   answer?: string;
   explanation?: string;
   problem_type: 'objective' | 'short' | 'long';
+  category?: string;
   topic?: string;
 };
 
