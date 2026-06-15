@@ -946,13 +946,22 @@ export function PdfWorkbenchPage() {
           ) : selected.status === 'idle' ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
               <p>영역만 잡았어요. 인식을 누르면 종류를 자동 분류하고 내용을 채워요.</p>
-              <button
-                type="button"
-                onClick={() => void recognizeBox(selected.id)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-4 py-2 text-sm font-bold text-white hover:bg-zinc-800"
-              >
-                <Sparkles className="h-4 w-4" /> 인식
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void recognizeBox(selected.id)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-4 py-2 text-sm font-bold text-white hover:bg-zinc-800"
+                >
+                  <Sparkles className="h-4 w-4" /> 인식
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteBox(selected.id)}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-rose-50 hover:text-rose-600"
+                >
+                  <Trash2 className="h-4 w-4" /> 취소
+                </button>
+              </div>
             </div>
           ) : selected.status === 'ocr' ? (
             <div className="flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500">
@@ -1017,13 +1026,13 @@ export function PdfWorkbenchPage() {
               </div>
 
               {selected.kind === 'problem' && selected.answerRefs.length > 0 && (
-                <div className="space-y-1 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
                   <div className="flex items-center justify-between">
                     <span className="font-medium">🔗 답안 연결 {selected.answerRefs.length}곳</span>
                     <button
                       type="button"
                       onClick={() => clearAnswerRefs(selected.id)}
-                      className="rounded px-1.5 py-0.5 font-medium hover:bg-indigo-100"
+                      className="rounded px-1.5 py-0.5 font-medium hover:bg-emerald-100"
                     >
                       전체 해제
                     </button>
@@ -1038,7 +1047,7 @@ export function PdfWorkbenchPage() {
                       <button
                         type="button"
                         onClick={() => removeAnswerRef(selected.id, a.id)}
-                        className="shrink-0 rounded px-1.5 py-0.5 hover:bg-indigo-100"
+                        className="shrink-0 rounded px-1.5 py-0.5 hover:bg-emerald-100"
                         title="이 연결 해제"
                       >
                         해제

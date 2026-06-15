@@ -76,12 +76,12 @@ export function ConnectionLine({
           <path
             d={`M ${s.fx} ${s.fy} C ${s.fx + 60} ${s.fy}, ${s.tx - 60} ${s.ty}, ${s.tx} ${s.ty}`}
             fill="none"
-            stroke="#6366f1"
+            stroke="#059669"
             strokeWidth={2}
             strokeDasharray="6 4"
           />
-          <circle cx={s.fx} cy={s.fy} r={4} fill="#6366f1" />
-          <circle cx={s.tx} cy={s.ty} r={4} fill="#6366f1" />
+          <circle cx={s.fx} cy={s.fy} r={4} fill="#059669" />
+          <circle cx={s.tx} cy={s.ty} r={4} fill="#059669" />
         </g>
       ))}
     </svg>

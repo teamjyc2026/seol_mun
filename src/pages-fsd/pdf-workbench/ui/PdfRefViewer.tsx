@@ -180,7 +180,7 @@ export function PdfRefViewer({
               key={p}
               type="button"
               onClick={() => goPage(p)}
-              className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
             >
               연결 p.{p}
             </button>
@@ -254,7 +254,7 @@ export function PdfRefViewer({
               <div
                 key={l.id}
                 data-answer-link
-                className="absolute border-2 border-indigo-500 bg-indigo-500/10"
+                className="absolute border-2 border-emerald-600 bg-emerald-600/10"
                 style={normToDisplay(l.rect)}
               />
             ))}
