@@ -95,6 +95,7 @@ export function PdfWorkbenchPage() {
     captureFigureFromMain,
     uploadFigureFile,
     removeAnswerRef,
+    updateAnswerRefRect,
     clearAnswerRefs,
     rescanAnswerRefs,
     runEmbedPending,
@@ -1030,6 +1031,9 @@ export function PdfWorkbenchPage() {
               onRotate={(d, p) => void rotateRef(d, p)}
               onReset={() => void resetRotation('ref')}
               linkedRefs={linkedRefs}
+              onUpdateLinkedRef={(refId, rect) => {
+                if (selected) updateAnswerRefRect(selected.id, refId, rect);
+              }}
             />
           </section>
         )}

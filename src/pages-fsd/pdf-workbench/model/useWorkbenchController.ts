@@ -878,6 +878,15 @@ export function useWorkbenchController() {
     }
   }
 
+  /** 답 연결 영역 1개의 rect 갱신 (보조 뷰어에서 재선택·이동·리사이즈). */
+  function updateAnswerRefRect(boxId: string, refId: string, rect: AnswerRef['rect']) {
+    const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+    if (!box) return;
+    patchBox(boxId, {
+      answerRefs: box.answerRefs.map((a) => (a.id === refId ? { ...a, rect } : a)),
+    });
+  }
+
   /** 답 연결 1개 해제 (텍스트는 그대로 둠). */
   function removeAnswerRef(boxId: string, refId: string) {
     const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
@@ -1154,6 +1163,7 @@ export function useWorkbenchController() {
     captureFigureFromMain,
     uploadFigureFile,
     removeAnswerRef,
+    updateAnswerRefRect,
     clearAnswerRefs,
     rescanAnswerRefs,
     refreshEmbedPending,

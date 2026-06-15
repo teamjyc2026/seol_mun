@@ -113,3 +113,54 @@ export function selectionReducer(
       return state;
   }
 }
+
+// ---------- 메인 뷰어 박스 드래그 reducer (생성 + 박스 id 기반 이동/리사이즈) ----------
+// 보조 뷰어와 같은 패턴이되, move/resize가 특정 박스(id)를 대상으로 한다.
+// 커밋(onCreate/onUpdateRect)은 컴포넌트가 mouseup에서 현재 drag를 보고 수행하고,
+// 이 reducer는 상태 전이만 담당한다(순수).
+export type BoxDragAction =
+  | { type: 'createStart'; p: Pt }
+  | { type: 'moveStart'; id: string; p: Pt; rect: Rect }
+  | { type: 'resizeStart'; id: string; handle: Handle; p: Pt; rect: Rect }
+  | { type: 'drag'; p: Pt; bound: Bound }
+  | { type: 'clear' };
+
+export function boxDragReducer(
+  state: DragState | null,
+  action: BoxDragAction,
+): DragState | null {
+  switch (action.type) {
+    case 'createStart':
+      return { kind: 'create', start: action.p, rect: { x: action.p.x, y: action.p.y, w: 0, h: 0 } };
+    case 'moveStart':
+      return { kind: 'move', id: action.id, startPos: action.p, orig: action.rect, rect: action.rect };
+    case 'resizeStart':
+      return {
+        kind: 'resize',
+        id: action.id,
+        handle: action.handle,
+        startPos: action.p,
+        orig: action.rect,
+        rect: action.rect,
+      };
+    case 'drag': {
+      const d = state;
+      if (!d) return state;
+      const min = { w: MIN_W, h: MIN_H };
+      if (d.kind === 'create') return { ...d, rect: createRect(d.start, action.p) };
+      if (d.kind === 'move')
+        return {
+          ...d,
+          rect: clampMove(d.orig, action.p.x - d.startPos.x, action.p.y - d.startPos.y, action.bound),
+        };
+      return {
+        ...d,
+        rect: applyResize(d.orig, d.handle, action.p.x - d.startPos.x, action.p.y - d.startPos.y, action.bound, min),
+      };
+    }
+    case 'clear':
+      return null;
+    default:
+      return state;
+  }
+}

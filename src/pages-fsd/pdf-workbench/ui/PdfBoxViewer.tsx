@@ -1,18 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Loader2, Sparkles, X } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { cn } from '@/shared/lib/cn';
-import {
-  HANDLES,
-  MIN_H,
-  MIN_W,
-  applyResize,
-  clampMove,
-  type Handle,
-  type Pt,
-} from '../lib/dragSelection';
+import { HANDLES, MIN_H, MIN_W, boxDragReducer, type Pt } from '../lib/dragSelection';
 
 /** 박스 좌표는 캔버스 내부 픽셀 기준 (리사이즈와 무관). */
 export type BoxRect = { x: number; y: number; w: number; h: number };
@@ -46,11 +38,6 @@ const KIND_BADGE_CLASS: Record<BoxKind, string> = {
 };
 
 const RENDER_SCALE = 1.5;
-
-type DragState =
-  | { kind: 'create'; start: Pt; rect: BoxRect }
-  | { kind: 'move'; id: string; startPos: Pt; orig: BoxRect; rect: BoxRect }
-  | { kind: 'resize'; id: string; handle: Handle; startPos: Pt; orig: BoxRect; rect: BoxRect };
 
 export function PdfBoxViewer({
   doc,
@@ -90,7 +77,8 @@ export function PdfBoxViewer({
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [rendering, setRendering] = useState(false);
-  const [drag, setDrag] = useState<DragState | null>(null);
+  // 드래그(생성/이동/리사이즈) 상태 머신 — 보조 뷰어와 같은 reducer 패턴.
+  const [drag, dispatch] = useReducer(boxDragReducer, null);
   // display(px) = internal(px) / ratio
   const [ratio, setRatio] = useState(1);
 
@@ -154,43 +142,17 @@ export function PdfBoxViewer({
   // 빈 캔버스에서 시작 → 새 박스 그리기
   function onWrapMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
-    const p = pos(e);
-    setDrag({ kind: 'create', start: p, rect: { x: p.x, y: p.y, w: 0, h: 0 } });
+    dispatch({ type: 'createStart', p: pos(e) });
   }
 
   function onMouseMove(e: React.MouseEvent) {
-    if (!drag) return;
-    const p = pos(e);
-    if (drag.kind === 'create') {
-      setDrag({
-        ...drag,
-        rect: {
-          x: Math.min(drag.start.x, p.x),
-          y: Math.min(drag.start.y, p.y),
-          w: Math.abs(p.x - drag.start.x),
-          h: Math.abs(p.y - drag.start.y),
-        },
-      });
-    } else if (drag.kind === 'move') {
-      const rect = clampMove(drag.orig, p.x - drag.startPos.x, p.y - drag.startPos.y, bound());
-      setDrag({ ...drag, rect });
-    } else {
-      const rect = applyResize(
-        drag.orig,
-        drag.handle,
-        p.x - drag.startPos.x,
-        p.y - drag.startPos.y,
-        bound(),
-        { w: MIN_W, h: MIN_H },
-      );
-      setDrag({ ...drag, rect });
-    }
+    if (drag) dispatch({ type: 'drag', p: pos(e), bound: bound() });
   }
 
   function onMouseUp() {
     if (!drag) return;
     const d = drag;
-    setDrag(null);
+    dispatch({ type: 'clear' });
     if (d.kind === 'create') {
       if (d.rect.w >= MIN_W && d.rect.h >= MIN_H) {
         if (captureMode) onCaptureFigure?.(d.rect);
@@ -204,7 +166,7 @@ export function PdfBoxViewer({
       Math.abs(d.rect.y - d.orig.y) > 1 ||
       Math.abs(d.rect.w - d.orig.w) > 1 ||
       Math.abs(d.rect.h - d.orig.h) > 1;
-    if (moved) onUpdateRect(d.id, d.rect);
+    if (moved && d.id) onUpdateRect(d.id, d.rect);
   }
 
   const toDisplay = (r: BoxRect) => ({
@@ -263,7 +225,7 @@ export function PdfBoxViewer({
             onMouseDown={(e) => {
               e.stopPropagation();
               onSelect(b.id);
-              setDrag({ kind: 'move', id: b.id, startPos: pos(e), orig: b.rect, rect: b.rect });
+              dispatch({ type: 'moveStart', id: b.id, p: pos(e), rect: b.rect });
             }}
           >
             <span
@@ -311,14 +273,7 @@ export function PdfBoxViewer({
                   style={{ cursor }}
                   onMouseDown={(e) => {
                     e.stopPropagation();
-                    setDrag({
-                      kind: 'resize',
-                      id: b.id,
-                      handle: h,
-                      startPos: pos(e),
-                      orig: b.rect,
-                      rect: b.rect,
-                    });
+                    dispatch({ type: 'resizeStart', id: b.id, handle: h, p: pos(e), rect: b.rect });
                   }}
                 />
               ))}

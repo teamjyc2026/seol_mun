@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { cn } from '@/shared/lib/cn';
-import { HANDLES, selectionReducer, type Pt, type Rect } from '../lib/dragSelection';
+import { HANDLES, boxDragReducer, selectionReducer, type Pt, type Rect } from '../lib/dragSelection';
 
 /** 보조 뷰어 grab 모드 — 정답·해설 OCR / 그림(이미지) 추가. */
 export type RefGrabMode = 'answer' | 'figure';
@@ -40,6 +40,7 @@ export function PdfRefViewer({
   onRotate,
   onReset,
   linkedRefs = [],
+  onUpdateLinkedRef,
 }: {
   doc: PDFDocumentProxy;
   /** 페이지별 회전 맵(메타데이터). 현재 페이지 회전은 여기서 해석. */
@@ -53,6 +54,8 @@ export function PdfRefViewer({
   onReset?: () => void;
   /** 선택된 박스의 저장된 답 영역들 (현재 열린 부속 PDF 대상, 다대일) */
   linkedRefs?: { id: string; page: number; rect: Rect }[];
+  /** 연결된 답 영역을 재선택·이동·리사이즈했을 때 (rect는 정규화 0–1). */
+  onUpdateLinkedRef?: (refId: string, rect: Rect) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -62,6 +65,9 @@ export function PdfRefViewer({
   const [pageSize, setPageSize] = useState<{ w: number; h: number } | null>(null);
   const [sel, dispatch] = useReducer(selectionReducer, { drag: null, rect: null });
   const [mode, setMode] = useState<RefGrabMode>('answer');
+  // 연결된 답 영역 재선택·이동·리사이즈 (id 기반, 캔버스 px).
+  const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
+  const [linkDrag, linkDispatch] = useReducer(boxDragReducer, null);
   const drag = sel.drag;
   const rect = sel.rect;
   const rotation = pageRotations[pageNum] ?? 0;
@@ -108,7 +114,23 @@ export function PdfRefViewer({
   /** 페이지 이동 — 드래그 선택은 페이지에 종속이라 함께 초기화. */
   function goPage(n: number) {
     dispatch({ type: 'clear' });
+    linkDispatch({ type: 'clear' });
+    setSelectedLinkId(null);
     setPageNum(n);
+  }
+
+  /** 정규화(0–1) ↔ 캔버스 내부 px (연결 영역 편집용). */
+  function normToPx(r: Rect): Rect {
+    const c = canvasRef.current;
+    const w = c?.width ?? 0;
+    const h = c?.height ?? 0;
+    return { x: r.x * w, y: r.y * h, w: r.w * w, h: r.h * h };
+  }
+  function pxToNorm(r: Rect): Rect {
+    const c = canvasRef.current;
+    const w = c?.width || 1;
+    const h = c?.height || 1;
+    return { x: r.x / w, y: r.y / h, w: r.w / w, h: r.h / h };
   }
 
   function pos(e: React.MouseEvent): Pt {
@@ -126,10 +148,23 @@ export function PdfRefViewer({
 
   function onMouseMove(e: React.MouseEvent) {
     if (drag) dispatch({ type: 'drag', p: pos(e), bound: bound() });
+    else if (linkDrag) linkDispatch({ type: 'drag', p: pos(e), bound: bound() });
   }
 
   function onMouseUp() {
     if (drag) dispatch({ type: 'end' });
+    if (linkDrag) {
+      const d = linkDrag;
+      linkDispatch({ type: 'clear' });
+      if (d.kind !== 'create' && d.id) {
+        const moved =
+          Math.abs(d.rect.x - d.orig.x) > 1 ||
+          Math.abs(d.rect.y - d.orig.y) > 1 ||
+          Math.abs(d.rect.w - d.orig.w) > 1 ||
+          Math.abs(d.rect.h - d.orig.h) > 1;
+        if (moved) onUpdateLinkedRef?.(d.id, pxToNorm(d.rect));
+      }
+    }
   }
 
   function grab() {
@@ -164,7 +199,7 @@ export function PdfRefViewer({
     height: r.h / ratio,
   });
 
-  /** 정규화(0–1) → 표시 픽셀 */
+  /** 정규화(0–1) → 표시 픽셀 (렌더용 — ref 대신 pageSize 상태 사용). */
   const normToDisplay = (r: Rect) => {
     if (!pageSize) return { left: 0, top: 0, width: 0, height: 0 };
     const w = pageSize.w / ratio;
@@ -292,6 +327,8 @@ export function PdfRefViewer({
         className="relative inline-block max-w-full cursor-crosshair select-none"
         onMouseDown={(e) => {
           if (e.button !== 0) return;
+          setSelectedLinkId(null);
+          linkDispatch({ type: 'clear' });
           dispatch({ type: 'createStart', p: pos(e) });
         }}
         onMouseMove={onMouseMove}
@@ -311,14 +348,52 @@ export function PdfRefViewer({
         {!rendering &&
           linkedRefs
             .filter((l) => l.page === pageNum)
-            .map((l) => (
-              <div
-                key={l.id}
-                data-answer-link
-                className="absolute border-2 border-emerald-600 bg-emerald-600/10"
-                style={normToDisplay(l.rect)}
-              />
-            ))}
+            .map((l) => {
+              const isSel = selectedLinkId === l.id;
+              // 이 연결을 드래그 중이면 라이브 px(toDisplay), 아니면 저장된 정규화(normToDisplay).
+              const dragging =
+                linkDrag !== null && linkDrag.kind !== 'create' && linkDrag.id === l.id;
+              const style = dragging ? toDisplay(linkDrag.rect) : normToDisplay(l.rect);
+              return (
+                <div
+                  key={l.id}
+                  data-answer-link
+                  className={cn(
+                    'absolute cursor-move border-2 border-emerald-600 bg-emerald-600/10',
+                    isSel && 'ring-2 ring-emerald-700/60',
+                  )}
+                  style={style}
+                  title="끌어 옮기거나 모서리로 크기 조절"
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setSelectedLinkId(l.id);
+                    linkDispatch({ type: 'moveStart', id: l.id, p: pos(e), rect: normToPx(l.rect) });
+                  }}
+                >
+                  {isSel &&
+                    HANDLES.map(({ h, cls, cursor }) => (
+                      <span
+                        key={h}
+                        className={cn(
+                          'absolute h-2.5 w-2.5 rounded-full border border-white bg-emerald-700',
+                          cls,
+                        )}
+                        style={{ cursor }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          linkDispatch({
+                            type: 'resizeStart',
+                            id: l.id,
+                            handle: h,
+                            p: pos(e),
+                            rect: normToPx(l.rect),
+                          });
+                        }}
+                      />
+                    ))}
+                </div>
+              );
+            })}
         {/* 드래그 중 라이브 미리보기 */}
         {drag && (
           <div
