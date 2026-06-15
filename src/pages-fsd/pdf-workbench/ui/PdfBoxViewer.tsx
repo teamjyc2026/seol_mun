@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, Sparkles, X } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { cn } from '@/shared/lib/cn';
 
@@ -15,7 +15,7 @@ export type WorkBox = {
   page: number;
   rect: BoxRect;
   kind: BoxKind;
-  status: 'ocr' | 'ready' | 'failed' | 'saved';
+  status: 'idle' | 'ocr' | 'ready' | 'failed' | 'saved';
 };
 
 export const KIND_LABEL: Record<BoxKind, string> = {
@@ -96,6 +96,7 @@ export function PdfBoxViewer({
   onSelect,
   onDelete,
   onCreate,
+  onRecognize,
   onUpdateRect,
   canvasRef,
 }: {
@@ -109,6 +110,8 @@ export function PdfBoxViewer({
   onDelete: (id: string) => void;
   /** rect는 캔버스 내부 픽셀 좌표 */
   onCreate: (rect: BoxRect) => void;
+  /** 미인식 박스의 "인식" 버튼 */
+  onRecognize: (id: string) => void;
   /** 기존 박스 이동·리사이즈 커밋 (캔버스 내부 px) */
   onUpdateRect: (id: string, rect: BoxRect) => void;
   /** 부모가 크롭에 쓸 수 있도록 캔버스 ref 공유 */
@@ -271,7 +274,11 @@ export function PdfBoxViewer({
             data-box-id={b.id}
             className={cn(
               'absolute cursor-move border-2',
-              b.status === 'failed' ? 'border-rose-500 bg-rose-500/10' : KIND_BOX_CLASS[b.kind],
+              b.status === 'failed'
+                ? 'border-rose-500 bg-rose-500/10'
+                : b.status === 'idle'
+                  ? 'border-dashed border-zinc-400 bg-zinc-400/10'
+                  : KIND_BOX_CLASS[b.kind],
               selected && 'ring-2 ring-zinc-900/40',
               b.status === 'saved' && 'opacity-80',
             )}
@@ -288,7 +295,7 @@ export function PdfBoxViewer({
                 KIND_BADGE_CLASS[b.kind],
               )}
             >
-              {i + 1} {KIND_LABEL[b.kind]}
+              {i + 1} {b.status === 'idle' ? '미인식' : KIND_LABEL[b.kind]}
               {b.status === 'ocr' && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
               {b.status === 'saved' && '✓'}
             </span>
@@ -302,6 +309,19 @@ export function PdfBoxViewer({
             >
               <X className="h-2.5 w-2.5" />
             </button>
+            {/* 미인식 박스: 가운데 인식 버튼 */}
+            {b.status === 'idle' && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  onRecognize(b.id);
+                }}
+                className="absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-zinc-900/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-zinc-900"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> 인식
+              </button>
+            )}
             {/* 선택된 박스에만 8방향 리사이즈 핸들 */}
             {selected &&
               HANDLES.map(({ h, cls, cursor }) => (

@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { api } from '@/shared/api/axios';
 import { createProblem } from '@/features/create-problem';
-import type { BoxRect } from '../ui/PdfBoxViewer';
+import type { BoxKind, BoxRect } from '../ui/PdfBoxViewer';
 import { KIND_LABEL } from '../ui/PdfBoxViewer';
 import { emptyProblemValue, type WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
 import type { RefGrab } from '../ui/PdfRefViewer';
@@ -380,14 +380,17 @@ export function useWorkbenchController() {
   }
 
   // ---------- 박스 ----------
-  /** 박스 영역(rect)을 크롭해 종류별 OCR → 결과로 박스 갱신. 생성·다시인식 공용. */
+  /**
+   * 박스 영역을 인식 — ① 종류(문제/개념/본문) 자동 분류 → ② 종류별 OCR → 채움.
+   * 박스의 "인식" 버튼·다시 인식 공용.
+   */
   async function recognizeBox(boxId: string) {
     const st = useWorkbenchStore.getState();
     const box = st.boxes.find((b) => b.id === boxId);
-    if (!box) return;
+    if (!box || box.id.startsWith('temp-')) return;
     if (box.page !== st.pageNum) {
       st.setPage(box.page);
-      toast.info('해당 박스 페이지로 이동했어요 — 다시 인식을 한 번 더 눌러주세요.');
+      toast.info('해당 박스 페이지로 이동했어요 — 인식을 한 번 더 눌러주세요.');
       return;
     }
     const canvas = canvasRef.current;
@@ -397,10 +400,24 @@ export function useWorkbenchController() {
     }
     const image = cropToBase64(canvas, box.rect);
     const { jobId } = st;
+    patchBox(boxId, { status: 'ocr' }, false);
     try {
+      // ① 종류 자동 분류
+      const clsRes = await fetch('/api/agent/ocr/classify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image, mediaType: 'image/png' }),
+      });
+      if (!clsRes.ok)
+        throw new Error((await clsRes.json().catch(() => null))?.message ?? '분류 실패');
+      const cls = (await clsRes.json()) as { kind: BoxKind; usage?: TokenUsage };
+      const kind = cls.kind;
+      reportUsage('종류 분류', cls.usage);
+
+      // ② 종류별 OCR
       let payload: BoxPayload;
       let patch: Partial<BoxData>;
-      if (box.kind === 'problem') {
+      if (kind === 'problem') {
         const res = await fetch('/api/agent/ocr/problem', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -423,7 +440,7 @@ export function useWorkbenchController() {
           explanation: problem.explanation ?? '',
         };
         payload = { problem: value };
-        patch = { status: 'ready', problem: value };
+        patch = { status: 'ready', kind, problem: value };
       } else {
         const res = await fetch('/api/agent/ocr', {
           method: 'POST',
@@ -435,18 +452,19 @@ export function useWorkbenchController() {
         reportUsage('내용 인식', usage);
         const value: ChunkValue = { ...box.chunk, text };
         payload = { chunk: value };
-        patch = { status: 'ready', chunk: value };
+        patch = { status: 'ready', kind, chunk: value };
       }
       patchBox(boxId, patch, false);
-      if (jobId && !boxId.startsWith('temp-')) {
+      if (jobId) {
         await api.patch(`/agent/workbench/${jobId}/boxes/${boxId}`, {
           status: 'ready',
+          kind,
           payload,
         });
       }
     } catch (e) {
       patchBox(boxId, { status: 'failed' }, false);
-      if (jobId && !boxId.startsWith('temp-')) {
+      if (jobId) {
         void api
           .patch(`/agent/workbench/${jobId}/boxes/${boxId}`, { status: 'failed' })
           .catch(() => {});
@@ -455,6 +473,7 @@ export function useWorkbenchController() {
     }
   }
 
+  /** 영역만 그려 두기 — 인식은 박스의 "인식" 버튼을 눌러야 돈다. */
   async function onCreate(rect: BoxRect) {
     const st = useWorkbenchStore.getState();
     const { jobId, pageNum, drawKind } = st;
@@ -465,7 +484,7 @@ export function useWorkbenchController() {
       page: pageNum,
       rect,
       kind: drawKind,
-      status: 'ocr',
+      status: 'idle',
       problem: emptyProblemValue(),
       chunk: { category: null, topic: '', text: '' },
       answerRef: null,
@@ -477,24 +496,32 @@ export function useWorkbenchController() {
         page: pageNum,
         rect,
         kind: drawKind,
-        status: 'ocr',
+        status: 'idle',
         payload: {},
       });
       useWorkbenchStore.getState().swapBoxId(tempId, data.id);
-      await recognizeBox(data.id);
     } catch (e) {
       patchBox(tempId, { status: 'failed' }, false);
       toast.error(e instanceof Error ? e.message : '박스 생성 실패');
     }
   }
 
-  /** 선택 박스의 영역을 다시 인식 (영역 수정 후 수동 재-OCR). */
+  /** 선택 박스 다시 인식 (영역 수정 후 등). */
   async function reocrSelected() {
-    const st = useWorkbenchStore.getState();
-    const sel = st.boxes.find((b) => b.id === st.selectedId);
+    const sel = useWorkbenchStore.getState().boxes.find(
+      (b) => b.id === useWorkbenchStore.getState().selectedId,
+    );
     if (!sel || sel.id.startsWith('temp-')) return;
-    patchBox(sel.id, { status: 'ocr' }, false);
     await recognizeBox(sel.id);
+  }
+
+  /** 현재 페이지의 미인식(idle) 박스를 모두 인식. */
+  async function recognizeIdleOnPage() {
+    const st = useWorkbenchStore.getState();
+    const ids = st.boxes
+      .filter((b) => b.page === st.pageNum && b.status === 'idle' && !b.id.startsWith('temp-'))
+      .map((b) => b.id);
+    for (const id of ids) await recognizeBox(id);
   }
 
   async function deleteBox(id: string) {
@@ -758,6 +785,8 @@ export function useWorkbenchController() {
     patchBox,
     rotateJob,
     onCreate,
+    recognizeBox,
+    recognizeIdleOnPage,
     reocrSelected,
     deleteBox,
     saveSelected,

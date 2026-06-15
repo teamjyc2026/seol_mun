@@ -20,7 +20,7 @@ const createSchema = z.object({
   page: z.coerce.number().int().min(1),
   rect: rectSchema,
   kind: z.enum(['problem', 'concept', 'passage']),
-  status: z.enum(['ocr', 'ready', 'failed', 'saved']).default('ocr'),
+  status: z.enum(['idle', 'ocr', 'ready', 'failed', 'saved']).default('idle'),
   payload: z.record(z.string(), z.unknown()).default({}),
 });
 

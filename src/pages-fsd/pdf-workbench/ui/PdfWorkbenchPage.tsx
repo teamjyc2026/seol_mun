@@ -23,6 +23,7 @@ import {
   Save,
   ScanText,
   Scissors,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { api } from '@/shared/api/axios';
@@ -78,6 +79,8 @@ export function PdfWorkbenchPage() {
     patchBox,
     rotateJob,
     onCreate,
+    recognizeBox,
+    recognizeIdleOnPage,
     reocrSelected,
     deleteBox,
     saveSelected,
@@ -178,6 +181,9 @@ export function PdfWorkbenchPage() {
   }, []);
 
   const pageBoxCount = s.boxes.filter((b) => b.page === s.pageNum).length;
+  const pageIdleCount = s.boxes.filter(
+    (b) => b.page === s.pageNum && b.status === 'idle',
+  ).length;
   const savedCount = s.boxes.filter((b) => b.status === 'saved').length;
 
   // ----- Finder 트리 -----
@@ -879,7 +885,19 @@ export function PdfWorkbenchPage() {
             >
               <RotateCw className="h-4 w-4" />
             </button>
-            <span className="ml-auto text-xs text-zinc-500">
+            {pageIdleCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void recognizeIdleOnPage()}
+                className="ml-auto inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                title="이 페이지의 미인식 박스를 모두 인식"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> 미인식 {pageIdleCount}개 인식
+              </button>
+            )}
+            <span
+              className={cn('text-xs text-zinc-500', pageIdleCount === 0 && 'ml-auto')}
+            >
               이 페이지 {pageBoxCount}개 · 저장 {savedCount}/{s.boxes.length}
             </span>
           </div>
@@ -892,6 +910,7 @@ export function PdfWorkbenchPage() {
             onSelect={s.setSelectedId}
             onDelete={(id) => void deleteBox(id)}
             onCreate={(r) => void onCreate(r)}
+            onRecognize={(id) => void recognizeBox(id)}
             onUpdateRect={(id, rect) => patchBox(id, { rect })}
             canvasRef={canvasRef}
           />
@@ -922,10 +941,20 @@ export function PdfWorkbenchPage() {
               박스를 클릭하면 여기서 수정할 수 있어요. 박스를 끌어 옮기거나 모서리로 크기를
               조절할 수 있어요.
             </div>
+          ) : selected.status === 'idle' ? (
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
+              <p>영역만 잡았어요. 인식을 누르면 종류를 자동 분류하고 내용을 채워요.</p>
+              <button
+                type="button"
+                onClick={() => void recognizeBox(selected.id)}
+                className="inline-flex items-center gap-1.5 rounded-full bg-zinc-900 px-4 py-2 text-sm font-bold text-white hover:bg-zinc-800"
+              >
+                <Sparkles className="h-4 w-4" /> 인식
+              </button>
+            </div>
           ) : selected.status === 'ocr' ? (
             <div className="flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white p-8 text-sm text-zinc-500">
-              <Loader2 className="h-4 w-4 animate-spin" /> {KIND_LABEL[selected.kind]} 영역
-              인식 중…
+              <Loader2 className="h-4 w-4 animate-spin" /> 영역 인식 중…
             </div>
           ) : (
             <>
