@@ -10,6 +10,8 @@ import {
   RotateCw,
   Sparkles,
   X,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { cn } from '@/shared/lib/cn';
@@ -73,6 +75,9 @@ export function PdfRefViewer({
   const [pageSize, setPageSize] = useState<{ w: number; h: number } | null>(null);
   const [sel, dispatch] = useReducer(selectionReducer, { drag: null, rect: null });
   const [mode, setMode] = useState<RefGrabMode>('answer');
+  const [zoom, setZoom] = useState(1);
+  const zoomBy = (d: number) =>
+    setZoom((z) => Math.min(3, Math.max(0.5, Math.round((z + d) * 100) / 100)));
   // 연결된 답 영역 재선택·이동·리사이즈 (id 기반, 캔버스 px).
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
   const [linkDrag, linkDispatch] = useReducer(boxDragReducer, null);
@@ -286,6 +291,34 @@ export function PdfRefViewer({
             )}
           </>
         )}
+        <span className="mx-0.5 h-4 w-px bg-zinc-200" />
+        {/* 확대/축소 — 표시 배율만 (좌표 불변) */}
+        <button
+          type="button"
+          disabled={zoom <= 0.5}
+          onClick={() => zoomBy(-0.25)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
+          title="축소"
+        >
+          <ZoomOut className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom(1)}
+          className="inline-flex h-7 min-w-[3rem] items-center justify-center rounded-md border border-zinc-200 px-1 text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-50"
+          title="배율 초기화 (맞춤)"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          type="button"
+          disabled={zoom >= 3}
+          onClick={() => zoomBy(0.25)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
+          title="확대"
+        >
+          <ZoomIn className="h-4 w-4" />
+        </button>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {/* 가져오기 모드 — 정답·해설 OCR / 그림 추가 */}
           <div className="flex rounded-md border border-zinc-200 p-0.5">
@@ -312,9 +345,11 @@ export function PdfRefViewer({
           </div>
         </div>
       </div>
+      <div className="max-w-full overflow-auto">
       <div
         ref={wrapRef}
-        className="relative inline-block max-w-full cursor-crosshair select-none"
+        className="relative cursor-crosshair select-none"
+        style={{ width: `${zoom * 100}%`, maxWidth: zoom <= 1 ? '100%' : 'none' }}
         onMouseDown={(e) => {
           if (e.button !== 0) return;
           setSelectedLinkId(null);
@@ -327,7 +362,7 @@ export function PdfRefViewer({
       >
         <canvas
           ref={canvasRef}
-          className="block max-w-full rounded-md border border-emerald-200 bg-white"
+          className="block w-full rounded-md border border-emerald-200 bg-white"
           style={{ height: 'auto' }}
         />
         {rendering && (
@@ -366,7 +401,7 @@ export function PdfRefViewer({
                 >
                   {labelChildren && (
                     <span className="absolute -left-px -top-5 inline-flex items-center rounded-t bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      문제 {childIdx + 1}
+                      해설 {childIdx + 1}
                     </span>
                   )}
                   {/* 메인 뷰어 박스처럼 X는 항상 보이게 — 선택 없이 바로 삭제 가능. */}
@@ -471,6 +506,7 @@ export function PdfRefViewer({
             ))}
           </div>
         )}
+      </div>
       </div>
     </div>
   );

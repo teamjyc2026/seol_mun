@@ -26,6 +26,8 @@ import {
   Scissors,
   Sparkles,
   Trash2,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { api } from '@/shared/api/axios';
 import { SUBJECTS } from '@/shared/config/subjects';
@@ -46,6 +48,14 @@ const KIND_ICON: Record<BoxKind, typeof PencilLine> = {
   problemset: Layers,
   concept: Lightbulb,
   passage: BookOpen,
+};
+
+/** 같은 family는 payload(문제/청크)가 같아 저장 후에도 종류 전환이 안전. */
+const KIND_FAMILY: Record<BoxKind, 'problem' | 'chunk'> = {
+  problem: 'problem',
+  problemset: 'problem',
+  concept: 'chunk',
+  passage: 'chunk',
 };
 
 /** 1234 → "1.2k". */
@@ -176,6 +186,10 @@ export function PdfWorkbenchPage() {
   const [dropTarget, setDropTarget] = useState<string | 'root' | null>(null);
   /** 세트에서 지금 풀이(정답·해설)를 받는 자식 문제 (0=대표, i+1=extra[i]). */
   const [activeChild, setActiveChild] = useState(0);
+  /** 메인 뷰어 표시 배율 (1=컨테이너 맞춤). */
+  const [zoom, setZoom] = useState(1);
+  const zoomBy = (d: number) =>
+    setZoom((z) => Math.min(3, Math.max(0.5, Math.round((z + d) * 100) / 100)));
   // 박스를 새로 고르면 활성 자식을 대표(0)로 되돌린다 (렌더 중 보정 — effect 아님).
   const [prevSelectedId, setPrevSelectedId] = useState(s.selectedId);
   if (s.selectedId !== prevSelectedId) {
@@ -953,6 +967,34 @@ export function PdfWorkbenchPage() {
               초기화
             </button>
             <span className="mx-1 h-4 w-px bg-zinc-200" />
+            {/* 확대/축소 — 표시 배율만 조절(좌표 불변) */}
+            <button
+              type="button"
+              disabled={zoom <= 0.5}
+              onClick={() => zoomBy(-0.25)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
+              title="축소"
+            >
+              <ZoomOut className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setZoom(1)}
+              className="inline-flex h-7 min-w-[3rem] items-center justify-center rounded-md border border-zinc-200 px-1 text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-50"
+              title="배율 초기화 (맞춤)"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              disabled={zoom >= 3}
+              onClick={() => zoomBy(0.25)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
+              title="확대"
+            >
+              <ZoomIn className="h-4 w-4" />
+            </button>
+            <span className="mx-1 h-4 w-px bg-zinc-200" />
             {/* 좌측 모드 세그먼트 — 우측 보조뷰어(정답·해설/그림)와 일관된 형태 */}
             <div className="flex rounded-md border border-zinc-200 p-0.5">
               {(Object.keys(KIND_LABEL) as BoxKind[]).map((k) => {
@@ -975,8 +1017,13 @@ export function PdfWorkbenchPage() {
                     onClick={() => {
                       s.setFigureCapture(false);
                       s.setDrawKind(k);
-                      // 선택된(미저장) 박스가 있으면 그 박스 종류를 바꿔 오른쪽 패널을 갱신.
-                      if (selected && selected.status !== 'saved') {
+                      // 선택 박스 종류 변경 — 저장 후엔 payload가 같은 family
+                      // (문제↔문제 세트, 개념↔본문)끼리만 안전하게 전환.
+                      if (
+                        selected &&
+                        (selected.status !== 'saved' ||
+                          KIND_FAMILY[selected.kind] === KIND_FAMILY[k])
+                      ) {
                         patchBox(selected.id, { kind: k });
                       }
                     }}
@@ -1027,6 +1074,7 @@ export function PdfWorkbenchPage() {
             doc={s.doc}
             pageNum={s.pageNum}
             rotation={s.pageRotations[s.pageNum] ?? 0}
+            zoom={zoom}
             boxes={s.boxes}
             selectedId={s.selectedId}
             onSelect={s.setSelectedId}
@@ -1140,6 +1188,14 @@ export function PdfWorkbenchPage() {
                   )}
                 </span>
                 <div className="flex shrink-0 items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void deleteBox(selected.id)}
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-500 hover:bg-rose-50 hover:text-rose-600"
+                    title="이 박스 삭제 (저장된 문제·교재가 있으면 함께 삭제)"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 shrink-0" /> 삭제
+                  </button>
                   <button
                     type="button"
                     onClick={() => void reocrSelected()}

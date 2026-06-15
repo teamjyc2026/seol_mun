@@ -13,6 +13,11 @@ const schema = z.object({
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
   /** 어떤 문제의 정답을 찾는지 힌트 (발문 일부 등) */
   hint: z.string().max(500).optional(),
+  /** 객관식 보기 — 정답을 번호(①…)로 정확히 돌려주도록 모델에 제공. */
+  choices: z
+    .array(z.object({ label: z.string().max(8), text: z.string().max(500) }))
+    .max(12)
+    .optional(),
 });
 
 /** 답안지/해설 영역에서 정답과 해설을 추출 — 보조 뷰어의 "정답·해설 가져오기". */
@@ -43,6 +48,12 @@ export async function POST(req: NextRequest) {
 - passage_translation: 지문(영어 본문 등)의 한국어 해석/번역이 보이면 그 전체. 해설과 별개. 없으면 생략.
 - 영역에 여러 문제의 답이 있으면${body.hint ? ' 힌트에 해당하는 문제의 것만' : ' 가장 위(첫 번째) 문제의 것만'} 추출하라.
 ${body.hint ? `힌트(대상 문제): ${body.hint}` : ''}
+${
+  body.choices?.length
+    ? `이 문제의 보기: ${body.choices.map((c) => `${c.label} ${c.text}`).join(' / ')}
+정답이 보기 중 하나면 반드시 그 보기의 번호(${body.choices.map((c) => c.label).join('·')})로만 answer를 채워라. 해설에 정답 단어만 적혀 있어도 보기와 대조해 번호로 바꿔라.`
+    : ''
+}
 ${MARKUP_RULES}`,
       content: [
         {

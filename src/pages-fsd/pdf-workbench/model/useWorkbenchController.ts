@@ -4,6 +4,7 @@ import { useRef } from 'react';
 import axios from 'axios';
 import { toast } from 'sonner';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import type { ProblemChoice } from '@/entities/problem';
 import { api } from '@/shared/api/axios';
 import {
   createProblem,
@@ -66,7 +67,9 @@ function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
 
 function toServerPayload(b: BoxData): BoxPayload {
   const base: BoxPayload =
-    b.kind === 'problem' ? { problem: b.problem } : { chunk: b.chunk };
+    b.kind === 'problem' || b.kind === 'problemset'
+      ? { problem: b.problem }
+      : { chunk: b.chunk };
   // answerRefs를 빠뜨리면 디바운스 PATCH가 저장된 링크를 지워버린다
   if (b.answerRefs.length) base.answerRefs = b.answerRefs;
   if (b.tokensIn > 0 || b.tokensOut > 0)
@@ -74,6 +77,58 @@ function toServerPayload(b: BoxData): BoxPayload {
   if (b.savedRefs.length) base.savedRefs = b.savedRefs;
   if (b.passageSetId) base.passageSetId = b.passageSetId;
   return base;
+}
+
+const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
+
+/**
+ * 객관식 OCR 정답(단어/번호/원문자)을 보기 라벨(①·②…)로 정규화. 못 맞추면 null.
+ * 해설 본문에 섞인 문제번호 "(1)" 오인을 막으려고 보기 텍스트 매칭을 숫자보다 먼저 한다.
+ */
+function normalizeObjectiveAnswer(choices: ProblemChoice[], raw: string): string | null {
+  const labels = choices.map((c) => c.label.trim()).filter(Boolean);
+  if (!labels.length || !raw) return null;
+  // 1) 보기 라벨(원문자)이 raw에 직접 있으면 그 라벨.
+  for (const lab of labels) if (raw.includes(lab)) return lab;
+  // 2) 보기 텍스트 매칭 (소문자·기호 제거 정규화) — "specify" → ②.
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9가-힣]/gi, '');
+  const rawN = norm(raw);
+  if (rawN) {
+    let best: { label: string; len: number } | null = null;
+    for (const c of choices) {
+      const t = norm(c.text);
+      if (t && (rawN === t || rawN.includes(t) || t.includes(rawN))) {
+        if (!best || t.length > best.len) best = { label: c.label.trim(), len: t.length };
+      }
+    }
+    if (best) return best.label;
+  }
+  // 3) 원문자/숫자 → 인덱스 → 라벨 (마지막 수단).
+  for (const ch of raw) {
+    const ci = CIRCLED.indexOf(ch);
+    if (ci >= 0 && ci < labels.length) return labels[ci];
+  }
+  const m = raw.match(/[1-9][0-9]?/);
+  if (m) {
+    const n = parseInt(m[0], 10);
+    if (n >= 1 && n <= labels.length) return labels[n - 1];
+  }
+  return null;
+}
+
+/** 객관식이면 정답을 보기 라벨로 매핑, 아니면 원문 유지. */
+function mapAnswer(sub: WbSubProblem, raw: string): string {
+  if (sub.problem_type !== 'objective' || !raw) return raw;
+  return normalizeObjectiveAnswer(sub.choices, raw) ?? raw;
+}
+
+/** /ocr/answer에 넘길 보기 목록 (객관식·내용 있는 보기만). 없으면 undefined. */
+function answerChoicesPayload(sub: WbSubProblem): { label: string; text: string }[] | undefined {
+  if (sub.problem_type !== 'objective') return undefined;
+  const list = sub.choices
+    .filter((c) => c.text.trim())
+    .map((c) => ({ label: c.label, text: c.text }));
+  return list.length ? list : undefined;
 }
 
 /** 자식 문제(0=대표, i+1=extra[i]) 조회 — 없으면 대표. */
@@ -523,21 +578,32 @@ export function useWorkbenchController() {
             : tax.length === 0
               ? (p.topic ?? prev?.topic ?? '')
               : (prev?.topic ?? '');
+          const choices = p.choices?.length
+            ? p.choices
+            : (prev?.choices ?? emptySubProblem().choices);
+          // 객관식 정답은 보기 라벨(①…)로 매핑해 둔다.
+          const ocrAnswer =
+            p.problem_type === 'objective' && p.answer
+              ? (normalizeObjectiveAnswer(choices, p.answer) ?? p.answer)
+              : (p.answer ?? '');
           return {
             problem_type: p.problem_type,
             difficulty: prev?.difficulty ?? 'medium',
             category,
             topic,
             question: p.question,
-            choices: p.choices?.length ? p.choices : (prev?.choices ?? emptySubProblem().choices),
+            choices,
             // 재인식 시 따로 가져온 정답·해설은 보존(비었을 때만 채움).
-            answer: prev?.answer || (p.answer ?? ''),
+            answer: prev?.answer || ocrAnswer,
             explanation: prev?.explanation || (p.explanation ?? ''),
           };
         };
         const ocrProblems = result.problems ?? [];
         const primary = ocrProblems[0] ? snap(ocrProblems[0], box.problem) : null;
         const extra = ocrProblems.slice(1).map((p) => snap(p));
+        // 문제로 그렸어도 인식 결과가 세트(문제 2개 이상)면 '문제 세트'로 자동 전환.
+        // (오른쪽 종류 토글로 다시 '문제'로 되돌릴 수 있음.)
+        if (kind === 'problem' && extra.length > 0) kind = 'problemset';
         const value: WorkbenchProblemValue = {
           ...box.problem,
           ...(primary ?? {}),
@@ -640,10 +706,28 @@ export function useWorkbenchController() {
 
   async function deleteBox(id: string) {
     const st = useWorkbenchStore.getState();
+    const box = st.boxes.find((b) => b.id === id);
+    // 저장된 문제/교재가 딸린 박스면 그 레코드까지 함께 지울지 확인.
+    if (box && box.savedRefs.length > 0) {
+      const isProblem = box.kind === 'problem' || box.kind === 'problemset';
+      const label = isProblem ? `저장한 문제 ${box.savedRefs.length}개` : '저장한 교재 내용';
+      if (!confirm(`이 박스와 ${label}를 삭제할까요? 되돌릴 수 없어요.`)) return;
+      const sourceId = st.source?.id;
+      for (const ref of box.savedRefs) {
+        if (isProblem) {
+          await api.delete(`/agent/problems/${ref}`).catch(() => {});
+        } else if (sourceId) {
+          await api
+            .delete(`/agent/sources/${sourceId}/chunks?chunkId=${ref}`)
+            .catch(() => {});
+        }
+      }
+    }
     st.removeBox(id);
     if (st.jobId && !id.startsWith('temp-')) {
       await api.delete(`/agent/workbench/${st.jobId}/boxes/${id}`).catch(() => {});
     }
+    void refreshEmbedPending();
   }
 
   async function saveSelected() {
@@ -658,7 +742,7 @@ export function useWorkbenchController() {
       const cite = (snippet: string) => [
         { sourceId: source.id, sourceTitle: source.title, page: selected.page, snippet: snippet.slice(0, 160) },
       ];
-      if (selected.kind === 'problem') {
+      if (selected.kind === 'problem' || selected.kind === 'problemset') {
         const f = selected.problem;
         const primary: WbSubProblem = {
           problem_type: f.problem_type,
@@ -931,13 +1015,15 @@ export function useWorkbenchController() {
     }
     st.setGrabbing(true);
     try {
+      const targetSub = subProblemAt(selected.problem, childIdx);
       const res = await fetch('/api/agent/ocr/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: grab.image,
           mediaType: 'image/png',
-          hint: subProblemAt(selected.problem, childIdx).question.slice(0, 200),
+          hint: targetSub.question.slice(0, 200),
+          choices: answerChoicesPayload(targetSub),
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
@@ -958,12 +1044,14 @@ export function useWorkbenchController() {
       const join = (prev: string, add?: string) =>
         add ? (prev.trim() ? `${prev.trim()}\n\n${add}` : add) : prev;
       const sub = subProblemAt(cur.problem, childIdx);
+      // 객관식이면 "specify" 같은 단어 정답을 보기 번호(②)로 매핑.
+      const mappedAnswer = mapAnswer(sub, answer ?? '');
       patchBox(selected.id, {
         problem: applyAnswerToSub(
           cur.problem,
           childIdx,
           {
-            answer: sub.answer || answer || '',
+            answer: sub.answer || mappedAnswer || '',
             explanation: join(sub.explanation, explanation),
           },
           join(cur.problem.passage_translation, passage_translation),
@@ -971,7 +1059,7 @@ export function useWorkbenchController() {
       });
       const label = childIdx > 0 ? `문제 ${childIdx + 1} ` : '';
       toast.success(
-        `${label}가져옴 — ${[answer ? `정답 ${answer}` : '', explanation ? '해설' : '', passage_translation ? '지문해석' : ''].filter(Boolean).join(' + ')}`,
+        `${label}가져옴 — ${[mappedAnswer ? `정답 ${mappedAnswer}` : '', explanation ? '해설' : '', passage_translation ? '지문해석' : ''].filter(Boolean).join(' + ')}`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '인식 실패');
@@ -1065,6 +1153,7 @@ export function useWorkbenchController() {
             image,
             mediaType: 'image/png',
             hint: subProblemAt(box.problem, childIdx).question.slice(0, 200),
+            choices: answerChoicesPayload(subProblemAt(box.problem, childIdx)),
           }),
         });
         if (!res.ok)
@@ -1082,11 +1171,15 @@ export function useWorkbenchController() {
       }
       const cur = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
       if (!cur) return;
+      const rescanAnswer = mapAnswer(
+        subProblemAt(cur.problem, childIdx),
+        answers.find((a) => a.trim()) ?? '',
+      );
       patchBox(boxId, {
         problem: applyAnswerToSub(
           cur.problem,
           childIdx,
-          { answer: answers.find((a) => a.trim()) ?? '', explanation: explanations.join('\n\n') },
+          { answer: rescanAnswer, explanation: explanations.join('\n\n') },
           translations.length ? translations.join('\n\n') : cur.problem.passage_translation,
         ),
       });
@@ -1114,7 +1207,7 @@ export function useWorkbenchController() {
   function appendFigureToBox(boxId: string, url: string) {
     const cur = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
     if (!cur) return;
-    if (cur.kind === 'problem') {
+    if (cur.kind === 'problem' || cur.kind === 'problemset') {
       patchBox(boxId, { problem: { ...cur.problem, figures: [...cur.problem.figures, { url }] } });
     } else {
       patchBox(boxId, { chunk: { ...cur.chunk, figures: [...cur.chunk.figures, { url }] } });

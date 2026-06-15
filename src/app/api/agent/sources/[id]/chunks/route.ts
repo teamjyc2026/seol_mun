@@ -30,6 +30,37 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }
 }
 
+/** PDF 워크벤치: 박스로 저장한 청크 1개 삭제 (?chunkId=). */
+export async function DELETE(req: NextRequest, ctx: Ctx) {
+  if (!(await requireUploader())) {
+    return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
+  }
+  const { id } = await ctx.params;
+  const chunkId = req.nextUrl.searchParams.get('chunkId') ?? '';
+  if (!idSchema.safeParse(id).success || !idSchema.safeParse(chunkId).success) {
+    return NextResponse.json({ message: 'invalid id' }, { status: 400 });
+  }
+  const supabase = getSupabaseServer();
+  const { error, count } = await supabase
+    .from('source_chunks')
+    .delete({ count: 'exact' })
+    .eq('id', chunkId)
+    .eq('source_id', id);
+  if (error) return NextResponse.json({ message: error.message }, { status: 500 });
+  if (count) {
+    const { data: src } = await supabase
+      .from('sources')
+      .select('chunk_count')
+      .eq('id', id)
+      .maybeSingle();
+    await supabase
+      .from('sources')
+      .update({ chunk_count: Math.max(0, (src?.chunk_count ?? 1) - 1) })
+      .eq('id', id);
+  }
+  return NextResponse.json({ ok: true });
+}
+
 const figureSchema = z.object({
   url: z.string().url().max(1000),
   caption: z.string().max(500).optional(),

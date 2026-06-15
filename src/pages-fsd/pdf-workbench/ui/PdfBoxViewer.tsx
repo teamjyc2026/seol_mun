@@ -46,6 +46,7 @@ export function PdfBoxViewer({
   doc,
   pageNum,
   rotation = 0,
+  zoom = 1,
   boxes,
   selectedId,
   onSelect,
@@ -61,6 +62,8 @@ export function PdfBoxViewer({
   pageNum: number;
   /** PDF 회전 (0/90/180/270). */
   rotation?: number;
+  /** 표시 배율 (1=컨테이너 맞춤). CSS 폭만 조절 — 좌표는 캔버스 내부 px 고정. */
+  zoom?: number;
   boxes: WorkBox[];
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -182,9 +185,11 @@ export function PdfBoxViewer({
   const pageBoxes = boxes.filter((b) => b.page === pageNum);
 
   return (
+    <div className="max-w-full overflow-auto">
     <div
       ref={wrapRef}
-      className="relative inline-block max-w-full cursor-crosshair select-none"
+      className="relative cursor-crosshair select-none"
+      style={{ width: `${zoom * 100}%`, maxWidth: zoom <= 1 ? '100%' : 'none' }}
       onMouseDown={onWrapMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -192,7 +197,7 @@ export function PdfBoxViewer({
     >
       <canvas
         ref={canvasRef}
-        className="block max-w-full rounded-md border border-zinc-200 bg-white"
+        className="block w-full rounded-md border border-zinc-200 bg-white"
         style={{ height: 'auto' }}
       />
       {rendering && (
@@ -293,6 +298,7 @@ export function PdfBoxViewer({
           style={toDisplay(drag.rect)}
         />
       )}
+    </div>
     </div>
   );
 }
