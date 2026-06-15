@@ -335,6 +335,7 @@ export function useWorkbenchController() {
       if (data.attachments.length > 0) {
         await openAttachment(data.attachments[0]);
       }
+      void refreshEmbedPending();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '작업을 열지 못했어요.');
     } finally {
@@ -648,16 +649,17 @@ export function useWorkbenchController() {
           ],
         };
         // 이미 저장한 박스면 새로 만들지 않고 그 문제를 갱신(중복 방지) — 계속 저장 가능.
+        // 임베딩은 저장과 분리: 신규/수정 모두 embedding이 비워진 채(=대기) 저장되고,
+        // 나중에 "일괄 임베딩"으로 채운다. (PATCH는 내용 변경 시 embedding을 비운다.)
         if (selected.savedRef) {
           await api.patch(`/agent/problems/${selected.savedRef}`, body);
           savedRef = selected.savedRef;
         } else {
           savedRef = (await createProblem(body)).id;
         }
-        await api.post(`/agent/problems/${savedRef}/embed`).catch(() => {
-          toast.info('저장됐지만 임베딩 실패 — 문제 목록 ⚡로 재시도하세요.');
-        });
-        toast.success(selected.savedRef ? '문제 수정 저장 완료' : '문제 저장 + 임베딩 완료');
+        toast.success(
+          selected.savedRef ? '문제 수정 저장 완료 (임베딩 대기)' : '문제 저장 완료 (임베딩 대기)',
+        );
       } else {
         const c = selected.chunk;
         if (c.text.trim().length < 10) {
@@ -674,7 +676,7 @@ export function useWorkbenchController() {
           { page_number: selected.page, content: c.text, chapter_path: chapterPath },
         );
         savedRef = data.id;
-        toast.success(`${KIND_LABEL[selected.kind]} 청크 저장 + 임베딩 완료`);
+        toast.success(`${KIND_LABEL[selected.kind]} 저장 완료 (임베딩 대기)`);
       }
       patchBox(selected.id, { status: 'saved', savedRef }, false);
       await api
@@ -684,6 +686,7 @@ export function useWorkbenchController() {
           payload: toServerPayload({ ...selected, status: 'saved' }),
         })
         .catch(() => {});
+      void refreshEmbedPending();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '저장 실패');
     } finally {
@@ -914,6 +917,57 @@ export function useWorkbenchController() {
     return grabAnswer(grab);
   }
 
+  // ---------- 임베딩 (저장과 분리) ----------
+  /** 임베딩 대기(=embedding 비어있음) 개수 갱신. */
+  async function refreshEmbedPending() {
+    try {
+      const { data } = await api.get<{ problems: number; chunks: number }>('/agent/embeddings');
+      useWorkbenchStore.getState().setEmbedPending(data);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  /** 대기분(문제+청크)을 0이 될 때까지 일괄 임베딩. */
+  async function runEmbedPending() {
+    const st = useWorkbenchStore.getState();
+    if (st.embedRunning) return;
+    if (st.embedPending.problems + st.embedPending.chunks === 0) {
+      toast.info('임베딩할 대기 항목이 없어요.');
+      return;
+    }
+    st.setEmbedRunning(true);
+    const tid = toast.loading('임베딩 중…');
+    try {
+      let guard = 0;
+      for (;;) {
+        const { data } = await api.post<{
+          problemsEmbedded: number;
+          chunksEmbedded: number;
+          problemsRemaining: number;
+          chunksRemaining: number;
+        }>('/agent/embeddings', { limit: 30 });
+        const remaining = data.problemsRemaining + data.chunksRemaining;
+        useWorkbenchStore
+          .getState()
+          .setEmbedPending({ problems: data.problemsRemaining, chunks: data.chunksRemaining });
+        if (remaining === 0) break;
+        // 남았는데 이번에 하나도 못 했으면(전부 실패) 무한루프 방지.
+        if (data.problemsEmbedded + data.chunksEmbedded === 0) {
+          throw new Error('일부 항목 임베딩 실패 — 잠시 후 다시 시도하세요.');
+        }
+        toast.loading(`임베딩 중… 남은 ${remaining}개`, { id: tid });
+        if (++guard > 500) break;
+      }
+      toast.success('임베딩 완료', { id: tid });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '임베딩 실패', { id: tid });
+    } finally {
+      useWorkbenchStore.getState().setEmbedRunning(false);
+      void refreshEmbedPending();
+    }
+  }
+
   /** 폼에서 파일을 직접 그림으로 업로드 → URL 반환. */
   async function uploadFigureFile(file: File): Promise<string | null> {
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -963,5 +1017,7 @@ export function useWorkbenchController() {
     uploadFigureFile,
     removeAnswerRef,
     clearAnswerRefs,
+    refreshEmbedPending,
+    runEmbedPending,
   };
 }

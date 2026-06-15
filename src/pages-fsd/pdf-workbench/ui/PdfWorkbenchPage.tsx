@@ -93,6 +93,8 @@ export function PdfWorkbenchPage() {
     uploadFigureFile,
     removeAnswerRef,
     clearAnswerRefs,
+    runEmbedPending,
+    refreshEmbedPending,
   } = useWorkbenchController();
 
   const s = useWorkbenchStore(
@@ -126,6 +128,8 @@ export function PdfWorkbenchPage() {
       rotating: st.rotating,
       tokensIn: st.tokensIn,
       tokensOut: st.tokensOut,
+      embedPending: st.embedPending,
+      embedRunning: st.embedRunning,
       // 박스
       boxes: st.boxes,
       selectedId: st.selectedId,
@@ -181,6 +185,7 @@ export function PdfWorkbenchPage() {
     useWorkbenchStore.getState().resetAll();
     void refreshJobs();
     void refreshFolders();
+    void refreshEmbedPending();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -250,10 +255,33 @@ export function PdfWorkbenchPage() {
           <p className="ml-1 text-xs text-zinc-500">
             작업은 저장돼요 — 여럿이 같이, 나중에 이어서.
           </p>
+          {(() => {
+            const pending = s.embedPending.problems + s.embedPending.chunks;
+            if (pending === 0 && !s.embedRunning) return null;
+            return (
+              <button
+                type="button"
+                disabled={s.embedRunning}
+                onClick={() => void runEmbedPending()}
+                title="저장과 분리된 임베딩 — 대기분(신규·수정 문제/청크)을 한 번에 임베딩"
+                className="ml-auto inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-violet-300 bg-violet-50 px-3 text-xs font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-60"
+              >
+                {s.embedRunning ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                임베딩 대기 {pending} · 일괄
+              </button>
+            );
+          })()}
           <button
             type="button"
             onClick={() => s.setCreating(!s.creating)}
-            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white"
+            className={cn(
+              'inline-flex h-8 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white',
+              s.embedPending.problems + s.embedPending.chunks === 0 && !s.embedRunning && 'ml-auto',
+            )}
           >
             <Plus className="h-3.5 w-3.5" /> 새 작업
           </button>
@@ -732,6 +760,30 @@ export function PdfWorkbenchPage() {
         >
           🪙 ↑{fmtTok(s.tokensIn)} ↓{fmtTok(s.tokensOut)}
         </span>
+        {(() => {
+          const pending = s.embedPending.problems + s.embedPending.chunks;
+          return (
+            <button
+              type="button"
+              disabled={s.embedRunning || pending === 0}
+              onClick={() => void runEmbedPending()}
+              title="저장과 분리된 임베딩 — 대기분(신규·수정 문제/청크)을 한 번에 임베딩. 차원 변경 후 전체 재임베딩도 이걸로."
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border px-2 py-1.5 text-xs font-medium tabular-nums transition disabled:cursor-default',
+                pending > 0
+                  ? 'border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                  : 'border-zinc-200 bg-white text-zinc-400',
+              )}
+            >
+              {s.embedRunning ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              )}
+              {pending > 0 ? `임베딩 대기 ${pending} · 일괄 임베딩` : '임베딩 최신'}
+            </button>
+          );
+        })()}
 
         <div className="ml-auto flex items-center gap-1">
           <span className="mr-1 text-xs text-zinc-500">새 박스:</span>

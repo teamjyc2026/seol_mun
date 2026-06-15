@@ -3,44 +3,13 @@ import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedQuery } from '@/shared/lib/embedding';
-import { stripRichText } from '@/shared/lib/richText';
+import { buildProblemEmbedText } from '@/shared/agent/buildProblemEmbedText';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const idSchema = z.string().uuid();
 type Ctx = { params: Promise<{ id: string }> };
-
-/**
- * Build the text we embed for a problem. We include topic + question +
- * choices labels + answer + explanation so semantic search like "임진왜란
- * 객관식 문제 비슷한 거" hits across all of them.
- */
-function buildProblemEmbedText(p: {
-  subject: string | null;
-  topic: string | null;
-  difficulty: string | null;
-  problem_type: string | null;
-  question: string;
-  choices: { label: string; text: string }[] | null;
-  answer: string;
-  explanation: string | null;
-}): string {
-  const parts: string[] = [];
-  const meta: string[] = [];
-  if (p.subject) meta.push(`과목:${p.subject}`);
-  if (p.topic) meta.push(`단원:${p.topic}`);
-  if (p.difficulty) meta.push(`난이도:${p.difficulty}`);
-  if (p.problem_type) meta.push(`유형:${p.problem_type}`);
-  if (meta.length) parts.push(`[${meta.join(' / ')}]`);
-  parts.push(stripRichText(p.question));
-  if (p.choices?.length) {
-    parts.push(p.choices.map((c) => `${c.label}. ${stripRichText(c.text)}`).join('\n'));
-  }
-  parts.push(`정답: ${stripRichText(p.answer)}`);
-  if (p.explanation) parts.push(`해설: ${stripRichText(p.explanation)}`);
-  return parts.join('\n\n');
-}
 
 export async function POST(_req: NextRequest, ctx: Ctx) {
   if (!(await requireUploader())) {

@@ -19,6 +19,10 @@ export type SessionSlice = {
   /** 이 작업 세션에서 Opus(OCR)가 쓴 누적 토큰. */
   tokensIn: number;
   tokensOut: number;
+  /** 임베딩 대기(=embedding 비어있음) 개수 — 저장과 분리된 일괄 임베딩용. */
+  embedPending: { problems: number; chunks: number };
+  /** 일괄 임베딩 진행 중. */
+  embedRunning: boolean;
 
   openSession: (s: {
     jobId: string;
@@ -36,6 +40,8 @@ export type SessionSlice = {
   /** 회전 후 구운 PDF를 다시 로드해 교체. */
   setDoc: (doc: PDFDocumentProxy) => void;
   addTokens: (input: number, output: number) => void;
+  setEmbedPending: (p: { problems: number; chunks: number }) => void;
+  setEmbedRunning: (v: boolean) => void;
 };
 
 export const createSessionSlice: StateCreator<
@@ -55,6 +61,8 @@ export const createSessionSlice: StateCreator<
   rotating: false,
   tokensIn: 0,
   tokensOut: 0,
+  embedPending: { problems: 0, chunks: 0 },
+  embedRunning: false,
 
   openSession: ({ jobId, jobTitle, source, doc, numPages, rotation }) =>
     set({
@@ -89,4 +97,6 @@ export const createSessionSlice: StateCreator<
   setDoc: (doc) => set({ doc }),
   addTokens: (input, output) =>
     set((st) => ({ tokensIn: st.tokensIn + input, tokensOut: st.tokensOut + output })),
+  setEmbedPending: (embedPending) => set({ embedPending }),
+  setEmbedRunning: (embedRunning) => set({ embedRunning }),
 });

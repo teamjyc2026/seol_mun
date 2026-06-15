@@ -3,8 +3,6 @@ import { z } from 'zod';
 import { getSourceChunks } from '@/entities/source/api/getSourceChunks';
 import { getUploaderId, requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
-import { embedQuery } from '@/shared/lib/embedding';
-import { buildEmbeddingText, type EmbedMeta } from '@/shared/agent/buildEmbeddingText';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -88,20 +86,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   try {
     const content = sanitize(body.content);
     const chapterPath = body.chapter_path.map(sanitize);
-    const meta: EmbedMeta = {
-      subject: source.subject,
-      grade: source.grade,
-      publisher: source.publisher,
-      edition: source.edition,
-      author: source.author,
-      source_type: source.source_type,
-      bookKeywords: source.units,
-      tags: source.tags,
-      title: source.title,
-    };
-    const embedding = await embedQuery(
-      buildEmbeddingText({ ...meta, page: body.page_number, chapterPath }, content),
-    );
 
     const { data: maxRow } = await supabase
       .from('source_chunks')
@@ -112,6 +96,8 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       .maybeSingle();
     const chunkIndex = (maxRow?.chunk_index ?? -1) + 1;
 
+    // 임베딩은 저장과 분리 — embedding은 비워두고(=대기), 나중에 일괄 임베딩
+    // (/api/agent/embeddings)에서 채운다. 저장 응답이 빨라진다.
     const { data: inserted, error: insErr } = await supabase
       .from('source_chunks')
       .insert({
@@ -120,7 +106,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         chunk_index: chunkIndex,
         content,
         chapter_path: chapterPath,
-        embedding: embedding as unknown as string,
+        embedding: null,
         created_by: uploaderId,
       })
       .select('id')

@@ -46,6 +46,8 @@ export const useWorkbenchStore = create<WorkbenchState>()((...a) => {
         rotating: false,
         tokensIn: 0,
         tokensOut: 0,
+        embedPending: { problems: 0, chunks: 0 },
+        embedRunning: false,
         boxes: [],
         selectedId: null,
         saving: false,
