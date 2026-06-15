@@ -589,6 +589,38 @@ export function useWorkbenchController() {
     st.setRefDoc(st.doc);
   }
 
+  /** 보조 뷰어 90° 회전 — 같은 PDF면 본 작업 회전, 부속이면 그 부속의 회전값 저장. */
+  async function rotateRef(delta: 90 | -90) {
+    const st = useWorkbenchStore.getState();
+    if (st.refSel?.type === 'same') {
+      await rotateJob(delta);
+      return;
+    }
+    if (st.refSel?.type !== 'attachment') return;
+    const attId = st.refSel.id;
+    const att = st.attachments.find((a) => a.id === attId);
+    if (!att) return;
+    const newRot = (((att.rotation + delta) % 360) + 360) % 360;
+    st.setAttachments(
+      st.attachments.map((a) => (a.id === attId ? { ...a, rotation: newRot } : a)),
+    );
+    // 이 부속을 가리키는 박스 답 링크(정규화 rect)도 함께 회전.
+    for (const b of st.boxes) {
+      if (b.answerRef?.attachmentId !== attId) continue;
+      const r = b.answerRef.rect;
+      const rect =
+        delta === 90
+          ? { x: 1 - (r.y + r.h), y: r.x, w: r.h, h: r.w }
+          : { x: r.y, y: 1 - (r.x + r.w), w: r.h, h: r.w };
+      patchBox(b.id, { answerRef: { ...b.answerRef, rect } });
+    }
+    if (st.jobId) {
+      void api
+        .patch(`/agent/workbench/${st.jobId}/attachments/${attId}`, { rotation: newRot })
+        .catch(() => {});
+    }
+  }
+
   async function openAttachment(att: Attachment) {
     const st = useWorkbenchStore.getState();
     if (st.refSel?.type === 'attachment' && st.refSel.id === att.id) {
@@ -615,13 +647,13 @@ export function useWorkbenchController() {
     try {
       const path = await uploadPdfToStorage(file);
       const attTitle = file.name.replace(/\.pdf$/i, '').normalize('NFC');
-      const { data } = await api.post<{ attachment: Attachment }>(
-        `/agent/workbench/${jobId}/attachments`,
-        { path, title: attTitle },
-      );
-      useWorkbenchStore.getState().appendAttachment(data.attachment);
-      await openAttachment(data.attachment);
-      toast.success(`'${data.attachment.title}' 부속 PDF를 연결했어요.`);
+      const { data } = await api.post<{
+        attachment: { id: string; title: string; url: string };
+      }>(`/agent/workbench/${jobId}/attachments`, { path, title: attTitle });
+      const att: Attachment = { ...data.attachment, rotation: 0 };
+      useWorkbenchStore.getState().appendAttachment(att);
+      await openAttachment(att);
+      toast.success(`'${att.title}' 부속 PDF를 연결했어요.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '부속 PDF 업로드 실패');
     }
@@ -730,6 +762,7 @@ export function useWorkbenchController() {
     deleteBox,
     saveSelected,
     toggleSameRef,
+    rotateRef,
     openAttachment,
     addAttachment,
     deleteAttachment,

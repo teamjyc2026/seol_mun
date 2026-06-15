@@ -40,7 +40,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       supabase.storage.from('sources').createSignedUrl(source.file_path, 60 * 60),
       supabase
         .from('workbench_attachments')
-        .select('id, title, file_path')
+        .select('id, title, file_path, rotation')
         .eq('job_id', id)
         .order('created_at', { ascending: true }),
       supabase
@@ -58,7 +58,12 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       const { data: signed } = await supabase.storage
         .from('sources')
         .createSignedUrl(a.file_path, 60 * 60);
-      return { id: a.id, title: a.title, url: signed?.signedUrl ?? null };
+      return {
+        id: a.id,
+        title: a.title,
+        url: signed?.signedUrl ?? null,
+        rotation: a.rotation ?? 0,
+      };
     }),
   );
 

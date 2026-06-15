@@ -82,6 +82,7 @@ export function PdfWorkbenchPage() {
     deleteBox,
     saveSelected,
     toggleSameRef,
+    rotateRef,
     openAttachment,
     addAttachment,
     deleteAttachment,
@@ -156,13 +157,19 @@ export function PdfWorkbenchPage() {
   const [dropTarget, setDropTarget] = useState<string | 'root' | null>(null);
 
   const selected = s.boxes.find((b) => b.id === s.selectedId) ?? null;
+  const refSel = s.refSel;
   /** 선택된 박스의 링크가 현재 열린 부속 PDF를 가리킬 때만 보조 뷰어에 표시. */
   const linkedRef =
     selected?.answerRef &&
-    s.refSel?.type === 'attachment' &&
-    selected.answerRef.attachmentId === s.refSel.id
+    refSel?.type === 'attachment' &&
+    selected.answerRef.attachmentId === refSel.id
       ? { page: selected.answerRef.page, rect: selected.answerRef.rect }
       : null;
+  /** 보조 뷰어 회전 — 부속이면 그 부속의 값, 같은 PDF면 본 작업 회전. */
+  const refRotation =
+    refSel?.type === 'attachment'
+      ? (s.attachments.find((a) => a.id === refSel.id)?.rotation ?? 0)
+      : s.rotation;
   useEffect(() => {
     useWorkbenchStore.getState().resetAll();
     void refreshJobs();
@@ -896,9 +903,11 @@ export function PdfWorkbenchPage() {
             <PdfRefViewer
               key={s.refSel?.type === 'attachment' ? s.refSel.id : 'same'}
               doc={s.refDoc}
+              rotation={refRotation}
               grabbing={s.grabbing}
               grabLabel="→ 정답·해설 가져오기"
               onGrab={(g) => void grabAnswer(g)}
+              onRotate={(d) => void rotateRef(d)}
               linkedRef={linkedRef}
             />
           </section>

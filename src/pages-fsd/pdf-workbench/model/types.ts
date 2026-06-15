@@ -28,7 +28,7 @@ export type BoxData = WorkBox & {
   answerRef: AnswerRef | null;
 };
 
-export type Attachment = { id: string; title: string; url: string };
+export type Attachment = { id: string; title: string; url: string; rotation: number };
 
 /** 보조 뷰어 선택 — 같은 PDF 또는 부속 PDF 하나. */
 export type RefSel = { type: 'same' } | { type: 'attachment'; id: string } | null;

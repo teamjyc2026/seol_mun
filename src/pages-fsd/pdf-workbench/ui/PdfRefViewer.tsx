@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, ScanText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2, RotateCcw, RotateCw, ScanText } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -21,15 +21,21 @@ export type RefGrab = {
  */
 export function PdfRefViewer({
   doc,
+  rotation = 0,
   grabLabel,
   grabbing,
   onGrab,
+  onRotate,
   linkedRef,
 }: {
   doc: PDFDocumentProxy;
+  /** PDF 회전 (0/90/180/270). */
+  rotation?: number;
   grabLabel: string;
   grabbing: boolean;
   onGrab: (grab: RefGrab) => void;
+  /** 90° 회전 (좌/우). */
+  onRotate?: (delta: 90 | -90) => void;
   /** 선택된 박스의 저장된 답 영역 (현재 열린 부속 PDF 대상일 때만) */
   linkedRef?: { page: number; rect: Rect } | null;
 }) {
@@ -53,7 +59,7 @@ export function PdfRefViewer({
       try {
         const page = await doc.getPage(pageNum);
         if (cancelled) return;
-        const viewport = page.getViewport({ scale: 1.5 });
+        const viewport = page.getViewport({ scale: 1.5, rotation });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport })
@@ -70,7 +76,7 @@ export function PdfRefViewer({
     return () => {
       cancelled = true;
     };
-  }, [doc, pageNum]);
+  }, [doc, pageNum, rotation]);
 
   // 표시 폭이 바뀌면(레이아웃 변화) 비율을 다시 잡아 오버레이가 따라가도록.
   useEffect(() => {
@@ -165,6 +171,35 @@ export function PdfRefViewer({
           >
             연결 p.{linkedRef.page} 보기
           </button>
+        )}
+        {onRotate && (
+          <>
+            <span className="mx-0.5 h-4 w-px bg-zinc-200" />
+            <button
+              type="button"
+              onClick={() => {
+                setRect(null);
+                setDrag(null);
+                onRotate(-90);
+              }}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="왼쪽으로 90° 회전"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRect(null);
+                setDrag(null);
+                onRotate(90);
+              }}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="오른쪽으로 90° 회전"
+            >
+              <RotateCw className="h-4 w-4" />
+            </button>
+          </>
         )}
         <button
           type="button"
