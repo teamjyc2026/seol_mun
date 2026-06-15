@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LogOut, Plus } from 'lucide-react';
-import type { School } from '@/entities/school';
 import type { Student } from '@/shared/config/auth';
 import type { AgentReply, ToolResult, Citation } from '@/shared/agent/types';
 import type { AgentId } from '@/shared/agent/agents/types';
@@ -26,6 +25,14 @@ import { streamAgentMessage } from '@/features/send-agent-message';
 
 type Conversation = { id: string; title: string; created_at: string };
 
+type Scope = {
+  id: string;
+  name: string;
+  subject: string | null;
+  grade: string | null;
+  schoolName: string | null;
+};
+
 type StoredMessage = {
   role: string;
   content: {
@@ -44,14 +51,13 @@ type ChatMessage =
 
 export function StudentAgentPage({
   student,
-  schools,
 }: {
   student: Pick<Student, 'id' | 'name' | 'grade'>;
-  schools: School[];
 }) {
   const router = useRouter();
   const [subject, setSubject] = useState<Subject>('영어');
-  const [schoolId, setSchoolId] = useState<string | null>(schools[0]?.id ?? null);
+  const [scopes, setScopes] = useState<Scope[]>([]);
+  const [scopeId, setScopeId] = useState<string | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -62,7 +68,19 @@ export function StudentAgentPage({
 
   useEffect(() => {
     void refreshConversations();
+    void loadScopes();
   }, []);
+
+  async function loadScopes() {
+    try {
+      const res = await fetch('/api/agent/scopes');
+      if (!res.ok) return;
+      const data = (await res.json()) as { scopes: Scope[] };
+      setScopes(data.scopes ?? []);
+    } catch {
+      // non-fatal
+    }
+  }
 
   async function refreshConversations() {
     try {
@@ -154,7 +172,7 @@ export function StudentAgentPage({
           message: text,
           pinnedSourceIds: [],
           subject,
-          schoolId,
+          scopeId,
         },
         {
           onMeta: (e) => {
@@ -283,7 +301,7 @@ export function StudentAgentPage({
           ))}
         </div>
 
-        {/* 과목 / 학교 */}
+        {/* 과목 / 시험범위 */}
         <div className="flex flex-wrap items-center gap-1.5">
           {SUBJECTS.map((s) => (
             <button
@@ -300,13 +318,14 @@ export function StudentAgentPage({
               {SUBJECT_EMOJI[s]} {s}
             </button>
           ))}
-          {schools.map((sch) => {
-            const active = sch.id === schoolId;
+          {scopes.map((sc) => {
+            const active = sc.id === scopeId;
             return (
               <button
-                key={sch.id}
+                key={sc.id}
                 type="button"
-                onClick={() => setSchoolId(active ? null : sch.id)}
+                onClick={() => setScopeId(active ? null : sc.id)}
+                title={[sc.schoolName, sc.name].filter(Boolean).join(' · ')}
                 className={cn(
                   'inline-flex min-h-9 items-center gap-1 rounded-full border-2 border-b-4 px-3 py-1 text-xs font-bold transition active:translate-y-[2px] active:border-b-2',
                   active
@@ -314,7 +333,7 @@ export function StudentAgentPage({
                     : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50',
                 )}
               >
-                🏫 {sch.name}
+                📘 {sc.name}
               </button>
             );
           })}

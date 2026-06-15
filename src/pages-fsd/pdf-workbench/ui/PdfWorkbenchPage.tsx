@@ -68,6 +68,7 @@ export function PdfWorkbenchPage() {
       // 목록 / 생성 폼
       jobs: st.jobs,
       jobsLoading: st.jobsLoading,
+      jobSubjectFilter: st.jobSubjectFilter,
       creating: st.creating,
       pendingFile: st.pendingFile,
       pendingAttachments: st.pendingAttachments,
@@ -108,6 +109,7 @@ export function PdfWorkbenchPage() {
       setGrade: st.setGrade,
       setSourceType: st.setSourceType,
       setPublisher: st.setPublisher,
+      setJobSubjectFilter: st.setJobSubjectFilter,
       setDrawKind: st.setDrawKind,
       setPage: st.setPage,
       setSelectedId: st.setSelectedId,
@@ -130,6 +132,9 @@ export function PdfWorkbenchPage() {
 
   const pageBoxCount = s.boxes.filter((b) => b.page === s.pageNum).length;
   const savedCount = s.boxes.filter((b) => b.status === 'saved').length;
+  const visibleJobs = s.jobSubjectFilter
+    ? s.jobs.filter((j) => j.subject === s.jobSubjectFilter)
+    : s.jobs;
 
   // ================= 목록 / 새 작업 =================
   if (!s.doc || !s.source || !s.jobId) {
@@ -303,17 +308,52 @@ export function PdfWorkbenchPage() {
           </div>
         )}
 
+        {/* 과목 필터 */}
+        {s.jobs.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => s.setJobSubjectFilter(null)}
+              className={cn(
+                'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                s.jobSubjectFilter === null
+                  ? 'border-zinc-900 bg-zinc-900 text-white'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
+              )}
+            >
+              전체
+            </button>
+            {SUBJECTS.map((sub) => (
+              <button
+                key={sub}
+                type="button"
+                onClick={() => s.setJobSubjectFilter(sub)}
+                className={cn(
+                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                  s.jobSubjectFilter === sub
+                    ? 'border-zinc-900 bg-zinc-900 text-white'
+                    : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
+                )}
+              >
+                {sub}
+              </button>
+            ))}
+          </div>
+        )}
+
         <section className="space-y-2">
           {s.jobsLoading ? (
             <div className="grid h-28 place-items-center rounded-xl border border-zinc-200 bg-white text-sm text-zinc-400">
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
-          ) : s.jobs.length === 0 ? (
+          ) : visibleJobs.length === 0 ? (
             <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
-              아직 작업이 없어요. &quot;새 작업&quot;으로 PDF를 올려 시작하세요.
+              {s.jobs.length === 0
+                ? '아직 작업이 없어요. "새 작업"으로 PDF를 올려 시작하세요.'
+                : '이 과목의 작업이 없어요.'}
             </div>
           ) : (
-            s.jobs.map((j) => (
+            visibleJobs.map((j) => (
               <div
                 key={j.id}
                 className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm"

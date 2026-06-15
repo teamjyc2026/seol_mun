@@ -7,6 +7,8 @@ import type { WorkbenchState } from '../store';
 export type CreationSlice = {
   jobs: JobSummary[];
   jobsLoading: boolean;
+  /** 목록 과목 필터 (null = 전체). */
+  jobSubjectFilter: Subject | null;
   creating: boolean;
   pendingFile: File | null;
   pendingAttachments: PendingAttachment[];
@@ -21,6 +23,7 @@ export type CreationSlice = {
 
   setJobs: (jobs: JobSummary[]) => void;
   setJobsLoading: (v: boolean) => void;
+  setJobSubjectFilter: (s: Subject | null) => void;
   setCreating: (v: boolean) => void;
   setPendingFile: (f: File | null) => void;
   addPendingAttachments: (atts: PendingAttachment[]) => void;
@@ -45,6 +48,7 @@ export const createCreationSlice: StateCreator<
 > = (set) => ({
   jobs: [],
   jobsLoading: true,
+  jobSubjectFilter: null,
   creating: false,
   pendingFile: null,
   pendingAttachments: [],
@@ -59,6 +63,7 @@ export const createCreationSlice: StateCreator<
 
   setJobs: (jobs) => set({ jobs }),
   setJobsLoading: (jobsLoading) => set({ jobsLoading }),
+  setJobSubjectFilter: (jobSubjectFilter) => set({ jobSubjectFilter }),
   setCreating: (creating) => set({ creating }),
   setPendingFile: (pendingFile) => set({ pendingFile }),
   addPendingAttachments: (atts) =>

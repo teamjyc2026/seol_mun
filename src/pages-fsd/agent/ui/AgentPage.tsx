@@ -1,9 +1,8 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import type { Source } from '@/entities/source';
-import type { School } from '@/entities/school';
 import { SUBJECTS, type Subject } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
 import { useSubject } from '@/shared/store/subject';
@@ -14,21 +13,37 @@ import {
 } from '@/widgets/agent-chat';
 import { streamAgentMessage } from '@/features/send-agent-message';
 
-export function AgentPage({
-  initialSources,
-  initialSchools = [],
-}: {
-  initialSources: Source[];
-  initialSchools?: School[];
-}) {
+type Scope = {
+  id: string;
+  name: string;
+  subject: string | null;
+  grade: string | null;
+  schoolName: string | null;
+};
+
+export function AgentPage({ initialSources }: { initialSources: Source[] }) {
   const { subject, setSubject } = useSubject();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const [studentId, setStudentId] = useState('');
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
-  const [schoolId, setSchoolId] = useState<string | null>(null);
+  const [scopes, setScopes] = useState<Scope[]>([]);
+  const [scopeId, setScopeId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch('/api/agent/scopes');
+        if (!res.ok) return;
+        const data = (await res.json()) as { scopes: Scope[] };
+        setScopes(data.scopes ?? []);
+      } catch {
+        // non-fatal
+      }
+    })();
+  }, []);
 
   function pickSubject(s: Subject) {
     setSubject(s);
@@ -84,7 +99,7 @@ export function AgentPage({
           pinnedSourceIds: pinnedIds,
           studentId: studentId.trim() || undefined,
           subject,
-          schoolId,
+          scopeId,
         },
         {
           onMeta: (e) => {
@@ -188,31 +203,32 @@ export function AgentPage({
           </div>
         </div>
 
-        {initialSchools.length > 0 && (
+        {scopes.length > 0 && (
           <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">
             <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
-              학교 RAG (선택 시 해당 학교 자료 기반으로 답변)
+              학교 시험범위 (선택 시 그 범위 자료 기반으로 답변)
             </p>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
-                onClick={() => setSchoolId(null)}
+                onClick={() => setScopeId(null)}
                 className={cn(
                   'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
-                  schoolId === null
+                  scopeId === null
                     ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
                     : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
                 )}
               >
                 전체
               </button>
-              {initialSchools.map((sch) => {
-                const active = sch.id === schoolId;
+              {scopes.map((sc) => {
+                const active = sc.id === scopeId;
                 return (
                   <button
-                    key={sch.id}
+                    key={sc.id}
                     type="button"
-                    onClick={() => setSchoolId(active ? null : sch.id)}
+                    onClick={() => setScopeId(active ? null : sc.id)}
+                    title={[sc.schoolName, sc.name].filter(Boolean).join(' · ')}
                     className={cn(
                       'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
                       active
@@ -220,7 +236,8 @@ export function AgentPage({
                         : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
                     )}
                   >
-                    🏫 {sch.name}
+                    📘 {sc.schoolName ? `${sc.schoolName} · ` : ''}
+                    {sc.name}
                   </button>
                 );
               })}

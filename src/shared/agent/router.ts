@@ -114,14 +114,34 @@ async function buildAgentSystem(
 }
 
 /**
- * 학교별 RAG: resolve the school's name and its indexed source ids so the
- * turn's retrieval is scoped to that school's materials.
+ * RAG 스코프 resolve: scopeId가 있으면 시험범위에 담긴 소스로, 없으면 기존
+ * 학교(school_id) 자료로 retrieval을 한정한다. schoolName은 시스템 프롬프트
+ * 컨텍스트 표기에 쓰인다(범위면 "{학교} {범위}").
  */
-async function resolveSchoolScope(
-  schoolId: string | null | undefined,
-): Promise<{ schoolName: string | null; sourceIds: string[] }> {
-  if (!schoolId) return { schoolName: null, sourceIds: [] };
+async function resolveScope(args: {
+  scopeId?: string | null;
+  schoolId?: string | null;
+}): Promise<{ schoolName: string | null; sourceIds: string[] }> {
   const supabase = getSupabaseServer();
+  if (args.scopeId) {
+    const { data: scope } = await supabase
+      .from('exam_scopes')
+      .select('id, name, school_id')
+      .eq('id', args.scopeId)
+      .maybeSingle();
+    if (!scope) return { schoolName: null, sourceIds: [] };
+    const [{ data: school }, { data: rows }] = await Promise.all([
+      supabase.from('schools').select('name').eq('id', scope.school_id).maybeSingle(),
+      supabase.from('exam_scope_sources').select('source_id').eq('scope_id', args.scopeId),
+    ]);
+    const label = [school?.name, scope.name].filter(Boolean).join(' ');
+    return {
+      schoolName: label || (scope.name as string),
+      sourceIds: (rows ?? []).map((r) => r.source_id as string),
+    };
+  }
+  const schoolId = args.schoolId;
+  if (!schoolId) return { schoolName: null, sourceIds: [] };
   const { data: school } = await supabase
     .from('schools')
     .select('id, name')
@@ -163,6 +183,8 @@ export async function runAgentTools(args: {
   audience?: Audience;
   /** 학교별 RAG: scope retrieval to this school's indexed sources. */
   schoolId?: string | null;
+  /** 시험범위 RAG: scope retrieval to this exam scope's sources (우선). */
+  scopeId?: string | null;
   /** Prior turns of this conversation (tutoring loop needs them). */
   history?: Anthropic.MessageParam[];
   /** Specialist that produced the last assistant turn (sticky routing). */
@@ -195,7 +217,7 @@ export async function runAgentTools(args: {
   const profile = getProfile(agent);
   const allowed = resolveAllowedTools(profile, audience);
 
-  const school = await resolveSchoolScope(args.schoolId);
+  const school = await resolveScope({ scopeId: args.scopeId, schoolId: args.schoolId });
   const pinnedSourceIds =
     school.sourceIds.length > 0
       ? Array.from(new Set([...args.pinnedSourceIds, ...school.sourceIds]))

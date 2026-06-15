@@ -24,6 +24,7 @@ const schema = z.object({
   studentId: z.string().min(1).optional(),
   subject: z.string().min(1).max(50).optional(),
   schoolId: z.string().uuid().nullable().optional(),
+  scopeId: z.string().uuid().nullable().optional(),
 });
 
 function encodeEvent(event: StreamEvent): string {
@@ -189,6 +190,7 @@ export async function POST(req: NextRequest) {
           subject,
           audience,
           schoolId: body.schoolId ?? null,
+          scopeId: body.scopeId ?? null,
           history,
           lastAgent,
           studentGrade: sessionStudent?.grade ?? null,

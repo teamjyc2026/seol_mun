@@ -1,5 +1,4 @@
 import { getStudent } from '@/shared/config/auth';
-import { listSchools } from '@/entities/school/api/listSchools';
 import { StudentAuthPage, StudentAgentPage } from '@/pages-fsd/student';
 
 export const runtime = 'nodejs';
@@ -10,6 +9,5 @@ export default async function Page() {
   if (!student) {
     return <StudentAuthPage />;
   }
-  const schools = await listSchools();
-  return <StudentAgentPage student={student} schools={schools} />;
+  return <StudentAgentPage student={student} />;
 }

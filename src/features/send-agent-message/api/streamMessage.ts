@@ -8,6 +8,8 @@ export type StreamMessageInput = {
   subject?: string;
   /** 학교별 RAG: scope retrieval to this school's sources. */
   schoolId?: string | null;
+  /** 시험범위 RAG: scope retrieval to this exam scope's sources. */
+  scopeId?: string | null;
 };
 
 export type StreamHandlers = {
