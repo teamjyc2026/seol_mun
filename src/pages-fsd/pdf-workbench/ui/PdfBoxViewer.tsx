@@ -149,10 +149,14 @@ export function PdfBoxViewer({
     setRatio(canvas.width / canvas.clientWidth);
   }
 
+  // 캔버스 표시 폭이 바뀔 때마다(윈도우 리사이즈 + 보조 뷰어 열림/닫힘 같은
+  // 레이아웃 변화) 비율을 다시 잡아 박스 오버레이가 함께 줄도록 한다.
   useEffect(() => {
-    const onResize = () => syncRatio();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ro = new ResizeObserver(() => syncRatio());
+    ro.observe(canvas);
+    return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -72,6 +72,17 @@ export function PdfRefViewer({
     };
   }, [doc, pageNum]);
 
+  // 표시 폭이 바뀌면(레이아웃 변화) 비율을 다시 잡아 오버레이가 따라가도록.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ro = new ResizeObserver(() => {
+      if (canvas.clientWidth > 0) setRatio(canvas.width / canvas.clientWidth);
+    });
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, []);
+
   /** 페이지 이동 — 드래그 선택은 페이지에 종속이라 함께 초기화. */
   function goPage(n: number) {
     setRect(null);
@@ -126,7 +137,7 @@ export function PdfRefViewer({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex h-8 items-center gap-2 text-sm">
         <button
           type="button"
           disabled={pageNum <= 1}

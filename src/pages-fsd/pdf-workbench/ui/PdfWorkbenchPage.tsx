@@ -122,12 +122,6 @@ export function PdfWorkbenchPage() {
     selected.answerRef.attachmentId === s.refSel.id
       ? { page: selected.answerRef.page, rect: selected.answerRef.rect }
       : null;
-  const refSel = s.refSel;
-  const refTitle =
-    refSel?.type === 'attachment'
-      ? (s.attachments.find((a) => a.id === refSel.id)?.title ?? '부속 PDF')
-      : '같은 PDF (해설 참조)';
-
   useEffect(() => {
     useWorkbenchStore.getState().resetAll();
     void refreshJobs();
@@ -504,7 +498,7 @@ export function PdfWorkbenchPage() {
         />
         {/* 메인 뷰어 */}
         <section className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex h-8 items-center gap-2 text-sm">
             <button
               type="button"
               disabled={s.pageNum <= 1}
@@ -544,11 +538,6 @@ export function PdfWorkbenchPage() {
         {/* 보조 뷰어 (답안/해설/부가자료 참조) */}
         {s.refDoc && (
           <section className="space-y-2">
-            <p className="text-xs font-medium text-emerald-700">
-              📑 {refTitle} — 영역을 드래그하고 버튼을 누르면 <b>선택된 문제</b>의
-              정답·해설로 들어가요
-              {s.refSel?.type === 'attachment' ? ' (문제와 선으로 연결돼요)' : ''}.
-            </p>
             <PdfRefViewer
               key={s.refSel?.type === 'attachment' ? s.refSel.id : 'same'}
               doc={s.refDoc}
