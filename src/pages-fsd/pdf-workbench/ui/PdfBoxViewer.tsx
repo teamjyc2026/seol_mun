@@ -173,6 +173,7 @@ export function PdfBoxViewer({
         return (
           <div
             key={b.id}
+            data-box-id={b.id}
             className={cn(
               'absolute border-2',
               b.status === 'failed'

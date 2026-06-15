@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const idSchema = z.string().uuid();
 type Ctx = { params: Promise<{ id: string }> };
 
-/** 작업 상세: 소스 메타 + 서명된 PDF URL(문제지/답안지) + 저장된 박스 전부. */
+/** 작업 상세: 소스 메타 + 서명된 PDF URL(문제지/부속자료들) + 저장된 박스 전부. */
 export async function GET(_req: NextRequest, ctx: Ctx) {
   if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
@@ -21,7 +21,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const supabase = getSupabaseServer();
   const { data: job } = await supabase
     .from('workbench_jobs')
-    .select('id, source_id, title, answer_path, created_at, updated_at')
+    .select('id, source_id, title, created_at, updated_at')
     .eq('id', id)
     .maybeSingle();
   if (!job) return NextResponse.json({ message: 'not found' }, { status: 404 });
@@ -35,12 +35,14 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ message: '소스 PDF가 없어요.' }, { status: 404 });
   }
 
-  const [{ data: pdfSigned, error: pdfErr }, answerSigned, { data: boxes }] =
+  const [{ data: pdfSigned, error: pdfErr }, { data: attRows }, { data: boxes }] =
     await Promise.all([
       supabase.storage.from('sources').createSignedUrl(source.file_path, 60 * 60),
-      job.answer_path
-        ? supabase.storage.from('sources').createSignedUrl(job.answer_path, 60 * 60)
-        : Promise.resolve(null),
+      supabase
+        .from('workbench_attachments')
+        .select('id, title, file_path')
+        .eq('job_id', id)
+        .order('created_at', { ascending: true }),
       supabase
         .from('workbench_boxes')
         .select('id, page, rect, kind, status, payload, saved_ref, updated_at')
@@ -51,8 +53,17 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ message: pdfErr?.message ?? 'signed url 실패' }, { status: 500 });
   }
 
+  const attachments = await Promise.all(
+    (attRows ?? []).map(async (a) => {
+      const { data: signed } = await supabase.storage
+        .from('sources')
+        .createSignedUrl(a.file_path, 60 * 60);
+      return { id: a.id, title: a.title, url: signed?.signedUrl ?? null };
+    }),
+  );
+
   return NextResponse.json({
-    job: { id: job.id, title: job.title, hasAnswerPdf: !!job.answer_path },
+    job: { id: job.id, title: job.title },
     source: {
       id: source.id,
       title: source.title,
@@ -60,15 +71,13 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       grade: source.grade,
     },
     pdfUrl: pdfSigned.signedUrl,
-    answerPdfUrl: answerSigned?.data?.signedUrl ?? null,
+    attachments: attachments.filter((a) => a.url),
     boxes: boxes ?? [],
   });
 }
 
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
-  /** 답안 PDF의 Storage 경로 (upload-url로 업로드 후 연결). */
-  answer_path: z.string().regex(/^[0-9a-f-]{36}\.pdf$/i).nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {

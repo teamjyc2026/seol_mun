@@ -32,7 +32,8 @@ import {
   type BoxRect,
   type WorkBox,
 } from './PdfBoxViewer';
-import { PdfRefViewer } from './PdfRefViewer';
+import { ConnectionLine } from './ConnectionLine';
+import { PdfRefViewer, type RefGrab } from './PdfRefViewer';
 import { TopicPicker } from './TopicPicker';
 import {
   WorkbenchProblemForm,
@@ -55,29 +56,42 @@ type OcrProblem = {
 
 type ChunkValue = { category: string | null; topic: string; text: string };
 
-type BoxPayload = { problem?: WorkbenchProblemValue; chunk?: ChunkValue };
+/** 박스 ↔ 부속 PDF 답 영역 연결 (rect는 페이지 비율 0–1 정규화). */
+type AnswerRef = { attachmentId: string; page: number; rect: BoxRect };
+
+type BoxPayload = {
+  problem?: WorkbenchProblemValue;
+  chunk?: ChunkValue;
+  answerRef?: AnswerRef;
+};
 
 type BoxData = WorkBox & {
   problem: WorkbenchProblemValue;
   chunk: ChunkValue;
+  answerRef: AnswerRef | null;
 };
+
+type Attachment = { id: string; title: string; url: string };
+
+/** 보조 뷰어 선택 — 같은 PDF 또는 부속 PDF 하나. */
+type RefSel = { type: 'same' } | { type: 'attachment'; id: string } | null;
 
 type JobSummary = {
   id: string;
   title: string;
   subject: string | null;
   grade: string | null;
-  hasAnswerPdf: boolean;
+  attachmentCount: number;
   boxCount: number;
   savedCount: number;
   updated_at: string;
 };
 
 type JobDetail = {
-  job: { id: string; title: string; hasAnswerPdf: boolean };
+  job: { id: string; title: string };
   source: { id: string; title: string; subject: string; grade: string | null };
   pdfUrl: string;
-  answerPdfUrl: string | null;
+  attachments: Attachment[];
   boxes: {
     id: string;
     page: number;
@@ -112,14 +126,21 @@ const KIND_ICON: Record<BoxKind, typeof PencilLine> = {
 export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
-  const answerFileRef = useRef<HTMLInputElement | null>(null);
+  const attachFileRef = useRef<HTMLInputElement | null>(null);
+  const pendingAttachRef = useRef<HTMLInputElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const patchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  /** 부속 PDF 문서 캐시 — 탭 전환 시 재다운로드 방지. */
+  const refDocCache = useRef<Map<string, PDFDocumentProxy>>(new Map());
 
   // ---- 목록 / 새 작업 ----
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [jobsLoading, setJobsLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<
+    { file: File; title: string }[]
+  >([]);
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState<Subject>('영어');
   const [grade, setGrade] = useState('고1');
@@ -128,6 +149,7 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
   const [schoolId, setSchoolId] = useState<string | null>(schools[0]?.id ?? null);
   const [uploading, setUploading] = useState(false);
   const [uploadPct, setUploadPct] = useState(0);
+  const [uploadStep, setUploadStep] = useState('');
 
   // ---- 작업 화면 ----
   const [jobId, setJobId] = useState<string | null>(null);
@@ -141,13 +163,20 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
   const [boxes, setBoxes] = useState<BoxData[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  // 보조 뷰어 (답안지/해설 참조)
-  const [refMode, setRefMode] = useState<'none' | 'same' | 'answer'>('none');
+  // 보조 뷰어 (답안지·해설·부가자료 참조)
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [refSel, setRefSel] = useState<RefSel>(null);
   const [refDoc, setRefDoc] = useState<PDFDocumentProxy | null>(null);
-  const [answerPdfUrl, setAnswerPdfUrl] = useState<string | null>(null);
   const [grabbing, setGrabbing] = useState(false);
 
   const selected = boxes.find((b) => b.id === selectedId) ?? null;
+  /** 선택된 박스의 링크가 현재 열린 부속 PDF를 가리킬 때만 보조 뷰어에 표시. */
+  const linkedRef =
+    selected?.answerRef &&
+    refSel?.type === 'attachment' &&
+    selected.answerRef.attachmentId === refSel.id
+      ? { page: selected.answerRef.page, rect: selected.answerRef.rect }
+      : null;
 
   useEffect(() => {
     void refreshJobs();
@@ -167,7 +196,23 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
 
   // ---------- 서버 동기화 ----------
   function toServerPayload(b: BoxData): BoxPayload {
-    return b.kind === 'problem' ? { problem: b.problem } : { chunk: b.chunk };
+    const base: BoxPayload =
+      b.kind === 'problem' ? { problem: b.problem } : { chunk: b.chunk };
+    // answerRef를 빠뜨리면 디바운스 PATCH가 저장된 링크를 지워버린다
+    return b.answerRef ? { ...base, answerRef: b.answerRef } : base;
+  }
+
+  function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
+    return {
+      id: b.id,
+      page: b.page,
+      rect: b.rect,
+      kind: b.kind,
+      status: b.status === 'ocr' ? 'ready' : b.status,
+      problem: b.payload.problem ?? emptyProblemValue(),
+      chunk: b.payload.chunk ?? { category: null, topic: '', text: '' },
+      answerRef: b.payload.answerRef ?? null,
+    };
   }
 
   /** 폼 수정은 800ms 디바운스로 서버에 반영 (이어하기·공동작업용). */
@@ -215,20 +260,11 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
       setJobId(data.job.id);
       setJobTitle(data.job.title);
       setSource(data.source);
-      setAnswerPdfUrl(data.answerPdfUrl);
-      setRefMode('none');
+      setAttachments(data.attachments);
+      setRefSel(null);
       setRefDoc(null);
-      setBoxes(
-        data.boxes.map((b) => ({
-          id: b.id,
-          page: b.page,
-          rect: b.rect,
-          kind: b.kind,
-          status: b.status === 'ocr' ? 'ready' : b.status,
-          problem: b.payload.problem ?? emptyProblemValue(),
-          chunk: b.payload.chunk ?? { category: null, topic: '', text: '' },
-        })),
-      );
+      refDocCache.current.clear();
+      setBoxes(data.boxes.map(fromServerBox));
       setSelectedId(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '작업을 열지 못했어요.');
@@ -242,22 +278,28 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
     if (!jobId) return;
     try {
       const { data } = await api.get<JobDetail>(`/agent/workbench/${jobId}`);
-      setBoxes(
-        data.boxes.map((b) => ({
-          id: b.id,
-          page: b.page,
-          rect: b.rect,
-          kind: b.kind,
-          status: b.status === 'ocr' ? 'ready' : b.status,
-          problem: b.payload.problem ?? emptyProblemValue(),
-          chunk: b.payload.chunk ?? { category: null, topic: '', text: '' },
-        })),
-      );
-      setAnswerPdfUrl(data.answerPdfUrl);
+      setBoxes(data.boxes.map(fromServerBox));
+      setAttachments(data.attachments);
       toast.success('서버와 동기화했어요.');
     } catch {
       toast.error('동기화 실패');
     }
+  }
+
+  /** 서명 URL 발급 → Storage 직접 업로드 → 경로 반환. */
+  async function uploadPdfToStorage(file: File): Promise<string> {
+    const { data: signed } = await api.post<{ path: string; signedUrl: string }>(
+      '/agent/sources/upload-url',
+      { filename: file.name, size: file.size },
+    );
+    await axios.put(signed.signedUrl, file, {
+      headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'false' },
+      timeout: 600_000,
+      onUploadProgress: (e) => {
+        if (e.total) setUploadPct(Math.round((e.loaded / e.total) * 100));
+      },
+    });
+    return signed.path;
   }
 
   async function startNewJob() {
@@ -268,19 +310,16 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
     }
     setUploading(true);
     try {
-      const { data: signed } = await api.post<{ path: string; signedUrl: string }>(
-        '/agent/sources/upload-url',
-        { filename: pendingFile.name, size: pendingFile.size },
-      );
-      await axios.put(signed.signedUrl, pendingFile, {
-        headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'false' },
-        timeout: 600_000,
-        onUploadProgress: (e) => {
-          if (e.total) setUploadPct(Math.round((e.loaded / e.total) * 100));
-        },
-      });
+      setUploadStep('본 PDF');
+      const mainPath = await uploadPdfToStorage(pendingFile);
+      const uploadedAttachments: { path: string; title: string }[] = [];
+      for (const [i, att] of pendingAttachments.entries()) {
+        setUploadStep(`부속 ${i + 1}/${pendingAttachments.length}`);
+        const path = await uploadPdfToStorage(att.file);
+        uploadedAttachments.push({ path, title: att.title.trim() || att.file.name });
+      }
       const { data: src } = await api.post<{ id: string }>('/agent/sources', {
-        path: signed.path,
+        path: mainPath,
         original_filename: pendingFile.name.normalize('NFC'),
         file_size_bytes: pendingFile.size,
         title: title.trim(),
@@ -295,10 +334,12 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
       const { data: job } = await api.post<{ id: string }>('/agent/workbench', {
         sourceId: src.id,
         title: title.trim(),
+        attachments: uploadedAttachments,
       });
       toast.success('작업이 만들어졌어요 — 목록에서 누구든 이어서 할 수 있어요.');
       setCreating(false);
       setPendingFile(null);
+      setPendingAttachments([]);
       setTitle('');
       await openJob(job.id);
       void refreshJobs();
@@ -306,6 +347,7 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
       toast.error(e instanceof Error ? e.message : '업로드 실패');
     } finally {
       setUploading(false);
+      setUploadStep('');
     }
   }
 
@@ -335,6 +377,7 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
       status: 'ocr',
       problem: emptyProblemValue(),
       chunk: { category: null, topic: '', text: '' },
+      answerRef: null,
     };
     setBoxes((prev) => [...prev, base]);
     setSelectedId(tempId);
@@ -487,66 +530,86 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
   }
 
   // ---------- 보조 뷰어 ----------
-  async function setRef(mode: 'none' | 'same' | 'answer') {
-    if (mode === refMode) {
-      setRefMode('none');
-      setRefDoc(null);
+  function closeRef() {
+    setRefSel(null);
+    setRefDoc(null);
+  }
+
+  function toggleSameRef() {
+    if (refSel?.type === 'same') {
+      closeRef();
       return;
     }
-    if (mode === 'none') {
-      setRefMode('none');
-      setRefDoc(null);
-      return;
-    }
-    if (mode === 'same') {
-      setRefMode('same');
-      setRefDoc(doc);
-      return;
-    }
-    // answer 모드: 연결된 답안 PDF 로드, 없으면 업로드 유도
-    if (!answerPdfUrl) {
-      answerFileRef.current?.click();
+    setRefSel({ type: 'same' });
+    setRefDoc(doc);
+  }
+
+  async function openAttachment(att: Attachment) {
+    if (refSel?.type === 'attachment' && refSel.id === att.id) {
+      closeRef();
       return;
     }
     try {
-      const loaded = await loadPdfFromUrl(answerPdfUrl);
+      let loaded = refDocCache.current.get(att.id);
+      if (!loaded) {
+        loaded = await loadPdfFromUrl(att.url);
+        refDocCache.current.set(att.id, loaded);
+      }
       setRefDoc(loaded);
-      setRefMode('answer');
+      setRefSel({ type: 'attachment', id: att.id });
     } catch {
-      toast.error('답안 PDF를 열지 못했어요.');
+      toast.error(`'${att.title}' PDF를 열지 못했어요.`);
     }
   }
 
-  async function uploadAnswerPdf(file: File) {
+  async function addAttachment(file: File) {
     if (!jobId) return;
     try {
-      const { data: signed } = await api.post<{ path: string; signedUrl: string }>(
-        '/agent/sources/upload-url',
-        { filename: file.name, size: file.size },
+      const path = await uploadPdfToStorage(file);
+      const attTitle = file.name.replace(/\.pdf$/i, '').normalize('NFC');
+      const { data } = await api.post<{ attachment: Attachment }>(
+        `/agent/workbench/${jobId}/attachments`,
+        { path, title: attTitle },
       );
-      await axios.put(signed.signedUrl, file, {
-        headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'false' },
-        timeout: 600_000,
-      });
-      await api.patch(`/agent/workbench/${jobId}`, { answer_path: signed.path });
-      const { data } = await api.get<JobDetail>(`/agent/workbench/${jobId}`);
-      setAnswerPdfUrl(data.answerPdfUrl);
-      if (data.answerPdfUrl) {
-        const loaded = await loadPdfFromUrl(data.answerPdfUrl);
-        setRefDoc(loaded);
-        setRefMode('answer');
-        toast.success('답안 PDF를 연결했어요.');
-      }
+      setAttachments((prev) => [...prev, data.attachment]);
+      await openAttachment(data.attachment);
+      toast.success(`'${data.attachment.title}' 부속 PDF를 연결했어요.`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : '답안 PDF 업로드 실패');
+      toast.error(e instanceof Error ? e.message : '부속 PDF 업로드 실패');
     }
   }
 
-  /** 보조 뷰어에서 드래그한 영역 → 선택된 문제의 정답·해설로 인식해 채움 */
-  async function grabAnswer(image: string) {
+  async function deleteAttachment(att: Attachment) {
+    if (!jobId) return;
+    if (!confirm(`'${att.title}' 부속 PDF를 삭제할까요? (연결된 답 표시도 함께 지워져요)`))
+      return;
+    try {
+      const { data } = await api.delete<{ ok: boolean; clearedBoxIds: string[] }>(
+        `/agent/workbench/${jobId}/attachments/${att.id}`,
+      );
+      setAttachments((prev) => prev.filter((a) => a.id !== att.id));
+      refDocCache.current.delete(att.id);
+      const cleared = new Set(data.clearedBoxIds);
+      setBoxes((prev) =>
+        prev.map((b) => (cleared.has(b.id) ? { ...b, answerRef: null } : b)),
+      );
+      if (refSel?.type === 'attachment' && refSel.id === att.id) closeRef();
+    } catch {
+      toast.error('부속 PDF 삭제 실패');
+    }
+  }
+
+  /** 보조 뷰어에서 드래그한 영역 → 선택된 문제의 정답·해설로 인식해 채움 + 링크 저장 */
+  async function grabAnswer(grab: RefGrab) {
     if (!selected || selected.kind !== 'problem') {
       toast.error('먼저 왼쪽에서 문제 박스를 선택하세요.');
       return;
+    }
+    // 드래그 자체가 "이 영역이 이 문제의 답"이라는 의미 — OCR 결과와 무관하게 연결 저장
+    if (refSel?.type === 'attachment') {
+      patchBox(selected.id, {
+        answerRef: { attachmentId: refSel.id, page: grab.page, rect: grab.rect },
+      });
     }
     setGrabbing(true);
     try {
@@ -554,7 +617,7 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image,
+          image: grab.image,
           mediaType: 'image/png',
           hint: selected.problem.question.slice(0, 200),
         }),
@@ -642,6 +705,65 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
                 e.target.value = '';
               }}
             />
+            <div className="space-y-2">
+              {pendingAttachments.map((att, i) => (
+                <div
+                  key={`${att.file.name}-${i}`}
+                  className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+                >
+                  <Columns2 className="h-4 w-4 shrink-0 text-zinc-400" />
+                  <input
+                    value={att.title}
+                    onChange={(e) =>
+                      setPendingAttachments((prev) =>
+                        prev.map((a, j) => (j === i ? { ...a, title: e.target.value } : a)),
+                      )
+                    }
+                    placeholder="부속 자료 이름 (예: 답안지)"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs outline-none focus:border-indigo-400"
+                  />
+                  <span className="hidden max-w-[160px] truncate text-[11px] text-zinc-400 sm:block">
+                    {att.file.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPendingAttachments((prev) => prev.filter((_, j) => j !== i))
+                    }
+                    className="rounded-md p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => pendingAttachRef.current?.click()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-zinc-300 px-3 py-2 text-xs text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
+              >
+                <Plus className="h-3.5 w-3.5" /> 부속 PDF 추가 (답안지·해설 등 — 여러 개 가능)
+              </button>
+              <input
+                ref={pendingAttachRef}
+                type="file"
+                accept="application/pdf"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length) {
+                    setPendingAttachments((prev) => [
+                      ...prev,
+                      ...files.map((file) => ({
+                        file,
+                        title: file.name.replace(/\.pdf$/i, '').normalize('NFC'),
+                      })),
+                    ]);
+                  }
+                  e.target.value = '';
+                }}
+              />
+            </div>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -713,7 +835,9 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
               disabled={!pendingFile || uploading}
               className="w-full rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
             >
-              {uploading ? `업로드 중… ${uploadPct}%` : '업로드하고 작업 시작'}
+              {uploading
+                ? `${uploadStep} 업로드 중… ${uploadPct}%`
+                : '업로드하고 작업 시작'}
             </button>
           </div>
         )}
@@ -738,8 +862,9 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
                   <p className="truncate text-sm font-semibold text-zinc-900">{j.title}</p>
                   <p className="text-xs text-zinc-500">
                     {[j.subject, j.grade].filter(Boolean).join(' · ')}
-                    {j.hasAnswerPdf ? ' · 답안PDF 연결됨' : ''} · 박스 {j.boxCount}개 (저장{' '}
-                    {j.savedCount}) · {new Date(j.updated_at).toLocaleString('ko-KR')}
+                    {j.attachmentCount > 0 ? ` · 부속 PDF ${j.attachmentCount}개` : ''} · 박스{' '}
+                    {j.boxCount}개 (저장 {j.savedCount}) ·{' '}
+                    {new Date(j.updated_at).toLocaleString('ko-KR')}
                   </p>
                 </div>
                 <button
@@ -781,8 +906,9 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
             setDoc(null);
             setSource(null);
             setJobId(null);
-            setRefDoc(null);
-            setRefMode('none');
+            closeRef();
+            setAttachments([]);
+            refDocCache.current.clear();
             void refreshJobs();
           }}
           className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
@@ -830,10 +956,10 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
           <span className="mx-1 h-4 w-px bg-zinc-200" />
           <button
             type="button"
-            onClick={() => void setRef('same')}
+            onClick={toggleSameRef}
             className={cn(
               'inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition',
-              refMode === 'same'
+              refSel?.type === 'same'
                 ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
                 : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
             )}
@@ -841,42 +967,82 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
           >
             <Columns2 className="h-3.5 w-3.5" /> 같은 PDF
           </button>
+          {attachments.map((att) => {
+            const active = refSel?.type === 'attachment' && refSel.id === att.id;
+            return (
+              <span
+                key={att.id}
+                className={cn(
+                  'inline-flex items-center overflow-hidden rounded-md border text-xs font-medium transition',
+                  active
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                    : 'border-zinc-200 bg-white text-zinc-600',
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => void openAttachment(att)}
+                  className={cn(
+                    'inline-flex max-w-[140px] items-center gap-1 px-2.5 py-1.5',
+                    !active && 'hover:bg-zinc-50',
+                  )}
+                  title={`'${att.title}' 옆에 띄우기`}
+                >
+                  <Columns2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{att.title}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteAttachment(att)}
+                  className="border-l border-zinc-200 px-1 py-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                  title="부속 PDF 삭제"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              </span>
+            );
+          })}
           <button
             type="button"
-            onClick={() => void setRef('answer')}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition',
-              refMode === 'answer'
-                ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
-            )}
-            title={answerPdfUrl ? '답안 PDF 열기' : '답안 PDF 업로드·연결'}
+            onClick={() => attachFileRef.current?.click()}
+            className="inline-flex items-center gap-1 rounded-md border border-dashed border-zinc-300 px-2 py-1.5 text-xs text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
+            title="부속 PDF(답안지·해설 등) 추가"
           >
-            <Columns2 className="h-3.5 w-3.5" /> 답안 PDF{answerPdfUrl ? '' : ' 연결'}
+            <Plus className="h-3.5 w-3.5" /> 부속
           </button>
         </div>
       </header>
 
       <input
-        ref={answerFileRef}
+        ref={attachFileRef}
         type="file"
         accept="application/pdf"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f) void uploadAnswerPdf(f);
+          const files = Array.from(e.target.files ?? []);
+          void (async () => {
+            for (const f of files) await addAttachment(f);
+          })();
           e.target.value = '';
         }}
       />
 
       <div
+        ref={containerRef}
         className={cn(
-          'grid gap-4',
+          'relative grid gap-4',
           refDoc
             ? 'xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_400px]'
             : 'lg:grid-cols-[minmax(0,1fr)_440px]',
         )}
       >
+        <ConnectionLine
+          containerRef={containerRef}
+          active={!!linkedRef && !!refDoc}
+          fromSelector={`[data-box-id="${selectedId}"]`}
+          toSelector="[data-answer-link]"
+        />
         {/* 메인 뷰어 */}
         <section className="space-y-2">
           <div className="flex items-center gap-2 text-sm">
@@ -915,18 +1081,24 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
           />
         </section>
 
-        {/* 보조 뷰어 (답안/해설 참조) */}
+        {/* 보조 뷰어 (답안/해설/부가자료 참조) */}
         {refDoc && (
           <section className="space-y-2">
             <p className="text-xs font-medium text-emerald-700">
-              📑 {refMode === 'answer' ? '답안 PDF' : '같은 PDF (해설 참조)'} — 영역을
-              드래그하고 버튼을 누르면 <b>선택된 문제</b>의 정답·해설로 들어가요.
+              📑{' '}
+              {refSel?.type === 'attachment'
+                ? (attachments.find((a) => a.id === refSel.id)?.title ?? '부속 PDF')
+                : '같은 PDF (해설 참조)'}{' '}
+              — 영역을 드래그하고 버튼을 누르면 <b>선택된 문제</b>의 정답·해설로
+              들어가요{refSel?.type === 'attachment' ? ' (문제와 선으로 연결돼요)' : ''}.
             </p>
             <PdfRefViewer
+              key={refSel?.type === 'attachment' ? refSel.id : 'same'}
               doc={refDoc}
               grabbing={grabbing}
               grabLabel="→ 정답·해설 가져오기"
-              onGrab={(img) => void grabAnswer(img)}
+              onGrab={(g) => void grabAnswer(g)}
+              linkedRef={linkedRef}
             />
           </section>
         )}
@@ -992,6 +1164,25 @@ export function PdfWorkbenchPage({ schools }: { schools: School[] }) {
                   저장
                 </button>
               </div>
+
+              {selected.kind === 'problem' && selected.answerRef && (
+                <div className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700">
+                  <span>
+                    🔗 답안 연결됨 —{' '}
+                    {attachments.find((a) => a.id === selected.answerRef?.attachmentId)
+                      ?.title ?? '삭제된 부속'}{' '}
+                    p.{selected.answerRef.page}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => patchBox(selected.id, { answerRef: null })}
+                    className="rounded px-1.5 py-0.5 font-medium hover:bg-indigo-100"
+                    title="연결 해제"
+                  >
+                    해제
+                  </button>
+                </div>
+              )}
 
               <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 {selected.kind === 'problem' ? (
