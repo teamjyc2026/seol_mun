@@ -14,6 +14,8 @@ export type ProblemDraft = {
   id?: string;
   /** shared reading passage (markup-enabled) when the problem belongs to a passage set */
   passage?: string | null;
+  /** uuid grouping problems that share one passage (지문 세트) */
+  passage_set_id?: string | null;
   topic: string | null;
   difficulty: 'easy' | 'medium' | 'hard';
   problem_type: 'objective' | 'short' | 'long';

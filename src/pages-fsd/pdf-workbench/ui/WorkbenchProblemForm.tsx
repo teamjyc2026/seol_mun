@@ -63,12 +63,15 @@ export function WorkbenchProblemForm({
   value,
   onChange,
   uploadFigure,
+  passageShared = false,
 }: {
   subject: string;
   value: WorkbenchProblemValue;
   onChange: (next: WorkbenchProblemValue) => void;
   /** 파일을 Storage에 올리고 public URL을 돌려준다 (실패 시 null). */
   uploadFigure: (file: File) => Promise<string | null>;
+  /** 세트 멤버(비대표) — 지문은 대표 문제에서 공유되므로 입력란 대신 안내. */
+  passageShared?: boolean;
 }) {
   const set = <K extends keyof WorkbenchProblemValue>(
     k: K,
@@ -148,17 +151,23 @@ export function WorkbenchProblemForm({
         onChange={({ category, topic }) => onChange({ ...value, category, topic })}
       />
 
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-zinc-700">지문 (선택)</label>
-        <textarea
-          value={value.passage}
-          onChange={(e) => set('passage', e.target.value)}
-          rows={5}
-          placeholder="지문/제시문 — 없으면 비워두세요"
-          className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
-        />
-        <RichTextPreview value={value.passage} />
-      </div>
+      {passageShared ? (
+        <div className="rounded-md border border-dashed border-indigo-200 bg-indigo-50/50 px-3 py-2 text-[11px] text-indigo-600">
+          📑 이 문제는 <b>지문 세트</b>의 멤버예요. 지문은 대표 문제에서 한 번만 입력합니다.
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-zinc-700">지문 (선택)</label>
+          <textarea
+            value={value.passage}
+            onChange={(e) => set('passage', e.target.value)}
+            rows={5}
+            placeholder="지문/제시문 — 없으면 비워두세요"
+            className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
+          />
+          <RichTextPreview value={value.passage} />
+        </div>
+      )}
 
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-zinc-700">지문 해석 (선택)</label>

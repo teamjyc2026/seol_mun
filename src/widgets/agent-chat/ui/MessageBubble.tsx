@@ -1,8 +1,9 @@
 'use client';
 
-import type { AgentReply, ToolResult } from '@/shared/agent/types';
+import type { AgentReply, ProblemDraft, ToolResult } from '@/shared/agent/types';
 import { AGENT_LABELS, AGENT_TEXT_CLASS } from '@/shared/agent/agents/styles';
 import { Markdown } from '@/shared/ui/Markdown/Markdown';
+import { RichText } from '@/shared/ui/RichText';
 import { cn } from '@/shared/lib/cn';
 import { openSourcePdf } from '@/features/open-source-pdf';
 import { ProblemCard } from './ProblemCard';
@@ -73,6 +74,20 @@ export function MessageBubble({
   );
 }
 
+// 연속된 같은 지문 세트(passage_set_id) 문제들을 묶는다 — 지문 1회만 표시.
+function groupBySet(
+  problems: ProblemDraft[],
+): { setId: string | null; items: { p: ProblemDraft; idx: number }[] }[] {
+  const groups: { setId: string | null; items: { p: ProblemDraft; idx: number }[] }[] = [];
+  problems.forEach((p, idx) => {
+    const sid = p.passage_set_id ?? null;
+    const last = groups[groups.length - 1];
+    if (sid && last && last.setId === sid) last.items.push({ p, idx });
+    else groups.push({ setId: sid, items: [{ p, idx }] });
+  });
+  return groups;
+}
+
 function ToolCards({
   results,
   onSubmitAnswer,
@@ -94,14 +109,31 @@ function ToolCards({
                   📂 저장된 문제 {r.problems.length}개
                 </p>
               ) : null}
-              {r.problems.map((p, idx) => (
-                <ProblemCard
-                  key={p.id ?? idx}
-                  problem={p}
-                  index={idx}
-                  onSubmitAnswer={onSubmitAnswer}
-                />
-              ))}
+              {groupBySet(r.problems).map((g, gi) => {
+                // 세트(2문제 이상 + 지문 있음)면 지문을 그룹 상단에 1회만.
+                const groupPassage =
+                  g.setId && g.items.length > 1
+                    ? g.items.find((it) => it.p.passage)?.p.passage
+                    : null;
+                return (
+                  <div key={g.setId ?? `solo-${gi}`} className="space-y-3">
+                    {groupPassage ? (
+                      <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[14px] leading-relaxed text-zinc-800">
+                        <RichText text={groupPassage} />
+                      </div>
+                    ) : null}
+                    {g.items.map(({ p, idx }) => (
+                      <ProblemCard
+                        key={p.id ?? idx}
+                        problem={p}
+                        index={idx}
+                        onSubmitAnswer={onSubmitAnswer}
+                        hidePassage={!!groupPassage}
+                      />
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           );
         }

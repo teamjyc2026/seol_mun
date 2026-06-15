@@ -12,11 +12,14 @@ export function ProblemCard({
   problem,
   index,
   onSubmitAnswer,
+  hidePassage = false,
 }: {
   problem: ProblemDraft;
   index: number;
   /** 출제 모드: 학생이 카드에서 직접 답을 제출 → 채팅 메시지로 전송. */
   onSubmitAnswer?: (text: string) => void;
+  /** 지문 세트 그룹에서 지문을 그룹 상단에 한 번만 표시할 때 카드 내 지문 숨김. */
+  hidePassage?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -38,7 +41,7 @@ export function ProblemCard({
 
   return (
     <article className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-      {problem.passage ? (
+      {problem.passage && !hidePassage ? (
         <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-[14px] leading-relaxed text-zinc-800">
           <RichText text={problem.passage} />
         </div>

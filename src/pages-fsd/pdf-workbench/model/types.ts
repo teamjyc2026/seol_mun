@@ -34,6 +34,10 @@ export type BoxPayload = {
   answerRefs?: AnswerRef[];
   /** 이 박스 인식에 쓴 누적 토큰 (분류+OCR+정답·해설). */
   tokens?: { in: number; out: number };
+  /** 지문 세트 id (같은 값 = 한 지문 공유). owner 박스는 setId === 자기 box id. */
+  setId?: string;
+  /** 세트로 저장된 뒤의 passage_set_id (참고용). */
+  passageSetId?: string;
   /** @deprecated 레거시 단일 연결 — fromServerBox에서 배열로 정규화. */
   answerRef?: Omit<AnswerRef, 'id'> & { id?: string };
 };
@@ -49,6 +53,10 @@ export type BoxData = WorkBox & {
   actor: string | null;
   /** 저장된 문제/청크 id — 재저장 시 새로 만들지 않고 이 레코드를 갱신. */
   savedRef: string | null;
+  /** 지문 세트 id (같은 값 = 한 지문 공유). owner 박스는 setId === 자기 box id. */
+  setId: string | null;
+  /** 세트 저장 후의 passage_set_id (참고용). */
+  passageSetId: string | null;
 };
 
 export type Attachment = {

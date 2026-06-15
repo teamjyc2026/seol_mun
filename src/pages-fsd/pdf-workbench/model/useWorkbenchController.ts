@@ -5,8 +5,13 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { api } from '@/shared/api/axios';
-import { createProblem } from '@/features/create-problem';
+import {
+  createProblem,
+  createProblemSet,
+  type ProblemSetSubProblem,
+} from '@/features/create-problem';
 import { topicCategoriesFor } from '@/shared/config/topics';
+import type { Subject } from '@/shared/config/subjects';
 import type { BoxKind, BoxRect } from '../ui/PdfBoxViewer';
 import { KIND_LABEL } from '../ui/PdfBoxViewer';
 import { emptyProblemValue, type WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
@@ -47,6 +52,8 @@ function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
     tokensOut: b.payload.tokens?.out ?? 0,
     actor: b.actor ?? null,
     savedRef: b.saved_ref ?? null,
+    setId: b.payload.setId ?? null,
+    passageSetId: b.payload.passageSetId ?? null,
   };
 }
 
@@ -57,6 +64,8 @@ function toServerPayload(b: BoxData): BoxPayload {
   if (b.answerRefs.length) base.answerRefs = b.answerRefs;
   if (b.tokensIn > 0 || b.tokensOut > 0)
     base.tokens = { in: b.tokensIn, out: b.tokensOut };
+  if (b.setId) base.setId = b.setId;
+  if (b.passageSetId) base.passageSetId = b.passageSetId;
   return base;
 }
 
@@ -550,6 +559,8 @@ export function useWorkbenchController() {
       tokensOut: 0,
       actor: null,
       savedRef: null,
+      setId: null,
+      passageSetId: null,
     };
     st.addBox(base);
     st.setSelectedId(tempId);
@@ -678,6 +689,115 @@ export function useWorkbenchController() {
       void refreshEmbedPending();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '저장 실패');
+    } finally {
+      useWorkbenchStore.getState().setSaving(false);
+    }
+  }
+
+  // ---------- 지문 세트 (지문 1 + 문제 N) ----------
+  /** 이 박스를 대표(owner)로 새 지문 세트 시작 (setId = 자기 box id). */
+  function makeSet(boxId: string) {
+    if (boxId.startsWith('temp-')) {
+      toast.error('먼저 박스가 서버에 만들어진 뒤에 세트로 묶을 수 있어요.');
+      return;
+    }
+    patchBox(boxId, { setId: boxId });
+  }
+
+  /** 세트 멤버 토글 — 같은 setId 부여/해제. */
+  function toggleSetMember(setId: string, boxId: string) {
+    const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+    if (!box) return;
+    patchBox(boxId, { setId: box.setId === setId ? null : setId });
+  }
+
+  /** 세트 해제 — 같은 setId 박스 전부 묶음 해제. */
+  function disbandSet(setId: string) {
+    for (const b of useWorkbenchStore.getState().boxes) {
+      if (b.setId === setId) patchBox(b.id, { setId: null });
+    }
+  }
+
+  /** 세트 저장 — 멤버 전부를 한 지문(대표 지문) + 여러 문제(passage set)로 저장. */
+  async function saveSelectedSet() {
+    const st = useWorkbenchStore.getState();
+    const sel = st.boxes.find((b) => b.id === st.selectedId);
+    const { source, jobId, saving } = st;
+    if (!sel || !sel.setId || !source || !jobId || saving) return;
+    const setId = sel.setId;
+    const members = st.boxes
+      .filter((b) => b.setId === setId && b.kind === 'problem')
+      .sort((a, b) => a.page - b.page || a.rect.y - b.rect.y || a.rect.x - b.rect.x);
+    if (members.length < 2) {
+      toast.error('세트에는 문제가 2개 이상 필요해요.');
+      return;
+    }
+    const owner = members.find((m) => m.id === setId) ?? members[0];
+    const passage = owner.problem.passage.trim();
+    if (!passage) {
+      toast.error('세트 지문을 대표 문제(지문 보유)에 입력해 주세요.');
+      return;
+    }
+    for (const m of members) {
+      if (!m.problem.question.trim() || !m.problem.answer.trim()) {
+        toast.error(`p.${m.page} 문제의 발문·정답을 채워주세요.`);
+        return;
+      }
+    }
+    st.setSaving(true);
+    try {
+      // 재저장: 기존 저장분 삭제 후 새 세트로 — 멤버 추가/삭제·수정 일괄 반영.
+      for (const m of members) {
+        if (m.savedRef) await api.delete(`/agent/problems/${m.savedRef}`).catch(() => {});
+      }
+      const problems: ProblemSetSubProblem[] = members.map((m) => ({
+        topic: m.problem.topic || null,
+        difficulty: m.problem.difficulty,
+        problem_type: m.problem.problem_type,
+        question: m.problem.question,
+        choices:
+          m.problem.problem_type === 'objective'
+            ? m.problem.choices.filter((c) => c.text.trim())
+            : null,
+        answer: m.problem.answer.trim(),
+        explanation: m.problem.explanation || null,
+        notes: 'PDF 워크벤치 세트',
+        citations: [
+          {
+            sourceId: source.id,
+            sourceTitle: source.title,
+            page: m.page,
+            snippet: (passage || m.problem.question).slice(0, 160),
+          },
+        ],
+      }));
+      const { passageSetId, ids } = await createProblemSet({
+        subject: source.subject as Subject,
+        subjects: [source.subject as Subject],
+        passage,
+        shared: { topic: owner.problem.topic || null },
+        problems,
+      });
+      // ids는 problems 순서와 동일 — 각 멤버 박스 saved 처리.
+      for (let i = 0; i < members.length; i++) {
+        const m = members[i];
+        const savedRef = ids[i] ?? null;
+        patchBox(m.id, { status: 'saved', savedRef, passageSetId }, false);
+        const fresh = useWorkbenchStore.getState().boxes.find((b) => b.id === m.id);
+        if (fresh) {
+          await api
+            .patch(`/agent/workbench/${jobId}/boxes/${m.id}`, {
+              status: 'saved',
+              saved_ref: savedRef,
+              payload: toServerPayload(fresh),
+            })
+            .catch(() => {});
+        }
+      }
+      toast.success(`지문 세트 저장 — 문제 ${ids.length}개 (임베딩 대기)`);
+      void refreshEmbedPending();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '세트 저장 실패');
     } finally {
       useWorkbenchStore.getState().setSaving(false);
     }
@@ -1155,6 +1275,10 @@ export function useWorkbenchController() {
     reocrSelected,
     deleteBox,
     saveSelected,
+    makeSet,
+    toggleSetMember,
+    disbandSet,
+    saveSelectedSet,
     toggleSameRef,
     rotateRef,
     openAttachment,
