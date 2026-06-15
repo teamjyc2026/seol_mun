@@ -90,9 +90,11 @@ export function PdfWorkbenchPage() {
     addAttachment,
     deleteAttachment,
     grabFromRef,
+    captureFigureFromMain,
     uploadFigureFile,
     removeAnswerRef,
     clearAnswerRefs,
+    rescanAnswerRefs,
     runEmbedPending,
     refreshEmbedPending,
   } = useWorkbenchController();
@@ -135,6 +137,8 @@ export function PdfWorkbenchPage() {
       selectedId: st.selectedId,
       drawKind: st.drawKind,
       saving: st.saving,
+      figureCapture: st.figureCapture,
+      setFigureCapture: st.setFigureCapture,
       // 보조 뷰어
       attachments: st.attachments,
       refSel: st.refSel,
@@ -941,6 +945,20 @@ export function PdfWorkbenchPage() {
             >
               {s.rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
             </button>
+            <span className="mx-1 h-4 w-px bg-zinc-200" />
+            <button
+              type="button"
+              onClick={() => s.setFigureCapture(!s.figureCapture)}
+              className={cn(
+                'inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1.5 text-xs font-medium transition',
+                s.figureCapture
+                  ? 'border-violet-500 bg-violet-50 text-violet-700'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
+              )}
+              title="켜고 본문 영역을 드래그하면 선택한 문제의 그림으로 캡처돼요"
+            >
+              <Scissors className="h-3.5 w-3.5 shrink-0" /> 그림 캡처
+            </button>
             {pageIdleCount > 0 && (
               <button
                 type="button"
@@ -957,6 +975,12 @@ export function PdfWorkbenchPage() {
               이 페이지 {pageBoxCount}개 · 저장 {savedCount}/{s.boxes.length}
             </span>
           </div>
+          {s.figureCapture && (
+            <p className="rounded-md border border-violet-200 bg-violet-50 px-2.5 py-1.5 text-[11px] font-medium text-violet-700">
+              ✂️ 그림 캡처 모드 — 본문에서 영역을 드래그하면 선택한 문제의 그림으로 추가돼요.
+              (박스 그리기는 잠시 멈춤)
+            </p>
+          )}
           <PdfBoxViewer
             doc={s.doc}
             pageNum={s.pageNum}
@@ -969,6 +993,8 @@ export function PdfWorkbenchPage() {
             onRecognize={(id) => void recognizeBox(id)}
             onUpdateRect={(id, rect) => patchBox(id, { rect })}
             canvasRef={canvasRef}
+            captureMode={s.figureCapture}
+            onCaptureFigure={(r) => void captureFigureFromMain(r)}
           />
         </section>
 
@@ -1101,15 +1127,31 @@ export function PdfWorkbenchPage() {
 
               {selected.kind === 'problem' && selected.answerRefs.length > 0 && (
                 <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="font-medium">🔗 답안 연결 {selected.answerRefs.length}곳</span>
-                    <button
-                      type="button"
-                      onClick={() => clearAnswerRefs(selected.id)}
-                      className="rounded px-1.5 py-0.5 font-medium hover:bg-emerald-100"
-                    >
-                      전체 해제
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={s.grabbing}
+                        onClick={() => void rescanAnswerRefs(selected.id)}
+                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium hover:bg-emerald-100 disabled:opacity-50"
+                        title="연결된 해설 영역을 다시 스캔해 정답·해설을 새로 채움"
+                      >
+                        {s.grabbing ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <ScanText className="h-3 w-3" />
+                        )}
+                        다시 스캔
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => clearAnswerRefs(selected.id)}
+                        className="rounded px-1.5 py-0.5 font-medium hover:bg-emerald-100"
+                      >
+                        전체 해제
+                      </button>
+                    </div>
                   </div>
                   {selected.answerRefs.map((a) => (
                     <div key={a.id} className="flex items-center justify-between gap-1">

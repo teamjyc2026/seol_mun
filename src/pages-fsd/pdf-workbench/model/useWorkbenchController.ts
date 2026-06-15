@@ -66,14 +66,19 @@ function fmtTok(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
-function cropToBase64(canvas: HTMLCanvasElement, rect: BoxRect): string {
+function cropToBase64(
+  canvas: HTMLCanvasElement,
+  rect: BoxRect,
+  mediaType: 'image/png' | 'image/jpeg' = 'image/png',
+  quality?: number,
+): string {
   const crop = document.createElement('canvas');
   crop.width = Math.max(1, Math.round(rect.w));
   crop.height = Math.max(1, Math.round(rect.h));
   crop
     .getContext('2d')!
     .drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, crop.width, crop.height);
-  const dataUrl = crop.toDataURL('image/png');
+  const dataUrl = crop.toDataURL(mediaType, quality);
   return dataUrl.slice(dataUrl.indexOf(',') + 1);
 }
 
@@ -250,23 +255,16 @@ export function useWorkbenchController() {
   async function rotateJob(delta: 90 | -90) {
     if (rotatingRef.current) return;
     const st = useWorkbenchStore.getState();
-    const { jobId, doc, boxes } = st;
+    const { jobId, doc, boxes, pageNum } = st;
     if (!jobId || !doc) return;
     rotatingRef.current = true;
     st.setRotating(true);
 
-    // 현재 화면 방향(0°) 기준 캔버스 크기로 박스를 회전 변환.
-    const pages = Array.from(new Set(boxes.map((b) => b.page)));
-    const dims = new Map<number, { w: number; h: number }>();
-    await Promise.all(
-      pages.map(async (p) => {
-        const vp = (await doc.getPage(p)).getViewport({ scale: 1.5, rotation: 0 });
-        dims.set(p, { w: vp.width, h: vp.height });
-      }),
-    );
+    // 보고 있는 페이지만 회전 — 그 페이지(0° 기준) 캔버스 크기로 박스를 변환.
+    const vp = (await doc.getPage(pageNum)).getViewport({ scale: 1.5, rotation: 0 });
+    const d = { w: vp.width, h: vp.height };
     const rotated = boxes.map((b) => {
-      const d = dims.get(b.page);
-      if (!d) return b;
+      if (b.page !== pageNum) return b; // 다른 페이지는 그대로
       const { x, y, w, h } = b.rect;
       const rect =
         delta === 90
@@ -279,19 +277,19 @@ export function useWorkbenchController() {
     // 낙관적 화면 회전(굽기 완료 전까지 기존 doc을 viewport로 돌려 보여준다).
     st.setRotation(((delta % 360) + 360) % 360);
 
-    // 박스 rect 영속 (temp 제외).
+    // 이 페이지 박스 rect만 영속 (temp 제외).
     for (const b of rotated) {
-      if (b.id.startsWith('temp-')) continue;
+      if (b.page !== pageNum || b.id.startsWith('temp-')) continue;
       void api
         .patch(`/agent/workbench/${jobId}/boxes/${b.id}`, { rect: b.rect })
         .catch(() => {});
     }
 
     try {
-      // 서버에서 파일을 회전해 덮어쓰고 새 서명 URL을 받는다.
+      // 서버에서 그 페이지를 회전해 덮어쓰고 새 서명 URL을 받는다.
       const { data } = await api.post<{ pdfUrl: string }>(
         `/agent/workbench/${jobId}/rotate`,
-        { delta },
+        { delta, page: pageNum },
       );
       const reloaded = await loadPdfFromUrl(data.pdfUrl);
       const s2 = useWorkbenchStore.getState();
@@ -510,8 +508,9 @@ export function useWorkbenchController() {
           passage: problem.passage ?? '',
           question: problem.question,
           choices: problem.choices?.length ? problem.choices : box.problem.choices,
-          answer: problem.answer ?? '',
-          explanation: problem.explanation ?? '',
+          // 문제 재인식은 문제 파트만 갱신 — 따로 가져온 정답·해설은 보존(비었을 때만 채움).
+          answer: box.problem.answer || (problem.answer ?? ''),
+          explanation: box.problem.explanation || (problem.explanation ?? ''),
         };
         patch = { status: 'ready', kind, problem: value };
       } else {
@@ -876,6 +875,96 @@ export function useWorkbenchController() {
     patchBox(boxId, { answerRefs: [] });
   }
 
+  /** 부속 PDF의 한 영역(정규화 rect)을 오프스크린 렌더해 base64 PNG로 크롭. */
+  async function renderRefRegion(
+    att: Attachment,
+    page: number,
+    normRect: BoxRect,
+  ): Promise<string> {
+    let doc = refDocCache.current.get(att.id);
+    if (!doc) {
+      doc = await loadPdfFromUrl(att.url);
+      refDocCache.current.set(att.id, doc);
+    }
+    const p = await doc.getPage(page);
+    const vp = p.getViewport({ scale: 1.5, rotation: att.rotation });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width;
+    canvas.height = vp.height;
+    await p.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport: vp }).promise;
+    return cropToBase64(canvas, {
+      x: normRect.x * canvas.width,
+      y: normRect.y * canvas.height,
+      w: normRect.w * canvas.width,
+      h: normRect.h * canvas.height,
+    });
+  }
+
+  /** 연결된 해설 영역들을 다시 스캔(재OCR)해 정답·해설·지문해석을 새로 채운다(덮어쓰기). */
+  async function rescanAnswerRefs(boxId: string) {
+    const st = useWorkbenchStore.getState();
+    const box = st.boxes.find((b) => b.id === boxId);
+    if (!box || box.kind !== 'problem') return;
+    const refs = box.answerRefs.filter((r) =>
+      st.attachments.some((a) => a.id === r.attachmentId),
+    );
+    if (refs.length === 0) {
+      toast.info('다시 스캔할 연결된 해설 영역이 없어요. (같은 PDF 연결은 대상 아님)');
+      return;
+    }
+    if (
+      !confirm('연결된 해설 영역을 다시 스캔해 정답·해설을 새로 채울까요? 지금 입력값은 덮어써져요.')
+    )
+      return;
+    st.setGrabbing(true);
+    try {
+      const answers: string[] = [];
+      const explanations: string[] = [];
+      const translations: string[] = [];
+      for (const ref of refs) {
+        const att = useWorkbenchStore.getState().attachments.find((a) => a.id === ref.attachmentId);
+        if (!att) continue;
+        const image = await renderRefRegion(att, ref.page, ref.rect);
+        const res = await fetch('/api/agent/ocr/answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image,
+            mediaType: 'image/png',
+            hint: box.problem.question.slice(0, 200),
+          }),
+        });
+        if (!res.ok)
+          throw new Error((await res.json().catch(() => null))?.message ?? '재스캔 실패');
+        const { answer, explanation, passage_translation, usage } = (await res.json()) as {
+          answer?: string;
+          explanation?: string;
+          passage_translation?: string;
+          usage?: TokenUsage;
+        };
+        reportUsage('정답·해설 재스캔', usage, boxId);
+        if (answer) answers.push(answer);
+        if (explanation) explanations.push(explanation);
+        if (passage_translation) translations.push(passage_translation);
+      }
+      const cur = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+      if (!cur) return;
+      patchBox(boxId, {
+        problem: {
+          ...cur.problem,
+          answer: answers.find((a) => a.trim()) ?? '',
+          explanation: explanations.join('\n\n'),
+          passage_translation: translations.join('\n\n'),
+        },
+      });
+      toast.success(`해설 ${refs.length}곳 다시 스캔 완료`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '재스캔 실패');
+    } finally {
+      useWorkbenchStore.getState().setGrabbing(false);
+    }
+  }
+
   // ---------- 그림/도표 ----------
   /** base64 이미지를 Storage(problem-figures)에 올리고 public URL을 돌려준다. */
   async function uploadFigure(image: string, mediaType: string): Promise<string | null> {
@@ -906,6 +995,35 @@ export function useWorkbenchController() {
         problem: { ...cur.problem, figures: [...cur.problem.figures, { url }] },
       });
       toast.success('그림을 추가했어요.');
+    } finally {
+      useWorkbenchStore.getState().setGrabbing(false);
+    }
+  }
+
+  /** 메인 뷰어에서 잡은 영역을 선택된 문제의 그림으로 추가 (본문 그림 캡처). */
+  async function captureFigureFromMain(rect: BoxRect) {
+    const st = useWorkbenchStore.getState();
+    const selected = st.boxes.find((b) => b.id === st.selectedId);
+    if (!selected || selected.kind !== 'problem') {
+      toast.error('먼저 문제 박스를 선택하세요. (그림은 그 문제에 추가돼요)');
+      return;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      toast.error('캔버스를 읽을 수 없어요.');
+      return;
+    }
+    const image = cropToBase64(canvas, rect, 'image/jpeg', 0.85);
+    st.setGrabbing(true);
+    try {
+      const url = await uploadFigure(image, 'image/jpeg');
+      if (!url) return;
+      const cur =
+        useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id) ?? selected;
+      patchBox(selected.id, {
+        problem: { ...cur.problem, figures: [...cur.problem.figures, { url }] },
+      });
+      toast.success('본문 그림을 문제에 추가했어요.');
     } finally {
       useWorkbenchStore.getState().setGrabbing(false);
     }
@@ -1014,9 +1132,11 @@ export function useWorkbenchController() {
     deleteAttachment,
     grabAnswer,
     grabFromRef,
+    captureFigureFromMain,
     uploadFigureFile,
     removeAnswerRef,
     clearAnswerRefs,
+    rescanAnswerRefs,
     refreshEmbedPending,
     runEmbedPending,
   };

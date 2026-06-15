@@ -64,6 +64,8 @@ export function PdfBoxViewer({
   onRecognize,
   onUpdateRect,
   canvasRef,
+  captureMode = false,
+  onCaptureFigure,
 }: {
   doc: PDFDocumentProxy;
   pageNum: number;
@@ -81,6 +83,10 @@ export function PdfBoxViewer({
   onUpdateRect: (id: string, rect: BoxRect) => void;
   /** 부모가 크롭에 쓸 수 있도록 캔버스 ref 공유 */
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  /** 그림 캡처 모드 — 드래그가 박스 생성 대신 영역을 캡처한다. */
+  captureMode?: boolean;
+  /** 캡처 모드에서 드래그 영역(캔버스 내부 px)을 부모에 넘김. */
+  onCaptureFigure?: (rect: BoxRect) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -186,7 +192,10 @@ export function PdfBoxViewer({
     const d = drag;
     setDrag(null);
     if (d.kind === 'create') {
-      if (d.rect.w >= MIN_W && d.rect.h >= MIN_H) onCreate(d.rect);
+      if (d.rect.w >= MIN_W && d.rect.h >= MIN_H) {
+        if (captureMode) onCaptureFigure?.(d.rect);
+        else onCreate(d.rect);
+      }
       return;
     }
     // move/resize: 의미 있는 변화가 있으면 커밋
@@ -247,6 +256,8 @@ export function PdfBoxViewer({
                   : KIND_BOX_CLASS[b.kind],
               selected && 'ring-2 ring-zinc-900/40',
               b.status === 'saved' && 'opacity-80',
+              // 캡처 모드에선 박스 위에서도 드래그가 래퍼로 가도록 통과시킨다.
+              captureMode && 'pointer-events-none',
             )}
             style={d}
             onMouseDown={(e) => {
@@ -317,7 +328,10 @@ export function PdfBoxViewer({
 
       {drag?.kind === 'create' && drag.rect.w > 0 && (
         <div
-          className="absolute border-2 border-dashed border-indigo-500 bg-indigo-500/10"
+          className={cn(
+            'absolute border-2 border-dashed',
+            captureMode ? 'border-violet-500 bg-violet-500/10' : 'border-indigo-500 bg-indigo-500/10',
+          )}
           style={toDisplay(drag.rect)}
         />
       )}

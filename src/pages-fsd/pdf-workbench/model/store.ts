@@ -51,6 +51,7 @@ export const useWorkbenchStore = create<WorkbenchState>()((...a) => {
         boxes: [],
         selectedId: null,
         saving: false,
+        figureCapture: false,
         attachments: [],
         refSel: null,
         refDoc: null,

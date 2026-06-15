@@ -9,6 +9,8 @@ export type BoxSlice = {
   selectedId: string | null;
   drawKind: BoxKind;
   saving: boolean;
+  /** 메인 뷰어 드래그가 박스 생성 대신 선택 문제의 그림을 캡처하는 모드. */
+  figureCapture: boolean;
 
   setBoxes: (boxes: BoxData[]) => void;
   addBox: (box: BoxData) => void;
@@ -19,6 +21,7 @@ export type BoxSlice = {
   setSelectedId: (id: string | null) => void;
   setDrawKind: (kind: BoxKind) => void;
   setSaving: (v: boolean) => void;
+  setFigureCapture: (v: boolean) => void;
 };
 
 export const createBoxSlice: StateCreator<WorkbenchState, [], [], BoxSlice> = (
@@ -28,6 +31,7 @@ export const createBoxSlice: StateCreator<WorkbenchState, [], [], BoxSlice> = (
   selectedId: null,
   drawKind: 'problem',
   saving: false,
+  figureCapture: false,
 
   setBoxes: (boxes) => set({ boxes }),
   addBox: (box) => set((s) => ({ boxes: [...s.boxes, box] })),
@@ -48,4 +52,5 @@ export const createBoxSlice: StateCreator<WorkbenchState, [], [], BoxSlice> = (
   setSelectedId: (selectedId) => set({ selectedId }),
   setDrawKind: (drawKind) => set({ drawKind }),
   setSaving: (saving) => set({ saving }),
+  setFigureCapture: (figureCapture) => set({ figureCapture }),
 });

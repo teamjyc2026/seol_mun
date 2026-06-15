@@ -11,12 +11,17 @@ export const maxDuration = 120;
 const idSchema = z.string().uuid();
 type Ctx = { params: Promise<{ id: string }> };
 
-const bodySchema = z.object({ delta: z.union([z.literal(90), z.literal(-90)]) });
+const bodySchema = z.object({
+  delta: z.union([z.literal(90), z.literal(-90)]),
+  /** 회전할 페이지 (1-base). 그 페이지만 회전. */
+  page: z.coerce.number().int().min(1),
+});
 
 /**
- * 본 PDF를 delta(±90°)만큼 **원본 파일에 구워** 다시 저장한다. 각 페이지의
- * /Rotate에 delta를 누적하고 같은 Storage 경로로 덮어쓴 뒤, 새 서명 URL을 돌려준다.
- * (회전을 메타데이터가 아니라 파일에 영속 → 어디서 열어도 회전된 채로 보인다.)
+ * 본 PDF의 **해당 페이지**를 delta(±90°)만큼 원본 파일에 구워 다시 저장한다.
+ * 그 페이지의 /Rotate에 delta를 누적하고 같은 Storage 경로로 덮어쓴 뒤(캐시
+ * 무효화), 새 서명 URL을 돌려준다. (메타데이터가 아니라 파일에 영속 →
+ * 어디서 열어도 그 페이지가 회전된 채로 보인다.)
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
   if (!(await requireUploader())) {
@@ -58,15 +63,22 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    for (const page of pdf.getPages()) {
-      const cur = page.getRotation().angle;
-      page.setRotation(degrees((((cur + body.delta) % 360) + 360) % 360));
+    const pages = pdf.getPages();
+    const target = pages[body.page - 1];
+    if (!target) {
+      return NextResponse.json({ message: '없는 페이지예요.' }, { status: 400 });
     }
+    const cur = target.getRotation().angle;
+    target.setRotation(degrees((((cur + body.delta) % 360) + 360) % 360));
     const out = await pdf.save();
 
     const { error: upErr } = await supabase.storage
       .from('sources')
-      .upload(source.file_path, out, { contentType: 'application/pdf', upsert: true });
+      .upload(source.file_path, out, {
+        contentType: 'application/pdf',
+        upsert: true,
+        cacheControl: '0',
+      });
     if (upErr) throw new Error(upErr.message);
 
     // 파일에 구웠으니 메타데이터 회전은 0으로 유지.
