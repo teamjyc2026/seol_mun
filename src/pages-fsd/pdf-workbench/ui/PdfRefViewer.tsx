@@ -354,7 +354,8 @@ export function PdfRefViewer({
                     linkDispatch({ type: 'moveStart', id: l.id, p: pos(e), rect: normToPx(l.rect) });
                   }}
                 >
-                  {isSel && onDeleteLinkedRef && (
+                  {/* 메인 뷰어 박스처럼 X는 항상 보이게 — 선택 없이 바로 삭제 가능. */}
+                  {onDeleteLinkedRef && (
                     <button
                       type="button"
                       onMouseDown={(e) => {
