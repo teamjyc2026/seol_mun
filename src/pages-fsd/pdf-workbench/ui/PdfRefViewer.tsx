@@ -42,6 +42,8 @@ export function PdfRefViewer({
   linkedRefs = [],
   onUpdateLinkedRef,
   onDeleteLinkedRef,
+  labelChildren = false,
+  activeChild = 0,
 }: {
   doc: PDFDocumentProxy;
   /** 페이지별 회전 맵(메타데이터). 현재 페이지 회전은 여기서 해석. */
@@ -53,11 +55,15 @@ export function PdfRefViewer({
   /** 전 페이지 회전 0으로 초기화. */
   onReset?: () => void;
   /** 선택된 박스의 저장된 답 영역들 (현재 열린 부속 PDF 대상, 다대일) */
-  linkedRefs?: { id: string; page: number; rect: Rect }[];
+  linkedRefs?: { id: string; page: number; rect: Rect; childIndex?: number }[];
   /** 연결된 답 영역을 재선택·이동·리사이즈했을 때 (rect는 정규화 0–1). */
   onUpdateLinkedRef?: (refId: string, rect: Rect) => void;
   /** 연결된 답 영역 삭제(연결 해제). */
   onDeleteLinkedRef?: (refId: string) => void;
+  /** 세트일 때 연결 영역에 "문제 N" 라벨을 달고 활성 자식만 강조. */
+  labelChildren?: boolean;
+  /** 현재 풀이를 받는 자식 문제 인덱스 (세트). grab은 이 자식으로 들어감. */
+  activeChild?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -334,6 +340,9 @@ export function PdfRefViewer({
             .filter((l) => l.page === pageNum)
             .map((l) => {
               const isSel = selectedLinkId === l.id;
+              const childIdx = l.childIndex ?? 0;
+              // 세트에서 다른 자식 문제의 연결은 흐리게 — 활성 자식만 또렷하게.
+              const dimmed = labelChildren && childIdx !== activeChild;
               // 이 연결을 드래그 중이면 라이브 px(toDisplay), 아니면 저장된 정규화(normToDisplay).
               const dragging =
                 linkDrag !== null && linkDrag.kind !== 'create' && linkDrag.id === l.id;
@@ -345,6 +354,7 @@ export function PdfRefViewer({
                   className={cn(
                     'absolute cursor-move border-2 border-emerald-600 bg-emerald-600/10',
                     isSel && 'ring-2 ring-emerald-700/60',
+                    dimmed && 'border-dashed opacity-40',
                   )}
                   style={style}
                   title="끌어 옮기거나 모서리로 크기 조절"
@@ -354,6 +364,11 @@ export function PdfRefViewer({
                     linkDispatch({ type: 'moveStart', id: l.id, p: pos(e), rect: normToPx(l.rect) });
                   }}
                 >
+                  {labelChildren && (
+                    <span className="absolute -left-px -top-5 inline-flex items-center rounded-t bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      문제 {childIdx + 1}
+                    </span>
+                  )}
                   {/* 메인 뷰어 박스처럼 X는 항상 보이게 — 선택 없이 바로 삭제 가능. */}
                   {onDeleteLinkedRef && (
                     <button

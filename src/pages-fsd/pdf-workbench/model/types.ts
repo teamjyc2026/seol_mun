@@ -31,7 +31,14 @@ export type ChunkValue = {
 };
 
 /** 박스 ↔ 부속 PDF 답 영역 연결 (rect는 페이지 비율 0–1 정규화). */
-export type AnswerRef = { id: string; attachmentId: string; page: number; rect: BoxRect };
+export type AnswerRef = {
+  id: string;
+  attachmentId: string;
+  page: number;
+  rect: BoxRect;
+  /** 이 연결이 속한 자식 문제 인덱스 (0=대표, i+1=extra[i]). 레거시=0. */
+  childIndex: number;
+};
 
 export type BoxPayload = {
   problem?: WorkbenchProblemValue;

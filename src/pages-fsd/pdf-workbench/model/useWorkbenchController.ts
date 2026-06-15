@@ -38,12 +38,14 @@ import type {
 } from './types';
 
 function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
-  // 레거시 단일 answerRef → 배열로 정규화.
-  const answerRefs: AnswerRef[] = b.payload.answerRefs
-    ? b.payload.answerRefs
-    : b.payload.answerRef
-      ? [{ id: b.payload.answerRef.id ?? crypto.randomUUID(), ...b.payload.answerRef }]
-      : [];
+  // 레거시 단일 answerRef → 배열로 정규화. childIndex 없는 레거시는 0(대표).
+  const answerRefs: AnswerRef[] = (
+    b.payload.answerRefs
+      ? b.payload.answerRefs
+      : b.payload.answerRef
+        ? [{ id: b.payload.answerRef.id ?? crypto.randomUUID(), ...b.payload.answerRef }]
+        : []
+  ).map((a) => ({ ...a, childIndex: a.childIndex ?? 0 }));
   return {
     id: b.id,
     page: b.page,
@@ -72,6 +74,25 @@ function toServerPayload(b: BoxData): BoxPayload {
   if (b.savedRefs.length) base.savedRefs = b.savedRefs;
   if (b.passageSetId) base.passageSetId = b.passageSetId;
   return base;
+}
+
+/** 자식 문제(0=대표, i+1=extra[i]) 조회 — 없으면 대표. */
+function subProblemAt(p: WorkbenchProblemValue, idx: number): WbSubProblem {
+  return idx > 0 ? (p.extra[idx - 1] ?? p) : p;
+}
+
+/** 자식 문제의 answer/explanation 갱신(passage_translation은 박스 공유) → 새 problem. */
+function applyAnswerToSub(
+  p: WorkbenchProblemValue,
+  idx: number,
+  fields: { answer?: string; explanation?: string },
+  passageTranslation?: string,
+): WorkbenchProblemValue {
+  const pt = passageTranslation !== undefined ? passageTranslation : p.passage_translation;
+  if (idx <= 0) return { ...p, ...fields, passage_translation: pt };
+  const extra = p.extra.slice();
+  if (extra[idx - 1]) extra[idx - 1] = { ...extra[idx - 1], ...fields };
+  return { ...p, extra, passage_translation: pt };
 }
 
 type TokenUsage = { input: number; output: number };
@@ -454,21 +475,26 @@ export function useWorkbenchController() {
     const { jobId } = st;
     patchBox(boxId, { status: 'ocr' }, false);
     try {
-      // ① 종류 자동 분류
-      const clsRes = await fetch('/api/agent/ocr/classify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image, mediaType: 'image/png' }),
-      });
-      if (!clsRes.ok)
-        throw new Error((await clsRes.json().catch(() => null))?.message ?? '분류 실패');
-      const cls = (await clsRes.json()) as { kind: BoxKind; usage?: TokenUsage };
-      const kind = cls.kind;
-      reportUsage('종류 분류', cls.usage, boxId);
+      // ① 종류 자동 분류 — 단, '문제 세트'는 사용자가 명시했으니 분류 생략(멀티 문제로).
+      let kind: BoxKind;
+      if (box.kind === 'problemset') {
+        kind = 'problemset';
+      } else {
+        const clsRes = await fetch('/api/agent/ocr/classify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image, mediaType: 'image/png' }),
+        });
+        if (!clsRes.ok)
+          throw new Error((await clsRes.json().catch(() => null))?.message ?? '분류 실패');
+        const cls = (await clsRes.json()) as { kind: BoxKind; usage?: TokenUsage };
+        kind = cls.kind;
+        reportUsage('종류 분류', cls.usage, boxId);
+      }
 
       // ② 종류별 OCR
       let patch: Partial<BoxData>;
-      if (kind === 'problem') {
+      if (kind === 'problem' || kind === 'problemset') {
         const subject = st.source?.subject ?? '';
         const res = await fetch('/api/agent/ocr/problem', {
           method: 'POST',
@@ -880,20 +906,26 @@ export function useWorkbenchController() {
     }
   }
 
-  /** 보조 뷰어에서 드래그한 영역 → 선택된 문제의 정답·해설로 인식해 채움 + 링크 저장 */
-  async function grabAnswer(grab: RefGrab) {
+  /** 보조 뷰어에서 드래그한 영역 → 선택된 박스의 childIdx 문제 정답·해설로 인식해 채움 + 링크. */
+  async function grabAnswer(grab: RefGrab, childIdx = 0) {
     const st = useWorkbenchStore.getState();
     const selected = st.boxes.find((b) => b.id === st.selectedId);
-    if (!selected || selected.kind !== 'problem') {
+    if (!selected || (selected.kind !== 'problem' && selected.kind !== 'problemset')) {
       toast.error('먼저 왼쪽에서 문제 박스를 선택하세요.');
       return;
     }
-    // 드래그 자체가 "이 영역이 이 문제의 답"이라는 의미 — OCR 결과와 무관하게 연결 추가(다대일)
+    // 드래그 자체가 "이 영역이 이 문제의 답" — 자식 인덱스로 태깅해 연결 추가.
     if (st.refSel?.type === 'attachment') {
       patchBox(selected.id, {
         answerRefs: [
           ...selected.answerRefs,
-          { id: crypto.randomUUID(), attachmentId: st.refSel.id, page: grab.page, rect: grab.rect },
+          {
+            id: crypto.randomUUID(),
+            attachmentId: st.refSel.id,
+            page: grab.page,
+            rect: grab.rect,
+            childIndex: childIdx,
+          },
         ],
       });
     }
@@ -905,7 +937,7 @@ export function useWorkbenchController() {
         body: JSON.stringify({
           image: grab.image,
           mediaType: 'image/png',
-          hint: selected.problem.question.slice(0, 200),
+          hint: subProblemAt(selected.problem, childIdx).question.slice(0, 200),
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
@@ -920,21 +952,26 @@ export function useWorkbenchController() {
         toast.info('영역에서 정답·해설을 찾지 못했어요.');
         return;
       }
-      // 최신 problem 위에 병합. 해설·지문해석은 여러 영역이라 이어붙여 누적.
+      // 최신 problem 위에 병합. 해당 자식의 정답(비었을 때만)·해설(이어붙임).
       const cur =
         useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id) ?? selected;
       const join = (prev: string, add?: string) =>
         add ? (prev.trim() ? `${prev.trim()}\n\n${add}` : add) : prev;
+      const sub = subProblemAt(cur.problem, childIdx);
       patchBox(selected.id, {
-        problem: {
-          ...cur.problem,
-          answer: cur.problem.answer || answer || '', // 정답은 비었을 때만
-          explanation: join(cur.problem.explanation, explanation),
-          passage_translation: join(cur.problem.passage_translation, passage_translation),
-        },
+        problem: applyAnswerToSub(
+          cur.problem,
+          childIdx,
+          {
+            answer: sub.answer || answer || '',
+            explanation: join(sub.explanation, explanation),
+          },
+          join(cur.problem.passage_translation, passage_translation),
+        ),
       });
+      const label = childIdx > 0 ? `문제 ${childIdx + 1} ` : '';
       toast.success(
-        `가져옴 — ${[answer ? `정답 ${answer}` : '', explanation ? '해설' : '', passage_translation ? '지문해석' : ''].filter(Boolean).join(' + ')}`,
+        `${label}가져옴 — ${[answer ? `정답 ${answer}` : '', explanation ? '해설' : '', passage_translation ? '지문해석' : ''].filter(Boolean).join(' + ')}`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '인식 실패');
@@ -959,9 +996,16 @@ export function useWorkbenchController() {
     patchBox(boxId, { answerRefs: box.answerRefs.filter((a) => a.id !== refId) });
   }
 
-  /** 답 연결 전체 해제. */
-  function clearAnswerRefs(boxId: string) {
-    patchBox(boxId, { answerRefs: [] });
+  /** 답 연결 해제 — childIdx가 주어지면 그 자식 것만, 아니면 전체. */
+  function clearAnswerRefs(boxId: string, childIdx?: number) {
+    const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+    if (!box) return;
+    patchBox(boxId, {
+      answerRefs:
+        childIdx === undefined
+          ? []
+          : box.answerRefs.filter((a) => a.childIndex !== childIdx),
+    });
   }
 
   /** 부속 PDF의 한 영역(정규화 rect)을 오프스크린 렌더해 base64 PNG로 크롭. */
@@ -989,20 +1033,20 @@ export function useWorkbenchController() {
     });
   }
 
-  /** 연결된 해설 영역들을 다시 스캔(재OCR)해 정답·해설·지문해석을 새로 채운다(덮어쓰기). */
-  async function rescanAnswerRefs(boxId: string) {
+  /** childIdx 자식의 연결된 해설 영역을 다시 스캔(재OCR)해 그 자식 정답·해설을 덮어쓴다. */
+  async function rescanAnswerRefs(boxId: string, childIdx = 0) {
     const st = useWorkbenchStore.getState();
     const box = st.boxes.find((b) => b.id === boxId);
-    if (!box || box.kind !== 'problem') return;
-    const refs = box.answerRefs.filter((r) =>
-      st.attachments.some((a) => a.id === r.attachmentId),
+    if (!box || (box.kind !== 'problem' && box.kind !== 'problemset')) return;
+    const refs = box.answerRefs.filter(
+      (r) => r.childIndex === childIdx && st.attachments.some((a) => a.id === r.attachmentId),
     );
     if (refs.length === 0) {
       toast.info('다시 스캔할 연결된 해설 영역이 없어요. (같은 PDF 연결은 대상 아님)');
       return;
     }
     if (
-      !confirm('이 답안 영역을 다시 스캔할까요? 정답·해설·지문해석이 새로 스캔한 내용으로 덮어써집니다.')
+      !confirm('이 답안 영역을 다시 스캔할까요? 이 문제의 정답·해설이 새로 스캔한 내용으로 덮어써집니다.')
     )
       return;
     st.setGrabbing(true);
@@ -1020,7 +1064,7 @@ export function useWorkbenchController() {
           body: JSON.stringify({
             image,
             mediaType: 'image/png',
-            hint: box.problem.question.slice(0, 200),
+            hint: subProblemAt(box.problem, childIdx).question.slice(0, 200),
           }),
         });
         if (!res.ok)
@@ -1039,12 +1083,12 @@ export function useWorkbenchController() {
       const cur = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
       if (!cur) return;
       patchBox(boxId, {
-        problem: {
-          ...cur.problem,
-          answer: answers.find((a) => a.trim()) ?? '',
-          explanation: explanations.join('\n\n'),
-          passage_translation: translations.join('\n\n'),
-        },
+        problem: applyAnswerToSub(
+          cur.problem,
+          childIdx,
+          { answer: answers.find((a) => a.trim()) ?? '', explanation: explanations.join('\n\n') },
+          translations.length ? translations.join('\n\n') : cur.problem.passage_translation,
+        ),
       });
       toast.success(`해설 ${refs.length}곳 다시 스캔 완료`);
     } catch (e) {
@@ -1121,10 +1165,10 @@ export function useWorkbenchController() {
     }
   }
 
-  /** 보조 뷰어 grab — 모드에 따라 정답·해설 또는 그림으로 분기. */
-  async function grabFromRef(grab: RefGrab) {
+  /** 보조 뷰어 grab — 모드에 따라 정답·해설(자식 childIdx) 또는 그림으로 분기. */
+  async function grabFromRef(grab: RefGrab, childIdx = 0) {
     if (grab.mode === 'figure') return grabFigure(grab);
-    return grabAnswer(grab);
+    return grabAnswer(grab, childIdx);
   }
 
   // ---------- 임베딩 (저장과 분리) ----------

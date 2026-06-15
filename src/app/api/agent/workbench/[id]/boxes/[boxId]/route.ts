@@ -13,7 +13,7 @@ const patchSchema = z.object({
   rect: z
     .object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() })
     .optional(),
-  kind: z.enum(['problem', 'concept', 'passage']).optional(),
+  kind: z.enum(['problem', 'problemset', 'concept', 'passage']).optional(),
   status: z.enum(['idle', 'ocr', 'ready', 'failed', 'saved']).optional(),
   payload: z.record(z.string(), z.unknown()).optional(),
   saved_ref: z.string().uuid().nullable().optional(),

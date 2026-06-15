@@ -19,7 +19,7 @@ const rectSchema = z.object({
 const createSchema = z.object({
   page: z.coerce.number().int().min(1),
   rect: rectSchema,
-  kind: z.enum(['problem', 'concept', 'passage']),
+  kind: z.enum(['problem', 'problemset', 'concept', 'passage']),
   status: z.enum(['idle', 'ocr', 'ready', 'failed', 'saved']).default('idle'),
   payload: z.record(z.string(), z.unknown()).default({}),
 });

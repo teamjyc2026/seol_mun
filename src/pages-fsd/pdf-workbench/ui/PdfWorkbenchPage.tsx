@@ -12,6 +12,7 @@ import {
   FileUp,
   Folder as FolderIcon,
   Home,
+  Layers,
   Lightbulb,
   Loader2,
   Pencil,
@@ -42,6 +43,7 @@ const GRADES = ['중1', '중2', '중3', '고1', '고2', '고3'];
 
 const KIND_ICON: Record<BoxKind, typeof PencilLine> = {
   problem: PencilLine,
+  problemset: Layers,
   concept: Lightbulb,
   passage: BookOpen,
 };
@@ -172,15 +174,33 @@ export function PdfWorkbenchPage() {
     null,
   );
   const [dropTarget, setDropTarget] = useState<string | 'root' | null>(null);
+  /** 세트에서 지금 풀이(정답·해설)를 받는 자식 문제 (0=대표, i+1=extra[i]). */
+  const [activeChild, setActiveChild] = useState(0);
+  // 박스를 새로 고르면 활성 자식을 대표(0)로 되돌린다 (렌더 중 보정 — effect 아님).
+  const [prevSelectedId, setPrevSelectedId] = useState(s.selectedId);
+  if (s.selectedId !== prevSelectedId) {
+    setPrevSelectedId(s.selectedId);
+    setActiveChild(0);
+  }
 
   const selected = s.boxes.find((b) => b.id === s.selectedId) ?? null;
   const refSel = s.refSel;
+  /** 세트(문제 세트 종류이거나 추가 문제가 있으면)인지 — 자식별 풀이 UI를 켠다. */
+  const isSet =
+    !!selected && (selected.kind === 'problemset' || selected.problem.extra.length > 0);
+  const childCount = selected ? 1 + selected.problem.extra.length : 1;
+  // 추가 문제가 줄었을 때 활성 자식이 범위를 벗어나지 않게 클램프.
+  const activeChildSafe = Math.min(activeChild, childCount - 1);
+  /** 현재 활성 자식에 연결된 답 영역들. */
+  const childRefs = selected
+    ? selected.answerRefs.filter((a) => a.childIndex === activeChildSafe)
+    : [];
   /** 선택 박스의 답 연결 중 현재 열린 부속 PDF 대상인 것들 (다대일). */
   const linkedRefs =
     selected && refSel?.type === 'attachment'
       ? selected.answerRefs
           .filter((a) => a.attachmentId === refSel.id)
-          .map((a) => ({ id: a.id, page: a.page, rect: a.rect }))
+          .map((a) => ({ id: a.id, page: a.page, rect: a.rect, childIndex: a.childIndex }))
       : [];
   /** 보조 뷰어 페이지별 회전 맵 — 부속이면 그 부속 것, 같은 PDF면 본 작업 것. */
   const refPageRotations =
@@ -943,9 +963,11 @@ export function PdfWorkbenchPage() {
                 const activeCls =
                   k === 'problem'
                     ? 'bg-indigo-600 text-white'
-                    : k === 'concept'
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-emerald-600 text-white';
+                    : k === 'problemset'
+                      ? 'bg-fuchsia-600 text-white'
+                      : k === 'concept'
+                        ? 'bg-amber-600 text-white'
+                        : 'bg-emerald-600 text-white';
                 return (
                   <button
                     key={k}
@@ -1026,10 +1048,12 @@ export function PdfWorkbenchPage() {
               doc={s.refDoc}
               pageRotations={refPageRotations}
               grabbing={s.grabbing}
-              onGrab={(g) => void grabFromRef(g)}
+              onGrab={(g) => void grabFromRef(g, activeChildSafe)}
               onRotate={(d, p) => void rotateRef(d, p)}
               onReset={() => void resetRotation('ref')}
               linkedRefs={linkedRefs}
+              labelChildren={isSet}
+              activeChild={activeChildSafe}
               onUpdateLinkedRef={(refId, rect) => {
                 if (selected) updateAnswerRefRect(selected.id, refId, rect);
               }}
@@ -1044,7 +1068,9 @@ export function PdfWorkbenchPage() {
         <section className="min-w-0 space-y-3">
           {!selected ? (
             <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
-              종류(문제/개념/본문)를 고르고 왼쪽에서 영역을 드래그하세요.
+              종류(문제/문제 세트/개념/본문)를 고르고 왼쪽에서 영역을 드래그하세요.
+              <br />
+              지문 하나에 문제가 여러 개면 “문제 세트”로 잡으면 한 박스에 묶여요.
               <br />
               박스를 클릭하면 여기서 수정할 수 있어요. 박스를 끌어 옮기거나 모서리로 크기를
               조절할 수 있어요.
@@ -1134,8 +1160,8 @@ export function PdfWorkbenchPage() {
                     ) : (
                       <Save className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    {selected.kind === 'problem' && selected.problem.extra.length > 0
-                      ? `세트 저장 ${selected.problem.extra.length + 1}`
+                    {isSet
+                      ? `세트 저장 ${childCount}`
                       : selected.status === 'saved'
                         ? '다시 저장'
                         : '저장'}
@@ -1143,61 +1169,103 @@ export function PdfWorkbenchPage() {
                 </div>
               </div>
 
-              {selected.kind === 'problem' && selected.answerRefs.length > 0 && (
-                <div className="space-y-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">🔗 답안 연결 {selected.answerRefs.length}곳</span>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        disabled={s.grabbing}
-                        onClick={() => void rescanAnswerRefs(selected.id)}
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
-                        title="연결된 해설 영역을 다시 스캔해 정답·해설을 새로 채움"
-                      >
-                        {s.grabbing ? (
-                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                        ) : (
-                          <ScanText className="h-3.5 w-3.5 shrink-0" />
-                        )}
-                        다시 스캔
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => clearAnswerRefs(selected.id)}
-                        className="rounded px-1.5 py-0.5 font-medium hover:bg-emerald-100"
-                      >
-                        전체 해제
-                      </button>
-                    </div>
-                  </div>
-                  {selected.answerRefs.map((a) => (
-                    <div key={a.id} className="flex items-center justify-between gap-1">
-                      <span className="truncate">
-                        {s.attachments.find((x) => x.id === a.attachmentId)?.title ??
-                          '삭제된 부속'}{' '}
-                        · p.{a.page}
+              {(selected.kind === 'problem' || selected.kind === 'problemset') &&
+                (selected.answerRefs.length > 0 || isSet) && (
+                  <div className="space-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    {/* 세트: 풀이를 받을 자식 문제 선택 (보조 뷰어 grab 대상) */}
+                    {isSet && (
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="mr-0.5 font-medium">풀이 받을 문제:</span>
+                        {Array.from({ length: childCount }).map((_, i) => {
+                          const n = selected.answerRefs.filter((a) => a.childIndex === i).length;
+                          const active = i === activeChildSafe;
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setActiveChild(i)}
+                              className={cn(
+                                'rounded-full border px-2 py-0.5 text-[11px] font-medium transition',
+                                active
+                                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                                  : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-100',
+                              )}
+                            >
+                              문제 {i + 1}
+                              {n > 0 ? ` · ${n}` : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">
+                        🔗 {isSet ? `문제 ${activeChildSafe + 1} ` : ''}답안 연결 {childRefs.length}곳
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => removeAnswerRef(selected.id, a.id)}
-                        className="shrink-0 rounded px-1.5 py-0.5 hover:bg-emerald-100"
-                        title="이 연결 해제"
-                      >
-                        해제
-                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={s.grabbing || childRefs.length === 0}
+                          onClick={() => void rescanAnswerRefs(selected.id, activeChildSafe)}
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+                          title="연결된 해설 영역을 다시 스캔해 정답·해설을 새로 채움"
+                        >
+                          {s.grabbing ? (
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                          ) : (
+                            <ScanText className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                          다시 스캔
+                        </button>
+                        <button
+                          type="button"
+                          disabled={childRefs.length === 0}
+                          onClick={() =>
+                            clearAnswerRefs(selected.id, isSet ? activeChildSafe : undefined)
+                          }
+                          className="rounded px-1.5 py-0.5 font-medium hover:bg-emerald-100 disabled:opacity-40"
+                        >
+                          {isSet ? '이 문제 해제' : '전체 해제'}
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                    {childRefs.length === 0 ? (
+                      <p className="text-[11px] text-emerald-600/80">
+                        보조 뷰어에서 {isSet ? `문제 ${activeChildSafe + 1}의 ` : ''}정답·해설 영역을
+                        잡으면 여기에 연결돼요.
+                      </p>
+                    ) : (
+                      childRefs.map((a) => (
+                        <div key={a.id} className="flex items-center justify-between gap-1">
+                          <span className="truncate">
+                            {s.attachments.find((x) => x.id === a.attachmentId)?.title ??
+                              '삭제된 부속'}{' '}
+                            · p.{a.page}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removeAnswerRef(selected.id, a.id)}
+                            className="shrink-0 rounded px-1.5 py-0.5 hover:bg-emerald-100"
+                            title="이 연결 해제"
+                          >
+                            해제
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
 
               <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-                {selected.kind === 'problem' ? (
+                {selected.kind === 'problem' || selected.kind === 'problemset' ? (
                   <WorkbenchProblemForm
                     subject={s.source.subject}
                     value={selected.problem}
                     onChange={(next) => patchBox(selected.id, { problem: next })}
                     uploadFigure={uploadFigureFile}
+                    isSet={isSet}
+                    activeChild={activeChildSafe}
+                    onActiveChild={setActiveChild}
                   />
                 ) : (
                   <div className="space-y-4">

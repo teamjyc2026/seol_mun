@@ -1,7 +1,8 @@
 'use client';
 
-import { Plus, X } from 'lucide-react';
+import { Plus, ScanText, X } from 'lucide-react';
 import type { ProblemFigure } from '@/entities/problem';
+import { cn } from '@/shared/lib/cn';
 import { RichTextHelp, RichTextPreview } from '@/shared/ui/RichText';
 import { FiguresEditor } from './FiguresEditor';
 import { ProblemFields, emptySubProblem, type WbSubProblem } from './ProblemFields';
@@ -52,19 +53,47 @@ export function WorkbenchProblemForm({
   value,
   onChange,
   uploadFigure,
+  isSet: isSetProp,
+  activeChild = 0,
+  onActiveChild,
 }: {
   subject: string;
   value: WorkbenchProblemValue;
   onChange: (next: WorkbenchProblemValue) => void;
   /** 파일을 Storage에 올리고 public URL을 돌려준다 (실패 시 null). */
   uploadFigure: (file: File) => Promise<string | null>;
+  /** 세트(문제 여러 개) — 블록별 헤더/풀이 받기 버튼을 보인다. */
+  isSet?: boolean;
+  /** 지금 풀이(정답·해설)를 받는 자식 인덱스 (0=대표, i+1=extra[i]). */
+  activeChild?: number;
+  /** 블록의 "이 문제 풀이 받기" 클릭 시 활성 자식 변경. */
+  onActiveChild?: (i: number) => void;
 }) {
-  const isSet = value.extra.length > 0;
+  const isSet = isSetProp ?? value.extra.length > 0;
   const updExtra = (i: number, sub: WbSubProblem) =>
     onChange({ ...value, extra: value.extra.map((e, idx) => (idx === i ? sub : e)) });
   const removeExtra = (i: number) =>
     onChange({ ...value, extra: value.extra.filter((_, idx) => idx !== i) });
   const addExtra = () => onChange({ ...value, extra: [...value.extra, emptySubProblem()] });
+
+  /** 블록 헤더의 "이 문제 풀이 받기" 토글 — 보조 뷰어 grab 대상(activeChild) 지정. */
+  const answerToggle = (idx: number) =>
+    onActiveChild && (
+      <button
+        type="button"
+        onClick={() => onActiveChild(idx)}
+        title="보조 뷰어에서 잡는 정답·해설이 이 문제로 들어가요"
+        className={cn(
+          'inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium transition',
+          activeChild === idx
+            ? 'border-emerald-600 bg-emerald-600 text-white'
+            : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50',
+        )}
+      >
+        <ScanText className="h-3 w-3" />
+        {activeChild === idx ? '풀이 받는 중' : '이 문제 풀이 받기'}
+      </button>
+    );
 
   return (
     <div className="space-y-4">
@@ -104,8 +133,20 @@ export function WorkbenchProblemForm({
       />
 
       {/* 대표 문제 (문제 1) */}
-      <div className="space-y-2 rounded-lg border border-zinc-100 bg-zinc-50/40 p-3">
-        {isSet && <p className="text-xs font-bold text-zinc-700">문제 1</p>}
+      <div
+        className={cn(
+          'space-y-2 rounded-lg border p-3',
+          isSet && activeChild === 0
+            ? 'border-emerald-300 bg-emerald-50/40 ring-1 ring-emerald-200'
+            : 'border-zinc-100 bg-zinc-50/40',
+        )}
+      >
+        {isSet && (
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-zinc-700">문제 1</p>
+            {answerToggle(0)}
+          </div>
+        )}
         <ProblemFields
           subject={subject}
           value={primaryOf(value)}
@@ -115,16 +156,27 @@ export function WorkbenchProblemForm({
 
       {/* 같은 지문 추가 문제 (세트) */}
       {value.extra.map((sub, i) => (
-        <div key={i} className="space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
-          <div className="flex items-center justify-between">
+        <div
+          key={i}
+          className={cn(
+            'space-y-2 rounded-lg border p-3',
+            activeChild === i + 1
+              ? 'border-emerald-300 bg-emerald-50/40 ring-1 ring-emerald-200'
+              : 'border-indigo-100 bg-indigo-50/40',
+          )}
+        >
+          <div className="flex items-center justify-between gap-1">
             <p className="text-xs font-bold text-indigo-700">문제 {i + 2}</p>
-            <button
-              type="button"
-              onClick={() => removeExtra(i)}
-              className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 text-[11px] text-zinc-500 hover:bg-rose-50 hover:text-rose-600"
-            >
-              <X className="h-3 w-3" /> 문제 삭제
-            </button>
+            <div className="flex items-center gap-1">
+              {answerToggle(i + 1)}
+              <button
+                type="button"
+                onClick={() => removeExtra(i)}
+                className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-200 bg-white px-1.5 text-[11px] text-zinc-500 hover:bg-rose-50 hover:text-rose-600"
+              >
+                <X className="h-3 w-3" /> 삭제
+              </button>
+            </div>
           </div>
           <ProblemFields subject={subject} value={sub} onChange={(next) => updExtra(i, next)} />
         </div>

@@ -9,7 +9,7 @@ import { HANDLES, MIN_H, MIN_W, boxDragReducer, type Pt } from '../lib/dragSelec
 /** 박스 좌표는 캔버스 내부 픽셀 기준 (리사이즈와 무관). */
 export type BoxRect = { x: number; y: number; w: number; h: number };
 
-export type BoxKind = 'problem' | 'concept' | 'passage';
+export type BoxKind = 'problem' | 'problemset' | 'concept' | 'passage';
 
 export type WorkBox = {
   id: string;
@@ -21,18 +21,21 @@ export type WorkBox = {
 
 export const KIND_LABEL: Record<BoxKind, string> = {
   problem: '문제',
+  problemset: '문제 세트',
   concept: '개념',
   passage: '본문',
 };
 
 const KIND_BOX_CLASS: Record<BoxKind, string> = {
   problem: 'border-indigo-500 bg-indigo-500/10',
+  problemset: 'border-fuchsia-500 bg-fuchsia-500/10',
   concept: 'border-amber-500 bg-amber-500/10',
   passage: 'border-emerald-500 bg-emerald-500/10',
 };
 
 const KIND_BADGE_CLASS: Record<BoxKind, string> = {
   problem: 'bg-indigo-600',
+  problemset: 'bg-fuchsia-600',
   concept: 'bg-amber-600',
   passage: 'bg-emerald-600',
 };
