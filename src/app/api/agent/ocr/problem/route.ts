@@ -17,7 +17,6 @@ const schema = z.object({
 });
 
 export type OcrProblem = {
-  passage?: string;
   question: string;
   choices?: { label: string; text: string }[];
   answer?: string;
@@ -26,6 +25,13 @@ export type OcrProblem = {
   /** 분류(대분류) — 과목 분류 목록에서 고름. */
   category?: string;
   topic?: string;
+};
+
+/** 한 영역 인식 결과 — 공유 지문 + 그 아래 문제 여러 개. */
+export type OcrProblemResult = {
+  passage?: string;
+  passage_translation?: string;
+  problems: OcrProblem[];
 };
 
 /** PDF 워크벤치: 박스 영역 이미지를 구조화된 문제(지문/발문/보기/정답)로 인식. */
@@ -49,17 +55,16 @@ export async function POST(req: NextRequest) {
 
   try {
     let usage = { input: 0, output: 0 };
-    const problem = await claudeJson<OcrProblem>({
+    const result = await claudeJson<OcrProblemResult>({
       onUsage: (u) => {
         usage = u;
       },
-      system: `너는 한국 고등학교 시험지 디지털화 전문가다. 이미지 속 문제 1개를 구조화 추출하라.
-- question: 발문(번호 제외). 지문이 있으면 발문만 넣고 지문은 passage에.
-- passage: 지문/제시문 전체.
-- choices: 객관식이면 보기 전부 (label "①"~"⑤"), 아니면 생략.
-- answer/explanation: 이미지에 정답·해설이 보일 때만 채우고, 안 보이면 생략(빈칸으로 두면 관리자가 기입).
-- problem_type: objective(객관식)|short(단답)|long(서술) 추정.
-- category와 topic은 위 [분류 목록]에서 정확히 골라라.${taxonomyText}
+      system: `너는 한국 고등학교 시험지 디지털화 전문가다. 이미지 영역에서 공유 지문(있으면)과 그 영역의 문제를 **전부** 구조화 추출하라.
+- passage: 여러 문제가 공유하는 지문/제시문 전체 (예 "[5~6] 다음 글을 읽고…"의 지문). 지문이 없으면 생략.
+- passage_translation: 지문의 한국어 해석이 보이면 그 전체. 없으면 생략.
+- problems: 이 영역의 문제를 **각각** 배열로. 문제가 1개면 1개, [5~6]처럼 여러 개면 그 수만큼.
+  각 문제: question(발문, 번호 제외), choices(객관식이면 보기 전부 label "①"~), answer/explanation(보일 때만), problem_type(objective|short|long), category/topic(아래 목록에서).
+- category와 topic은 [분류 목록]에서 정확히 골라라.${taxonomyText}
 - 글자는 보이는 그대로, 요약·번역 금지.
 ${MARKUP_RULES}`,
       content: [
@@ -67,37 +72,45 @@ ${MARKUP_RULES}`,
           type: 'image',
           source: { type: 'base64', media_type: body.mediaType, data: body.image },
         },
-        { type: 'text', text: '이 영역의 문제를 구조화 추출하라.' },
+        { type: 'text', text: '이 영역의 지문과 문제 전부를 구조화 추출하라.' },
       ],
       schema: {
         type: 'object',
         properties: {
           passage: { type: 'string' },
-          question: { type: 'string' },
-          choices: {
+          passage_translation: { type: 'string' },
+          problems: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                label: { type: 'string' },
-                text: { type: 'string' },
+                question: { type: 'string' },
+                choices: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: { label: { type: 'string' }, text: { type: 'string' } },
+                    required: ['label', 'text'],
+                    additionalProperties: false,
+                  },
+                },
+                answer: { type: 'string' },
+                explanation: { type: 'string' },
+                problem_type: { type: 'string', enum: ['objective', 'short', 'long'] },
+                category: { type: 'string' },
+                topic: { type: 'string' },
               },
-              required: ['label', 'text'],
+              required: ['question', 'problem_type'],
               additionalProperties: false,
             },
           },
-          answer: { type: 'string' },
-          explanation: { type: 'string' },
-          problem_type: { type: 'string', enum: ['objective', 'short', 'long'] },
-          category: { type: 'string' },
-          topic: { type: 'string' },
         },
-        required: ['question', 'problem_type'],
+        required: ['problems'],
         additionalProperties: false,
       },
       maxTokens: 8192,
     });
-    return NextResponse.json({ problem, usage });
+    return NextResponse.json({ result, usage });
   } catch (e) {
     return NextResponse.json(
       { message: llmErrorMessage(e) },

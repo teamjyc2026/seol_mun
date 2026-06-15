@@ -6,7 +6,6 @@ import type { WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
 export type PageRotations = Record<string, number>;
 
 export type OcrProblem = {
-  passage?: string;
   question: string;
   choices?: { label: string; text: string }[];
   answer?: string;
@@ -14,6 +13,13 @@ export type OcrProblem = {
   problem_type: 'objective' | 'short' | 'long';
   category?: string;
   topic?: string;
+};
+
+/** /ocr/problem 응답 — 공유 지문 + 그 영역 문제들. */
+export type OcrProblemResult = {
+  passage?: string;
+  passage_translation?: string;
+  problems: OcrProblem[];
 };
 
 export type ChunkValue = {
@@ -34,8 +40,8 @@ export type BoxPayload = {
   answerRefs?: AnswerRef[];
   /** 이 박스 인식에 쓴 누적 토큰 (분류+OCR+정답·해설). */
   tokens?: { in: number; out: number };
-  /** 지문 세트 id (같은 값 = 한 지문 공유). owner 박스는 setId === 자기 box id. */
-  setId?: string;
+  /** 저장된 문제 id들 (세트면 여러 개). */
+  savedRefs?: string[];
   /** 세트로 저장된 뒤의 passage_set_id (참고용). */
   passageSetId?: string;
   /** @deprecated 레거시 단일 연결 — fromServerBox에서 배열로 정규화. */
@@ -51,10 +57,8 @@ export type BoxData = WorkBox & {
   tokensOut: number;
   /** 이 박스를 만든 사람(올린이) 닉네임 — 서버 created_by에서 해석. */
   actor: string | null;
-  /** 저장된 문제/청크 id — 재저장 시 새로 만들지 않고 이 레코드를 갱신. */
-  savedRef: string | null;
-  /** 지문 세트 id (같은 값 = 한 지문 공유). owner 박스는 setId === 자기 box id. */
-  setId: string | null;
+  /** 저장된 문제/청크 id들 — 재저장 시 새로 만들지 않고 갱신(세트면 여러 개). */
+  savedRefs: string[];
   /** 세트 저장 후의 passage_set_id (참고용). */
   passageSetId: string | null;
 };

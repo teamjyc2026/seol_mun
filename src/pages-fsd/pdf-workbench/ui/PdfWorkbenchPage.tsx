@@ -86,10 +86,6 @@ export function PdfWorkbenchPage() {
     reocrSelected,
     deleteBox,
     saveSelected,
-    makeSet,
-    toggleSetMember,
-    disbandSet,
-    saveSelectedSet,
     toggleSameRef,
     rotateRef,
     openAttachment,
@@ -191,24 +187,6 @@ export function PdfWorkbenchPage() {
     refSel?.type === 'attachment'
       ? (s.attachments.find((a) => a.id === refSel.id)?.pageRotations ?? {})
       : s.pageRotations;
-  // 지문 세트 — 선택 박스가 속한 세트의 멤버(문제 박스)들.
-  const setId = selected?.setId ?? null;
-  const setMembers = setId
-    ? s.boxes
-        .filter((b) => b.setId === setId && b.kind === 'problem')
-        .sort((a, b) => a.page - b.page || a.rect.y - b.rect.y)
-    : [];
-  const isSetOwner = !!setId && selected?.id === setId;
-  /** 세트에 넣을 수 있는 다른 문제 박스(인식된 것만). */
-  const groupableBoxes = selected
-    ? s.boxes.filter(
-        (b) =>
-          b.kind === 'problem' &&
-          b.id !== selected.id &&
-          b.status !== 'idle' &&
-          !b.id.startsWith('temp-'),
-      )
-    : [];
   useEffect(() => {
     useWorkbenchStore.getState().resetAll();
     void refreshJobs();
@@ -1147,7 +1125,7 @@ export function PdfWorkbenchPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => (setId ? void saveSelectedSet() : void saveSelected())}
+                    onClick={() => void saveSelected()}
                     disabled={s.saving}
                     className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
                   >
@@ -1156,8 +1134,8 @@ export function PdfWorkbenchPage() {
                     ) : (
                       <Save className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    {setId
-                      ? `세트 저장 ${setMembers.length}`
+                    {selected.kind === 'problem' && selected.problem.extra.length > 0
+                      ? `세트 저장 ${selected.problem.extra.length + 1}`
                       : selected.status === 'saved'
                         ? '다시 저장'
                         : '저장'}
@@ -1213,74 +1191,6 @@ export function PdfWorkbenchPage() {
                 </div>
               )}
 
-              {/* 지문 세트 — 지문 하나에 문제 여러 개 묶기 */}
-              {selected.kind === 'problem' && (
-                <div className="space-y-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
-                  {!setId ? (
-                    <button
-                      type="button"
-                      disabled={selected.id.startsWith('temp-')}
-                      onClick={() => makeSet(selected.id)}
-                      className="inline-flex items-center gap-1 font-medium hover:underline disabled:opacity-40"
-                      title="이 문제의 지문을 여러 문제가 공유하는 세트로 만들기"
-                    >
-                      📑 지문 세트로 묶기 (지문 공유)
-                    </button>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium">
-                          📑 지문 세트 {setMembers.length}문제
-                          {isSetOwner ? ' · 이 문제가 지문 보유' : ''}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => disbandSet(setId)}
-                          className="shrink-0 rounded px-1.5 py-0.5 font-medium hover:bg-indigo-100"
-                        >
-                          세트 해제
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-indigo-500">
-                        같은 지문을 쓰는 문제를 체크해 묶고 “세트 저장”하세요. 지문은 대표 문제
-                        한 곳에만 입력.
-                      </p>
-                      <ul className="space-y-0.5">
-                        {groupableBoxes.map((b) => {
-                          const inThisSet = b.setId === setId;
-                          const inOther = !!b.setId && b.setId !== setId;
-                          return (
-                            <li key={b.id}>
-                              <label
-                                className={cn(
-                                  'flex items-center gap-2',
-                                  inOther && 'opacity-40',
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={inThisSet}
-                                  disabled={inOther}
-                                  onChange={() => toggleSetMember(setId, b.id)}
-                                />
-                                <span className="truncate">
-                                  p.{b.page} · {b.problem.question.slice(0, 30) || '(발문 없음)'}
-                                </span>
-                              </label>
-                            </li>
-                          );
-                        })}
-                        {groupableBoxes.length === 0 && (
-                          <li className="text-[11px] text-indigo-400">
-                            묶을 수 있는 다른 문제 박스가 없어요.
-                          </li>
-                        )}
-                      </ul>
-                    </>
-                  )}
-                </div>
-              )}
-
               <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
                 {selected.kind === 'problem' ? (
                   <WorkbenchProblemForm
@@ -1288,7 +1198,6 @@ export function PdfWorkbenchPage() {
                     value={selected.problem}
                     onChange={(next) => patchBox(selected.id, { problem: next })}
                     uploadFigure={uploadFigureFile}
-                    passageShared={!!setId && !isSetOwner}
                   />
                 ) : (
                   <div className="space-y-4">

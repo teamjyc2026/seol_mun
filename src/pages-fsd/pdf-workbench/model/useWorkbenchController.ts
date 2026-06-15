@@ -14,7 +14,12 @@ import { topicCategoriesFor } from '@/shared/config/topics';
 import type { Subject } from '@/shared/config/subjects';
 import type { BoxKind, BoxRect } from '../ui/PdfBoxViewer';
 import { KIND_LABEL } from '../ui/PdfBoxViewer';
-import { emptyProblemValue, type WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
+import {
+  emptyProblemValue,
+  type WorkbenchProblemValue,
+  type WbSubProblem,
+} from '../ui/WorkbenchProblemForm';
+import { emptySubProblem } from '../ui/ProblemFields';
 import type { RefGrab } from '../ui/PdfRefViewer';
 import { useWorkbenchStore } from './store';
 import { loadPdfFromUrl } from './loadPdf';
@@ -28,6 +33,7 @@ import type {
   JobDetail,
   JobSummary,
   OcrProblem,
+  OcrProblemResult,
   PageRotations,
 } from './types';
 
@@ -51,8 +57,7 @@ function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
     tokensIn: b.payload.tokens?.in ?? 0,
     tokensOut: b.payload.tokens?.out ?? 0,
     actor: b.actor ?? null,
-    savedRef: b.saved_ref ?? null,
-    setId: b.payload.setId ?? null,
+    savedRefs: b.payload.savedRefs ?? (b.saved_ref ? [b.saved_ref] : []),
     passageSetId: b.payload.passageSetId ?? null,
   };
 }
@@ -64,7 +69,7 @@ function toServerPayload(b: BoxData): BoxPayload {
   if (b.answerRefs.length) base.answerRefs = b.answerRefs;
   if (b.tokensIn > 0 || b.tokensOut > 0)
     base.tokens = { in: b.tokensIn, out: b.tokensOut };
-  if (b.setId) base.setId = b.setId;
+  if (b.savedRefs.length) base.savedRefs = b.savedRefs;
   if (b.passageSetId) base.passageSetId = b.passageSetId;
   return base;
 }
@@ -471,38 +476,48 @@ export function useWorkbenchController() {
           body: JSON.stringify({ image, mediaType: 'image/png', subject }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
-        const { problem, usage } = (await res.json()) as {
-          problem: OcrProblem;
+        const { result, usage } = (await res.json()) as {
+          result: OcrProblemResult;
           usage?: TokenUsage;
         };
         reportUsage('문제 인식', usage, boxId);
         // 분류는 반드시 기존 목록에 스냅 — 목록에 없는 OCR 토픽은 버린다(자유입력 금지).
         const tax = topicCategoriesFor(subject);
-        const matchedCat = problem.topic
-          ? tax.find((c) => c.topics.includes(problem.topic as string))
-          : undefined;
-        const category =
-          matchedCat?.category ??
-          (problem.category && tax.some((c) => c.category === problem.category)
-            ? problem.category
-            : box.problem.category);
-        // topic은 목록에 있을 때만 채우고, 아니면 비워 사용자가 고르게 한다.
-        const topic = matchedCat
-          ? (problem.topic as string)
-          : tax.length === 0
-            ? (problem.topic ?? box.problem.topic)
-            : box.problem.topic;
+        const snap = (p: OcrProblem, prev?: WbSubProblem): WbSubProblem => {
+          const matchedCat = p.topic
+            ? tax.find((c) => c.topics.includes(p.topic as string))
+            : undefined;
+          const category =
+            matchedCat?.category ??
+            (p.category && tax.some((c) => c.category === p.category)
+              ? p.category
+              : (prev?.category ?? null));
+          const topic = matchedCat
+            ? (p.topic as string)
+            : tax.length === 0
+              ? (p.topic ?? prev?.topic ?? '')
+              : (prev?.topic ?? '');
+          return {
+            problem_type: p.problem_type,
+            difficulty: prev?.difficulty ?? 'medium',
+            category,
+            topic,
+            question: p.question,
+            choices: p.choices?.length ? p.choices : (prev?.choices ?? emptySubProblem().choices),
+            // 재인식 시 따로 가져온 정답·해설은 보존(비었을 때만 채움).
+            answer: prev?.answer || (p.answer ?? ''),
+            explanation: prev?.explanation || (p.explanation ?? ''),
+          };
+        };
+        const ocrProblems = result.problems ?? [];
+        const primary = ocrProblems[0] ? snap(ocrProblems[0], box.problem) : null;
+        const extra = ocrProblems.slice(1).map((p) => snap(p));
         const value: WorkbenchProblemValue = {
           ...box.problem,
-          problem_type: problem.problem_type,
-          category,
-          topic,
-          passage: problem.passage ?? '',
-          question: problem.question,
-          choices: problem.choices?.length ? problem.choices : box.problem.choices,
-          // 문제 재인식은 문제 파트만 갱신 — 따로 가져온 정답·해설은 보존(비었을 때만 채움).
-          answer: box.problem.answer || (problem.answer ?? ''),
-          explanation: box.problem.explanation || (problem.explanation ?? ''),
+          ...(primary ?? {}),
+          passage: result.passage ?? box.problem.passage,
+          passage_translation: result.passage_translation || box.problem.passage_translation,
+          extra,
         };
         patch = { status: 'ready', kind, problem: value };
       } else {
@@ -558,8 +573,7 @@ export function useWorkbenchController() {
       tokensIn: 0,
       tokensOut: 0,
       actor: null,
-      savedRef: null,
-      setId: null,
+      savedRefs: [],
       passageSetId: null,
     };
     st.addBox(base);
@@ -613,48 +627,85 @@ export function useWorkbenchController() {
     if (!selected || !source || !jobId || saving) return;
     st.setSaving(true);
     try {
-      let savedRef: string | null = null;
+      let savedRefs: string[] = [];
+      let passageSetId: string | null = null;
+      const cite = (snippet: string) => [
+        { sourceId: source.id, sourceTitle: source.title, page: selected.page, snippet: snippet.slice(0, 160) },
+      ];
       if (selected.kind === 'problem') {
         const f = selected.problem;
-        if (!f.question.trim() || !f.answer.trim()) {
-          toast.error('발문과 정답을 채워주세요.');
-          return;
-        }
-        const body = {
-          subject: source.subject,
-          topic: f.topic || null,
-          difficulty: f.difficulty,
+        const primary: WbSubProblem = {
           problem_type: f.problem_type,
-          passage: f.passage.trim() || null,
-          passage_translation: f.passage_translation.trim() || null,
+          difficulty: f.difficulty,
+          category: f.category,
+          topic: f.topic,
           question: f.question,
-          choices:
-            f.problem_type === 'objective' ? f.choices.filter((c) => c.text.trim()) : null,
-          answer: f.answer.trim(),
-          explanation: f.explanation || null,
-          figures: f.figures.filter((fig) => fig.url),
-          notes: 'PDF 워크벤치 등록',
-          citations: [
-            {
-              sourceId: source.id,
-              sourceTitle: source.title,
-              page: selected.page,
-              snippet: (f.passage || f.question).slice(0, 160),
-            },
-          ],
+          choices: f.choices,
+          answer: f.answer,
+          explanation: f.explanation,
         };
-        // 이미 저장한 박스면 새로 만들지 않고 그 문제를 갱신(중복 방지) — 계속 저장 가능.
-        // 임베딩은 저장과 분리: 신규/수정 모두 embedding이 비워진 채(=대기) 저장되고,
-        // 나중에 "일괄 임베딩"으로 채운다. (PATCH는 내용 변경 시 embedding을 비운다.)
-        if (selected.savedRef) {
-          await api.patch(`/agent/problems/${selected.savedRef}`, body);
-          savedRef = selected.savedRef;
-        } else {
-          savedRef = (await createProblem(body)).id;
+        const allSubs = [primary, ...f.extra];
+        for (const sub of allSubs) {
+          if (!sub.question.trim() || !sub.answer.trim()) {
+            toast.error('각 문제의 발문과 정답을 채워주세요.');
+            return;
+          }
         }
-        toast.success(
-          selected.savedRef ? '문제 수정 저장 완료 (임베딩 대기)' : '문제 저장 완료 (임베딩 대기)',
-        );
+        const sharedFigures = f.figures.filter((fig) => fig.url);
+        const subBody = (sub: WbSubProblem, withFigures: boolean): ProblemSetSubProblem => ({
+          topic: sub.topic || null,
+          difficulty: sub.difficulty,
+          problem_type: sub.problem_type,
+          question: sub.question,
+          choices: sub.problem_type === 'objective' ? sub.choices.filter((c) => c.text.trim()) : null,
+          answer: sub.answer.trim(),
+          explanation: sub.explanation || null,
+          figures: withFigures ? sharedFigures : undefined,
+          notes: f.extra.length > 0 ? 'PDF 워크벤치 세트' : 'PDF 워크벤치 등록',
+          citations: cite(f.passage || sub.question),
+        });
+
+        if (f.extra.length > 0) {
+          // 지문 세트 — 기존 저장분 삭제 후 한 지문 + 여러 문제로 재생성.
+          if (!f.passage.trim()) {
+            toast.error('세트는 공유 지문이 필요해요. (지문 입력)');
+            return;
+          }
+          for (const id of selected.savedRefs) {
+            await api.delete(`/agent/problems/${id}`).catch(() => {});
+          }
+          const r = await createProblemSet({
+            subject: source.subject as Subject,
+            subjects: [source.subject as Subject],
+            passage: f.passage.trim(),
+            shared: { topic: f.topic || null },
+            problems: allSubs.map((sub, i) => subBody(sub, i === 0)),
+          });
+          savedRefs = r.ids;
+          passageSetId = r.passageSetId;
+          toast.success(`지문 세트 저장 — 문제 ${r.ids.length}개 (임베딩 대기)`);
+        } else {
+          // 단일 문제.
+          const body = {
+            subject: source.subject,
+            passage: f.passage.trim() || null,
+            passage_translation: f.passage_translation.trim() || null,
+            ...subBody(primary, true),
+          };
+          // 이전에 세트였던 잔여 id 정리.
+          for (const id of selected.savedRefs.slice(1)) {
+            await api.delete(`/agent/problems/${id}`).catch(() => {});
+          }
+          if (selected.savedRefs[0]) {
+            await api.patch(`/agent/problems/${selected.savedRefs[0]}`, body);
+            savedRefs = [selected.savedRefs[0]];
+          } else {
+            savedRefs = [(await createProblem(body)).id];
+          }
+          toast.success(
+            selected.savedRefs[0] ? '문제 수정 저장 완료 (임베딩 대기)' : '문제 저장 완료 (임베딩 대기)',
+          );
+        }
       } else {
         const c = selected.chunk;
         if (c.text.trim().length < 10) {
@@ -675,129 +726,21 @@ export function useWorkbenchController() {
             figures: c.figures.filter((f) => f.url),
           },
         );
-        savedRef = data.id;
+        savedRefs = [data.id];
         toast.success(`${KIND_LABEL[selected.kind]} 저장 완료 (임베딩 대기)`);
       }
-      patchBox(selected.id, { status: 'saved', savedRef }, false);
+      patchBox(selected.id, { status: 'saved', savedRefs, passageSetId }, false);
+      const fresh = useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id);
       await api
         .patch(`/agent/workbench/${jobId}/boxes/${selected.id}`, {
           status: 'saved',
-          saved_ref: savedRef,
-          payload: toServerPayload({ ...selected, status: 'saved' }),
+          saved_ref: savedRefs[0] ?? null,
+          payload: fresh ? toServerPayload(fresh) : {},
         })
         .catch(() => {});
       void refreshEmbedPending();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '저장 실패');
-    } finally {
-      useWorkbenchStore.getState().setSaving(false);
-    }
-  }
-
-  // ---------- 지문 세트 (지문 1 + 문제 N) ----------
-  /** 이 박스를 대표(owner)로 새 지문 세트 시작 (setId = 자기 box id). */
-  function makeSet(boxId: string) {
-    if (boxId.startsWith('temp-')) {
-      toast.error('먼저 박스가 서버에 만들어진 뒤에 세트로 묶을 수 있어요.');
-      return;
-    }
-    patchBox(boxId, { setId: boxId });
-  }
-
-  /** 세트 멤버 토글 — 같은 setId 부여/해제. */
-  function toggleSetMember(setId: string, boxId: string) {
-    const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
-    if (!box) return;
-    patchBox(boxId, { setId: box.setId === setId ? null : setId });
-  }
-
-  /** 세트 해제 — 같은 setId 박스 전부 묶음 해제. */
-  function disbandSet(setId: string) {
-    for (const b of useWorkbenchStore.getState().boxes) {
-      if (b.setId === setId) patchBox(b.id, { setId: null });
-    }
-  }
-
-  /** 세트 저장 — 멤버 전부를 한 지문(대표 지문) + 여러 문제(passage set)로 저장. */
-  async function saveSelectedSet() {
-    const st = useWorkbenchStore.getState();
-    const sel = st.boxes.find((b) => b.id === st.selectedId);
-    const { source, jobId, saving } = st;
-    if (!sel || !sel.setId || !source || !jobId || saving) return;
-    const setId = sel.setId;
-    const members = st.boxes
-      .filter((b) => b.setId === setId && b.kind === 'problem')
-      .sort((a, b) => a.page - b.page || a.rect.y - b.rect.y || a.rect.x - b.rect.x);
-    if (members.length < 2) {
-      toast.error('세트에는 문제가 2개 이상 필요해요.');
-      return;
-    }
-    const owner = members.find((m) => m.id === setId) ?? members[0];
-    const passage = owner.problem.passage.trim();
-    if (!passage) {
-      toast.error('세트 지문을 대표 문제(지문 보유)에 입력해 주세요.');
-      return;
-    }
-    for (const m of members) {
-      if (!m.problem.question.trim() || !m.problem.answer.trim()) {
-        toast.error(`p.${m.page} 문제의 발문·정답을 채워주세요.`);
-        return;
-      }
-    }
-    st.setSaving(true);
-    try {
-      // 재저장: 기존 저장분 삭제 후 새 세트로 — 멤버 추가/삭제·수정 일괄 반영.
-      for (const m of members) {
-        if (m.savedRef) await api.delete(`/agent/problems/${m.savedRef}`).catch(() => {});
-      }
-      const problems: ProblemSetSubProblem[] = members.map((m) => ({
-        topic: m.problem.topic || null,
-        difficulty: m.problem.difficulty,
-        problem_type: m.problem.problem_type,
-        question: m.problem.question,
-        choices:
-          m.problem.problem_type === 'objective'
-            ? m.problem.choices.filter((c) => c.text.trim())
-            : null,
-        answer: m.problem.answer.trim(),
-        explanation: m.problem.explanation || null,
-        notes: 'PDF 워크벤치 세트',
-        citations: [
-          {
-            sourceId: source.id,
-            sourceTitle: source.title,
-            page: m.page,
-            snippet: (passage || m.problem.question).slice(0, 160),
-          },
-        ],
-      }));
-      const { passageSetId, ids } = await createProblemSet({
-        subject: source.subject as Subject,
-        subjects: [source.subject as Subject],
-        passage,
-        shared: { topic: owner.problem.topic || null },
-        problems,
-      });
-      // ids는 problems 순서와 동일 — 각 멤버 박스 saved 처리.
-      for (let i = 0; i < members.length; i++) {
-        const m = members[i];
-        const savedRef = ids[i] ?? null;
-        patchBox(m.id, { status: 'saved', savedRef, passageSetId }, false);
-        const fresh = useWorkbenchStore.getState().boxes.find((b) => b.id === m.id);
-        if (fresh) {
-          await api
-            .patch(`/agent/workbench/${jobId}/boxes/${m.id}`, {
-              status: 'saved',
-              saved_ref: savedRef,
-              payload: toServerPayload(fresh),
-            })
-            .catch(() => {});
-        }
-      }
-      toast.success(`지문 세트 저장 — 문제 ${ids.length}개 (임베딩 대기)`);
-      void refreshEmbedPending();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '세트 저장 실패');
     } finally {
       useWorkbenchStore.getState().setSaving(false);
     }
@@ -1275,10 +1218,6 @@ export function useWorkbenchController() {
     reocrSelected,
     deleteBox,
     saveSelected,
-    makeSet,
-    toggleSetMember,
-    disbandSet,
-    saveSelectedSet,
     toggleSameRef,
     rotateRef,
     openAttachment,

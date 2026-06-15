@@ -40,6 +40,7 @@ const subProblemSchema = z.object({
   choices: z.array(choiceSchema).max(10).nullable().optional(),
   answer: z.string().min(1).max(2000),
   explanation: z.string().max(4000).nullable().optional(),
+  figures: z.array(figureSchema).max(10).default([]),
   notes: z.string().max(2000).nullable().optional(),
   citations: z.array(citationSchema).max(20).default([]),
 });
@@ -186,6 +187,7 @@ export async function PUT(req: NextRequest) {
     choices: p.choices ?? null,
     answer: p.answer,
     explanation: p.explanation ?? null,
+    figures: p.figures ?? [],
     notes: p.notes ?? null,
     citations: p.citations.length ? p.citations : (shared.citations ?? []),
     created_by: userId,
