@@ -6,6 +6,8 @@ import type { AgentContext, AgentReply, Citation, ToolResult } from './types';
 import type { AgentId, AgentProfile, Audience } from './agents/types';
 import { classifyAgent } from './agents/classify';
 import { buildStudentStyleOverlay } from './agents/studentStyle';
+import { buildGrokPersona } from './agents/grokPersona';
+import { streamGrokText } from '@/shared/config/xai';
 import { formatLearningMemories, formatMemories, loadMemories } from './memory';
 import {
   buildToolDeclarations,
@@ -109,6 +111,9 @@ async function buildAgentSystem(
   }
   if (audience === 'student') {
     system += buildStudentStyleOverlay(studentGrade ?? null);
+  }
+  if (profile.provider === 'grok') {
+    system += buildGrokPersona();
   }
   return system;
 }
@@ -242,33 +247,38 @@ export async function runAgentTools(args: {
     args.studentGrade,
   );
 
-  const first = await client.messages.create({
-    model: CLAUDE_MODEL,
-    max_tokens: 4096,
-    system,
-    ...(allowed.length ? { tools: buildToolDeclarations(allowed) } : {}),
-    messages: [...(args.history ?? []), { role: 'user', content: augmentedMessage }],
-  });
-
-  const calls = first.content.filter(
-    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
-  );
-  // Keep any direct text the model produced when it didn't call a tool, so an
-  // off-topic / no-tool question still gets a real answer instead of a blank.
-  const directText = first.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('')
-    .trim();
-
+  // 교감(grok) 에이전트는 툴이 없으므로 Claude 호출 자체를 건너뛰고
+  // streamWrapup에서 곧장 Grok으로 스트리밍한다.
+  let directText = '';
   const toolResults: ToolResult[] = [];
-  for (const call of calls) {
-    try {
-      const result = await runTool(call.name, call.input ?? {}, ctx);
-      toolResults.push(result);
-    } catch (e) {
-      const text = e instanceof Error ? e.message : String(e);
-      console.error(`[agent] tool ${call.name} failed:`, text);
+  if (profile.provider !== 'grok') {
+    const first = await client.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4096,
+      system,
+      ...(allowed.length ? { tools: buildToolDeclarations(allowed) } : {}),
+      messages: [...(args.history ?? []), { role: 'user', content: augmentedMessage }],
+    });
+
+    const calls = first.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+    );
+    // Keep any direct text the model produced when it didn't call a tool, so an
+    // off-topic / no-tool question still gets a real answer instead of a blank.
+    directText = first.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map((b) => b.text)
+      .join('')
+      .trim();
+
+    for (const call of calls) {
+      try {
+        const result = await runTool(call.name, call.input ?? {}, ctx);
+        toolResults.push(result);
+      } catch (e) {
+        const text = e instanceof Error ? e.message : String(e);
+        console.error(`[agent] tool ${call.name} failed:`, text);
+      }
     }
   }
 
@@ -349,6 +359,15 @@ export async function* streamWrapup(args: {
     args.schoolName ?? null,
     args.studentGrade,
   );
+
+  // 교감(grok) 에이전트 — 툴 없음. 곧장 Grok으로 스트리밍.
+  if (args.profile.provider === 'grok') {
+    yield* streamGrokText({
+      system,
+      messages: [...(args.history ?? []), { role: 'user', content: args.augmentedMessage }],
+    });
+    return;
+  }
 
   if (args.toolResults.length === 0) {
     // Model already produced a direct answer in the profile's voice — use it.

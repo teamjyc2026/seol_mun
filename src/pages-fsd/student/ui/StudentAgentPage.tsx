@@ -23,6 +23,8 @@ import {
 } from '@/widgets/student-chat';
 import { streamAgentMessage } from '@/features/send-agent-message';
 
+const SCOPE_STORAGE_KEY = 'seolmun:student:scopeId';
+
 type Conversation = { id: string; title: string; created_at: string };
 
 type Scope = {
@@ -71,12 +73,32 @@ export function StudentAgentPage({
     void loadScopes();
   }, []);
 
+  /** 선택한 시험범위를 저장하고 기억(localStorage). */
+  function chooseScope(id: string | null) {
+    setScopeId(id);
+    try {
+      if (id) localStorage.setItem(SCOPE_STORAGE_KEY, id);
+      else localStorage.removeItem(SCOPE_STORAGE_KEY);
+    } catch {
+      // 무시
+    }
+  }
+
   async function loadScopes() {
     try {
       const res = await fetch('/api/agent/scopes');
       if (!res.ok) return;
       const data = (await res.json()) as { scopes: Scope[] };
-      setScopes(data.scopes ?? []);
+      const list = data.scopes ?? [];
+      setScopes(list);
+      // 마지막으로 고른 시험범위 복원 (목록에 아직 있을 때만).
+      let saved: string | null = null;
+      try {
+        saved = localStorage.getItem(SCOPE_STORAGE_KEY);
+      } catch {
+        // 무시
+      }
+      if (saved && list.some((s) => s.id === saved)) setScopeId(saved);
     } catch {
       // non-fatal
     }
@@ -324,7 +346,7 @@ export function StudentAgentPage({
               <button
                 key={sc.id}
                 type="button"
-                onClick={() => setScopeId(active ? null : sc.id)}
+                onClick={() => chooseScope(active ? null : sc.id)}
                 title={[sc.schoolName, sc.name].filter(Boolean).join(' · ')}
                 className={cn(
                   'inline-flex min-h-9 items-center gap-1 rounded-full border-2 border-b-4 px-3 py-1 text-xs font-bold transition active:translate-y-[2px] active:border-b-2',
@@ -358,6 +380,51 @@ export function StudentAgentPage({
                   같이 놀면서 공부하자! 뭐부터 해볼까?
                 </p>
               </div>
+
+              {/* 시험범위 골라서 시작 */}
+              {scopes.length > 0 && (
+                <div className="w-full max-w-md space-y-2">
+                  <p className="text-sm font-bold text-zinc-700">📘 어떤 시험범위로 공부할래?</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {scopes.map((sc) => {
+                      const active = sc.id === scopeId;
+                      return (
+                        <button
+                          key={sc.id}
+                          type="button"
+                          onClick={() => chooseScope(active ? null : sc.id)}
+                          className={cn(
+                            'rounded-2xl border-2 border-b-4 px-3 py-2.5 text-left transition active:translate-y-[2px] active:border-b-2',
+                            active
+                              ? 'border-emerald-400 bg-emerald-50'
+                              : 'border-zinc-200 bg-white hover:bg-zinc-50',
+                          )}
+                        >
+                          <span className="block truncate text-sm font-bold text-zinc-800">
+                            📘 {sc.name}
+                          </span>
+                          <span className="block truncate text-[11px] text-zinc-500">
+                            {[sc.schoolName, sc.subject].filter(Boolean).join(' · ') || '시험범위'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => chooseScope(null)}
+                    className={cn(
+                      'w-full rounded-full border-2 px-3 py-1.5 text-xs font-bold transition',
+                      scopeId === null
+                        ? 'border-orange-400 bg-orange-100 text-orange-700'
+                        : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50',
+                    )}
+                  >
+                    자유 모드 (범위 없이) 🎈
+                  </button>
+                </div>
+              )}
+
               <QuickReplies
                 big
                 choices={DEFAULT_QUICK_REPLIES}

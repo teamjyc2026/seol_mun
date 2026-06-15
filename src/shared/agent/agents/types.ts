@@ -55,4 +55,6 @@ export type AgentProfile = {
    * extract new ones after the turn (companion/emotion).
    */
   useMemories?: boolean;
+  /** LLM 공급자 — 'grok'이면 xAI Grok으로 답한다(교감용). 기본 claude. */
+  provider?: 'claude' | 'grok';
 };
