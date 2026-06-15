@@ -100,11 +100,12 @@ export function useWorkbenchController() {
     }
   }
 
-  async function createFolder(name: string) {
+  /** 현재 위치(parentId) 하위로 폴더 생성. */
+  async function createFolder(name: string, parentId: string | null) {
     const trimmed = name.trim();
     if (!trimmed) return;
     try {
-      await api.post('/agent/workbench/folders', { name: trimmed });
+      await api.post('/agent/workbench/folders', { name: trimmed, parentId });
       await refreshFolders();
     } catch {
       toast.error('폴더 생성 실패');
@@ -122,18 +123,29 @@ export function useWorkbenchController() {
     }
   }
 
+  /** 폴더를 다른 폴더 하위로 이동 (null = 최상위). */
+  async function moveFolder(folderId: string, parentId: string | null) {
+    try {
+      await api.patch(`/agent/workbench/folders/${folderId}`, { parentId });
+      await refreshFolders();
+    } catch (e) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg ?? '폴더 이동 실패');
+    }
+  }
+
   async function deleteFolder(id: string) {
     try {
       await api.delete(`/agent/workbench/folders/${id}`);
       const st = useWorkbenchStore.getState();
-      if (st.folderFilter === id) st.setFolderFilter(null);
+      if (st.currentFolderId === id) st.setCurrentFolderId(null);
       await Promise.all([refreshFolders(), refreshJobs()]);
     } catch {
       toast.error('폴더 삭제 실패');
     }
   }
 
-  /** 작업을 폴더로 이동 (null = 미분류). */
+  /** 작업을 폴더로 이동 (null = 최상위). */
   async function moveJob(jobId: string, folderId: string | null) {
     const st = useWorkbenchStore.getState();
     st.setJobs(st.jobs.map((j) => (j.id === jobId ? { ...j, folder_id: folderId } : j)));
@@ -142,6 +154,20 @@ export function useWorkbenchController() {
       await refreshFolders();
     } catch {
       toast.error('폴더 이동 실패');
+      void refreshJobs();
+    }
+  }
+
+  /** 작업(PDF) 이름 변경. */
+  async function renameJob(jobId: string, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const st = useWorkbenchStore.getState();
+    st.setJobs(st.jobs.map((j) => (j.id === jobId ? { ...j, title: trimmed } : j)));
+    try {
+      await api.patch(`/agent/workbench/${jobId}`, { title: trimmed });
+    } catch {
+      toast.error('이름 변경 실패');
       void refreshJobs();
     }
   }
@@ -689,8 +715,10 @@ export function useWorkbenchController() {
     refreshFolders,
     createFolder,
     renameFolder,
+    moveFolder,
     deleteFolder,
     moveJob,
+    renameJob,
     openJob,
     closeJob,
     refreshBoxes,

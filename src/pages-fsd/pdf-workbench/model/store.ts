@@ -34,6 +34,7 @@ export const useWorkbenchStore = create<WorkbenchState>()((...a) => {
         uploading: false,
         uploadPct: 0,
         uploadStep: '',
+        currentFolderId: null,
         jobId: null,
         jobTitle: '',
         source: null,

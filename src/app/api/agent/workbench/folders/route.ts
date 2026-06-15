@@ -14,7 +14,7 @@ export async function GET() {
   const supabase = getSupabaseServer();
   const { data: folders, error } = await supabase
     .from('workbench_folders')
-    .select('id, name, created_at')
+    .select('id, name, parent_id, created_at')
     .order('created_at', { ascending: true });
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
 
@@ -28,15 +28,20 @@ export async function GET() {
 
   return NextResponse.json({
     folders: (folders ?? []).map((f) => ({
-      ...f,
+      id: f.id,
+      name: f.name,
+      parentId: f.parent_id ?? null,
       jobCount: counts.get(f.id as string) ?? 0,
     })),
   });
 }
 
-const createSchema = z.object({ name: z.string().trim().min(1).max(60) });
+const createSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  parentId: z.string().uuid().nullable().optional(),
+});
 
-/** 폴더 생성. */
+/** 폴더 생성 (parentId 하위로). */
 export async function POST(req: NextRequest) {
   if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
@@ -50,9 +55,12 @@ export async function POST(req: NextRequest) {
   const supabase = getSupabaseServer();
   const { data, error } = await supabase
     .from('workbench_folders')
-    .insert({ name: body.name })
-    .select('id, name, created_at')
+    .insert({ name: body.name, parent_id: body.parentId ?? null })
+    .select('id, name, parent_id, created_at')
     .single();
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
-  return NextResponse.json({ folder: { ...data, jobCount: 0 } }, { status: 201 });
+  return NextResponse.json(
+    { folder: { id: data.id, name: data.name, parentId: data.parent_id ?? null, jobCount: 0 } },
+    { status: 201 },
+  );
 }

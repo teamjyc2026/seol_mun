@@ -11,7 +11,7 @@ import {
   Columns2,
   FileUp,
   Folder as FolderIcon,
-  FolderOpen,
+  Home,
   Lightbulb,
   Loader2,
   Pencil,
@@ -67,8 +67,10 @@ export function PdfWorkbenchPage() {
     refreshFolders,
     createFolder,
     renameFolder,
+    moveFolder,
     deleteFolder,
     moveJob,
+    renameJob,
     openJob,
     closeJob,
     refreshBoxes,
@@ -93,7 +95,7 @@ export function PdfWorkbenchPage() {
       jobsLoading: st.jobsLoading,
       jobSubjectFilter: st.jobSubjectFilter,
       folders: st.folders,
-      folderFilter: st.folderFilter,
+      currentFolderId: st.currentFolderId,
       creating: st.creating,
       pendingFile: st.pendingFile,
       pendingAttachments: st.pendingAttachments,
@@ -138,7 +140,7 @@ export function PdfWorkbenchPage() {
       setSourceType: st.setSourceType,
       setPublisher: st.setPublisher,
       setJobSubjectFilter: st.setJobSubjectFilter,
-      setFolderFilter: st.setFolderFilter,
+      setCurrentFolderId: st.setCurrentFolderId,
       setDrawKind: st.setDrawKind,
       setPage: st.setPage,
       setSelectedId: st.setSelectedId,
@@ -147,6 +149,11 @@ export function PdfWorkbenchPage() {
 
   /** 드래그 호버 표시 (순수 UI). */
   const [dragZone, setDragZone] = useState<'main' | 'attach' | null>(null);
+  /** Finder 드래그 중인 항목 + 드롭 하이라이트. */
+  const [dragItem, setDragItem] = useState<{ kind: 'job' | 'folder'; id: string } | null>(
+    null,
+  );
+  const [dropTarget, setDropTarget] = useState<string | 'root' | null>(null);
 
   const selected = s.boxes.find((b) => b.id === s.selectedId) ?? null;
   /** 선택된 박스의 링크가 현재 열린 부속 PDF를 가리킬 때만 보조 뷰어에 표시. */
@@ -165,16 +172,54 @@ export function PdfWorkbenchPage() {
 
   const pageBoxCount = s.boxes.filter((b) => b.page === s.pageNum).length;
   const savedCount = s.boxes.filter((b) => b.status === 'saved').length;
-  // 탐색기 모델: 홈(folderFilter=null)은 미분류 작업만, 폴더 안이면 그 폴더 작업만.
-  const currentFolder =
-    s.folderFilter && s.folderFilter !== 'unfiled'
-      ? (s.folders.find((f) => f.id === s.folderFilter) ?? null)
-      : null;
+
+  // ----- Finder 트리 -----
+  const folderById = new Map(s.folders.map((f) => [f.id, f]));
+  const currentFolderId = s.currentFolderId;
+  const currentFolder = currentFolderId ? (folderById.get(currentFolderId) ?? null) : null;
+  // 현재 위치의 하위폴더.
+  const subFolders = s.folders.filter((f) => f.parentId === currentFolderId);
+  // 현재 위치의 작업 (+ 과목 필터).
   const visibleJobs = s.jobs.filter((j) => {
     if (s.jobSubjectFilter && j.subject !== s.jobSubjectFilter) return false;
-    if (currentFolder) return j.folder_id === currentFolder.id;
-    return !j.folder_id; // 홈 = 미분류
+    return (j.folder_id ?? null) === currentFolderId;
   });
+  // breadcrumb 경로 (루트→현재).
+  const crumbs: { id: string; name: string }[] = [];
+  for (let f = currentFolder; f; f = f.parentId ? (folderById.get(f.parentId) ?? null) : null) {
+    crumbs.unshift({ id: f.id, name: f.name });
+  }
+  // 드래그한 폴더의 자기 자신+하위 집합 (그쪽으론 드롭 금지).
+  function descendantsOf(id: string): Set<string> {
+    const out = new Set<string>([id]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const f of s.folders) {
+        if (f.parentId && out.has(f.parentId) && !out.has(f.id)) {
+          out.add(f.id);
+          added = true;
+        }
+      }
+    }
+    return out;
+  }
+  /** 드래그 항목을 target 폴더(null=루트)로 드롭할 수 있나. */
+  function canDrop(target: string | null): boolean {
+    if (!dragItem) return false;
+    if (dragItem.kind === 'folder') {
+      if (target !== null && descendantsOf(dragItem.id).has(target)) return false;
+      const cur = folderById.get(dragItem.id)?.parentId ?? null;
+      return cur !== target; // 이미 그 위치면 무의미
+    }
+    const cur = s.jobs.find((j) => j.id === dragItem.id)?.folder_id ?? null;
+    return cur !== target;
+  }
+  function doDrop(target: string | null) {
+    if (!dragItem || !canDrop(target)) return;
+    if (dragItem.kind === 'folder') void moveFolder(dragItem.id, target);
+    else void moveJob(dragItem.id, target);
+  }
 
   // ================= 목록 / 새 작업 =================
   if (!s.doc || !s.source || !s.jobId) {
@@ -389,72 +434,64 @@ export function PdfWorkbenchPage() {
           </div>
         )}
 
-        {/* 폴더 — 홈: 카드(클릭해 들어가기) / 폴더 안: 경로(뒤로) */}
-        {currentFolder ? (
-          <div className="mb-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => s.setFolderFilter(null)}
-              className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" /> 폴더 목록
-            </button>
-            <FolderOpen className="h-4 w-4 text-indigo-600" />
-            <h2 className="text-sm font-bold text-zinc-900">{currentFolder.name}</h2>
-            <button
-              type="button"
-              onClick={() => {
-                const name = prompt('폴더 이름', currentFolder.name);
-                if (name?.trim()) void renameFolder(currentFolder.id, name);
-              }}
-              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-              title="이름 변경"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (confirm(`'${currentFolder.name}' 폴더를 삭제할까요? (작업은 미분류로)`))
-                  void deleteFolder(currentFolder.id);
-              }}
-              className="rounded-md p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
-              title="폴더 삭제"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ) : (
-          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {s.folders.map((f) => (
+        {/* Finder — 경로(breadcrumb) */}
+        <div className="mb-3 flex flex-wrap items-center gap-1 text-sm">
+          <button
+            type="button"
+            onClick={() => s.setCurrentFolderId(null)}
+            onDragOver={(e) => {
+              if (canDrop(null)) {
+                e.preventDefault();
+                setDropTarget('root');
+              }
+            }}
+            onDragLeave={() => setDropTarget((t) => (t === 'root' ? null : t))}
+            onDrop={() => {
+              doDrop(null);
+              setDropTarget(null);
+            }}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition',
+              dropTarget === 'root'
+                ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-400'
+                : currentFolderId === null
+                  ? 'text-zinc-900'
+                  : 'text-zinc-500 hover:bg-zinc-100',
+            )}
+          >
+            <Home className="h-3.5 w-3.5" /> 홈
+          </button>
+          {crumbs.map((c, i) => (
+            <span key={c.id} className="flex items-center gap-1">
+              <ChevronRight className="h-3.5 w-3.5 text-zinc-300" />
               <button
-                key={f.id}
                 type="button"
-                onClick={() => s.setFolderFilter(f.id)}
-                className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/40"
+                onClick={() => s.setCurrentFolderId(c.id)}
+                onDragOver={(e) => {
+                  if (canDrop(c.id)) {
+                    e.preventDefault();
+                    setDropTarget(c.id);
+                  }
+                }}
+                onDragLeave={() => setDropTarget((t) => (t === c.id ? null : t))}
+                onDrop={() => {
+                  doDrop(c.id);
+                  setDropTarget(null);
+                }}
+                className={cn(
+                  'rounded-md px-2 py-1 font-medium transition',
+                  dropTarget === c.id
+                    ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-400'
+                    : i === crumbs.length - 1
+                      ? 'text-zinc-900'
+                      : 'text-zinc-500 hover:bg-zinc-100',
+                )}
               >
-                <FolderIcon className="h-5 w-5 shrink-0 text-indigo-500" />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-800">
-                  {f.name}
-                </span>
-                <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 text-[11px] text-zinc-500">
-                  {f.jobCount}
-                </span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300" />
+                {c.name}
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => {
-                const name = prompt('새 폴더 이름');
-                if (name?.trim()) void createFolder(name);
-              }}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 px-3 py-2.5 text-sm text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
-            >
-              <Plus className="h-4 w-4" /> 새 폴더
-            </button>
-          </div>
-        )}
+            </span>
+          ))}
+        </div>
 
         {/* 과목 필터 */}
         {s.jobs.length > 0 && (
@@ -489,9 +526,85 @@ export function PdfWorkbenchPage() {
           </div>
         )}
 
-        {!currentFolder && s.folders.length > 0 && visibleJobs.length > 0 && (
-          <p className="mb-1 text-xs font-medium text-zinc-400">미분류 작업</p>
-        )}
+        {/* 하위폴더 + 새 폴더 (드래그로 작업·폴더 받기) */}
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {subFolders.map((f) => (
+            <div
+              key={f.id}
+              draggable
+              onDragStart={(e) => {
+                setDragItem({ kind: 'folder', id: f.id });
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', f.id);
+              }}
+              onDragEnd={() => {
+                setDragItem(null);
+                setDropTarget(null);
+              }}
+              onDragOver={(e) => {
+                if (canDrop(f.id)) {
+                  e.preventDefault();
+                  setDropTarget(f.id);
+                }
+              }}
+              onDragLeave={() => setDropTarget((t) => (t === f.id ? null : t))}
+              onDrop={() => {
+                doDrop(f.id);
+                setDropTarget(null);
+              }}
+              onClick={() => s.setCurrentFolderId(f.id)}
+              className={cn(
+                'group flex cursor-pointer items-center gap-2 rounded-xl border bg-white px-3 py-2.5 text-left shadow-sm transition',
+                dropTarget === f.id
+                  ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-400'
+                  : 'border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/40',
+                dragItem?.kind === 'folder' && dragItem.id === f.id && 'opacity-40',
+              )}
+            >
+              <FolderIcon className="h-5 w-5 shrink-0 text-indigo-500" />
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-800">
+                {f.name}
+              </span>
+              <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 text-[11px] text-zinc-500">
+                {f.jobCount}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const name = prompt('폴더 이름', f.name);
+                  if (name?.trim()) void renameFolder(f.id, name);
+                }}
+                className="rounded p-1 text-zinc-300 hover:bg-zinc-100 hover:text-zinc-600 group-hover:text-zinc-400"
+                title="이름 변경"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`'${f.name}' 폴더를 삭제할까요? (하위 폴더 포함, 작업은 미분류로)`))
+                    void deleteFolder(f.id);
+                }}
+                className="rounded p-1 text-zinc-300 hover:bg-rose-50 hover:text-rose-600 group-hover:text-zinc-400"
+                title="폴더 삭제"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              const name = prompt('새 폴더 이름');
+              if (name?.trim()) void createFolder(name, currentFolderId);
+            }}
+            className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 px-3 py-2.5 text-sm text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
+          >
+            <Plus className="h-4 w-4" /> 새 폴더
+          </button>
+        </div>
 
         <section className="space-y-2">
           {s.jobsLoading ? (
@@ -499,18 +612,29 @@ export function PdfWorkbenchPage() {
               <Loader2 className="h-5 w-5 animate-spin" />
             </div>
           ) : visibleJobs.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
+            <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
               {s.jobs.length === 0
                 ? '아직 작업이 없어요. "새 작업"으로 PDF를 올려 시작하세요.'
-                : currentFolder
-                  ? '이 폴더에 작업이 없어요. 미분류 작업의 폴더를 이 폴더로 바꿔 넣어보세요.'
-                  : '미분류 작업이 없어요. 위 폴더를 열어 확인하세요.'}
+                : '이 위치엔 작업이 없어요. 작업을 끌어다 폴더에 넣거나, 폴더를 열어보세요.'}
             </div>
           ) : (
             visibleJobs.map((j) => (
               <div
                 key={j.id}
-                className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm"
+                draggable
+                onDragStart={(e) => {
+                  setDragItem({ kind: 'job', id: j.id });
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', j.id);
+                }}
+                onDragEnd={() => {
+                  setDragItem(null);
+                  setDropTarget(null);
+                }}
+                className={cn(
+                  'flex cursor-grab items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-sm active:cursor-grabbing',
+                  dragItem?.kind === 'job' && dragItem.id === j.id && 'opacity-40',
+                )}
               >
                 <Scissors className="h-4 w-4 shrink-0 text-zinc-400" />
                 <div className="min-w-0 flex-1">
@@ -522,19 +646,17 @@ export function PdfWorkbenchPage() {
                     {new Date(j.updated_at).toLocaleString('ko-KR')}
                   </p>
                 </div>
-                <select
-                  value={j.folder_id ?? ''}
-                  onChange={(e) => void moveJob(j.id, e.target.value || null)}
-                  title="폴더 이동"
-                  className="hidden h-8 max-w-28 rounded-md border border-zinc-200 bg-white px-1 text-xs text-zinc-600 sm:block"
+                <button
+                  type="button"
+                  onClick={() => {
+                    const title = prompt('PDF 이름', j.title);
+                    if (title?.trim()) void renameJob(j.id, title);
+                  }}
+                  className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+                  title="이름 변경"
                 >
-                  <option value="">미분류</option>
-                  {s.folders.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
+                  <Pencil className="h-4 w-4" />
+                </button>
                 <button
                   type="button"
                   onClick={() => {
