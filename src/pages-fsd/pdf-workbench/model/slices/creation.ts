@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand';
 import type { Subject } from '@/shared/config/subjects';
-import type { JobSummary, PendingAttachment } from '../types';
+import type { Folder, JobSummary, PendingAttachment } from '../types';
 import type { WorkbenchState } from '../store';
+
+/** 목록 폴더 필터 — null=전체, 'unfiled'=미분류, string=특정 폴더 id. */
+export type FolderFilter = string | 'unfiled' | null;
 
 /** 목록 / 새 작업 생성 폼 상태. */
 export type CreationSlice = {
@@ -9,6 +12,8 @@ export type CreationSlice = {
   jobsLoading: boolean;
   /** 목록 과목 필터 (null = 전체). */
   jobSubjectFilter: Subject | null;
+  folders: Folder[];
+  folderFilter: FolderFilter;
   creating: boolean;
   pendingFile: File | null;
   pendingAttachments: PendingAttachment[];
@@ -24,6 +29,8 @@ export type CreationSlice = {
   setJobs: (jobs: JobSummary[]) => void;
   setJobsLoading: (v: boolean) => void;
   setJobSubjectFilter: (s: Subject | null) => void;
+  setFolders: (f: Folder[]) => void;
+  setFolderFilter: (f: FolderFilter) => void;
   setCreating: (v: boolean) => void;
   setPendingFile: (f: File | null) => void;
   addPendingAttachments: (atts: PendingAttachment[]) => void;
@@ -49,6 +56,8 @@ export const createCreationSlice: StateCreator<
   jobs: [],
   jobsLoading: true,
   jobSubjectFilter: null,
+  folders: [],
+  folderFilter: null,
   creating: false,
   pendingFile: null,
   pendingAttachments: [],
@@ -64,6 +73,8 @@ export const createCreationSlice: StateCreator<
   setJobs: (jobs) => set({ jobs }),
   setJobsLoading: (jobsLoading) => set({ jobsLoading }),
   setJobSubjectFilter: (jobSubjectFilter) => set({ jobSubjectFilter }),
+  setFolders: (folders) => set({ folders }),
+  setFolderFilter: (folderFilter) => set({ folderFilter }),
   setCreating: (creating) => set({ creating }),
   setPendingFile: (pendingFile) => set({ pendingFile }),
   addPendingAttachments: (atts) =>

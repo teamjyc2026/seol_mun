@@ -35,11 +35,14 @@ export type RefSel = { type: 'same' } | { type: 'attachment'; id: string } | nul
 
 export type PendingAttachment = { file: File; title: string };
 
+export type Folder = { id: string; name: string; jobCount: number };
+
 export type JobSummary = {
   id: string;
   title: string;
   subject: string | null;
   grade: string | null;
+  folder_id: string | null;
   attachmentCount: number;
   boxCount: number;
   savedCount: number;

@@ -17,6 +17,7 @@ import type {
   BoxData,
   BoxPayload,
   ChunkValue,
+  Folder,
   JobDetail,
   JobSummary,
   OcrProblem,
@@ -79,6 +80,62 @@ export function useWorkbenchController() {
       toast.error('작업 목록을 불러오지 못했어요.');
     } finally {
       useWorkbenchStore.getState().setJobsLoading(false);
+    }
+  }
+
+  // ---------- 폴더 ----------
+  async function refreshFolders() {
+    try {
+      const { data } = await api.get<{ folders: Folder[] }>('/agent/workbench/folders');
+      useWorkbenchStore.getState().setFolders(data.folders);
+    } catch {
+      // non-fatal
+    }
+  }
+
+  async function createFolder(name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      await api.post('/agent/workbench/folders', { name: trimmed });
+      await refreshFolders();
+    } catch {
+      toast.error('폴더 생성 실패');
+    }
+  }
+
+  async function renameFolder(id: string, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      await api.patch(`/agent/workbench/folders/${id}`, { name: trimmed });
+      await refreshFolders();
+    } catch {
+      toast.error('폴더 이름 변경 실패');
+    }
+  }
+
+  async function deleteFolder(id: string) {
+    try {
+      await api.delete(`/agent/workbench/folders/${id}`);
+      const st = useWorkbenchStore.getState();
+      if (st.folderFilter === id) st.setFolderFilter(null);
+      await Promise.all([refreshFolders(), refreshJobs()]);
+    } catch {
+      toast.error('폴더 삭제 실패');
+    }
+  }
+
+  /** 작업을 폴더로 이동 (null = 미분류). */
+  async function moveJob(jobId: string, folderId: string | null) {
+    const st = useWorkbenchStore.getState();
+    st.setJobs(st.jobs.map((j) => (j.id === jobId ? { ...j, folder_id: folderId } : j)));
+    try {
+      await api.patch(`/agent/workbench/${jobId}`, { folder_id: folderId });
+      await refreshFolders();
+    } catch {
+      toast.error('폴더 이동 실패');
+      void refreshJobs();
     }
   }
 
@@ -562,6 +619,11 @@ export function useWorkbenchController() {
     pendingAttachRef,
     containerRef,
     refreshJobs,
+    refreshFolders,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveJob,
     openJob,
     closeJob,
     refreshBoxes,

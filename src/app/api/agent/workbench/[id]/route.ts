@@ -78,6 +78,8 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
 
 const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
+  /** 폴더 이동 (null = 미분류). */
+  folder_id: z.string().uuid().nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {

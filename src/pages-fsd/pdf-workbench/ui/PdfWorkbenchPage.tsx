@@ -10,8 +10,10 @@ import {
   ChevronRight,
   Columns2,
   FileUp,
+  Folder as FolderIcon,
   Lightbulb,
   Loader2,
+  Pencil,
   PencilLine,
   Plus,
   RefreshCw,
@@ -47,6 +49,11 @@ export function PdfWorkbenchPage() {
     pendingAttachRef,
     containerRef,
     refreshJobs,
+    refreshFolders,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveJob,
     openJob,
     closeJob,
     refreshBoxes,
@@ -69,6 +76,8 @@ export function PdfWorkbenchPage() {
       jobs: st.jobs,
       jobsLoading: st.jobsLoading,
       jobSubjectFilter: st.jobSubjectFilter,
+      folders: st.folders,
+      folderFilter: st.folderFilter,
       creating: st.creating,
       pendingFile: st.pendingFile,
       pendingAttachments: st.pendingAttachments,
@@ -110,6 +119,7 @@ export function PdfWorkbenchPage() {
       setSourceType: st.setSourceType,
       setPublisher: st.setPublisher,
       setJobSubjectFilter: st.setJobSubjectFilter,
+      setFolderFilter: st.setFolderFilter,
       setDrawKind: st.setDrawKind,
       setPage: st.setPage,
       setSelectedId: st.setSelectedId,
@@ -127,14 +137,19 @@ export function PdfWorkbenchPage() {
   useEffect(() => {
     useWorkbenchStore.getState().resetAll();
     void refreshJobs();
+    void refreshFolders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pageBoxCount = s.boxes.filter((b) => b.page === s.pageNum).length;
   const savedCount = s.boxes.filter((b) => b.status === 'saved').length;
-  const visibleJobs = s.jobSubjectFilter
-    ? s.jobs.filter((j) => j.subject === s.jobSubjectFilter)
-    : s.jobs;
+  const visibleJobs = s.jobs.filter((j) => {
+    if (s.jobSubjectFilter && j.subject !== s.jobSubjectFilter) return false;
+    if (s.folderFilter === 'unfiled' && j.folder_id) return false;
+    if (s.folderFilter && s.folderFilter !== 'unfiled' && j.folder_id !== s.folderFilter)
+      return false;
+    return true;
+  });
 
   // ================= 목록 / 새 작업 =================
   if (!s.doc || !s.source || !s.jobId) {
@@ -308,6 +323,93 @@ export function PdfWorkbenchPage() {
           </div>
         )}
 
+        {/* 폴더 필터 */}
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <FolderIcon className="h-3.5 w-3.5 text-zinc-400" />
+          <button
+            type="button"
+            onClick={() => s.setFolderFilter(null)}
+            className={cn(
+              'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+              s.folderFilter === null
+                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
+            )}
+          >
+            전체
+          </button>
+          <button
+            type="button"
+            onClick={() => s.setFolderFilter('unfiled')}
+            className={cn(
+              'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+              s.folderFilter === 'unfiled'
+                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
+            )}
+          >
+            미분류
+          </button>
+          {s.folders.map((f) => {
+            const active = s.folderFilter === f.id;
+            return (
+              <span
+                key={f.id}
+                className={cn(
+                  'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium transition',
+                  active
+                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                    : 'border-zinc-200 bg-white text-zinc-600',
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => s.setFolderFilter(f.id)}
+                  className={cn('px-2.5 py-0.5', !active && 'hover:bg-zinc-50')}
+                >
+                  {f.name} {f.jobCount}
+                </button>
+                {active && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const name = prompt('폴더 이름', f.name);
+                        if (name?.trim()) void renameFolder(f.id, name);
+                      }}
+                      className="border-l border-indigo-200 px-1 py-0.5 hover:bg-indigo-100"
+                      title="이름 변경"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`'${f.name}' 폴더를 삭제할까요? (작업은 미분류로)`))
+                          void deleteFolder(f.id);
+                      }}
+                      className="border-l border-indigo-200 px-1 py-0.5 text-rose-500 hover:bg-rose-50"
+                      title="삭제"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </>
+                )}
+              </span>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => {
+              const name = prompt('새 폴더 이름');
+              if (name?.trim()) void createFolder(name);
+            }}
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-xs text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
+          >
+            <Plus className="h-3 w-3" /> 새 폴더
+          </button>
+        </div>
+
         {/* 과목 필터 */}
         {s.jobs.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-1.5">
@@ -368,6 +470,19 @@ export function PdfWorkbenchPage() {
                     {new Date(j.updated_at).toLocaleString('ko-KR')}
                   </p>
                 </div>
+                <select
+                  value={j.folder_id ?? ''}
+                  onChange={(e) => void moveJob(j.id, e.target.value || null)}
+                  title="폴더 이동"
+                  className="hidden h-8 max-w-28 rounded-md border border-zinc-200 bg-white px-1 text-xs text-zinc-600 sm:block"
+                >
+                  <option value="">미분류</option>
+                  {s.folders.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   onClick={() => {

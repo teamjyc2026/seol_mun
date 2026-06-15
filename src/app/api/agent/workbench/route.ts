@@ -14,7 +14,7 @@ export async function GET() {
   const supabase = getSupabaseServer();
   const { data: jobs, error } = await supabase
     .from('workbench_jobs')
-    .select('id, source_id, title, created_at, updated_at')
+    .select('id, source_id, title, folder_id, created_at, updated_at')
     .order('updated_at', { ascending: false })
     .limit(100);
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
