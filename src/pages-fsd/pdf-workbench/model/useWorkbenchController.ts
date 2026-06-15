@@ -235,6 +235,10 @@ export function useWorkbenchController() {
         numPages: loaded.numPages,
         rotation: data.job.rotation ?? 0,
       });
+      // 부속(부교재)이 있으면 자동으로 첫 부속을 분할 화면에 띄운다.
+      if (data.attachments.length > 0) {
+        await openAttachment(data.attachments[0]);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '작업을 열지 못했어요.');
     } finally {
