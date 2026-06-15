@@ -14,7 +14,7 @@ export async function GET() {
   const supabase = getSupabaseServer();
   const { data: schools, error } = await supabase
     .from('schools')
-    .select('id, name, description, grade, created_at')
+    .select('id, name, description, grade, year, created_at')
     .order('created_at', { ascending: true });
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
 
@@ -43,6 +43,7 @@ const createSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   grade: z.string().max(20).optional(),
+  year: z.number().int().min(2000).max(2100).nullable().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -62,8 +63,9 @@ export async function POST(req: NextRequest) {
       name: body.name.trim(),
       description: body.description ?? null,
       grade: body.grade ?? null,
+      year: body.year ?? null,
     })
-    .select('id, name, description, grade, created_at')
+    .select('id, name, description, grade, year, created_at')
     .single();
   if (error) {
     const status = error.code === '23505' ? 409 : 500;

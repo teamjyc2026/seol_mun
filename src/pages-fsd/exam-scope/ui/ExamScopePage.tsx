@@ -8,7 +8,7 @@ import { cn } from '@/shared/lib/cn';
 
 const GRADES = ['중1', '중2', '중3', '고1', '고2', '고3'];
 
-type SchoolRow = { id: string; name: string; grade: string | null };
+type SchoolRow = { id: string; name: string; grade: string | null; year: number | null };
 type ScopeRow = {
   id: string;
   name: string;
@@ -29,6 +29,7 @@ export function ExamScopePage() {
 
   // 폼
   const [newSchool, setNewSchool] = useState('');
+  const [newSchoolYear, setNewSchoolYear] = useState('');
   const [newScopeName, setNewScopeName] = useState('');
   const [newScopeSubject, setNewScopeSubject] = useState<string>('');
   const [newScopeGrade, setNewScopeGrade] = useState<string>('');
@@ -64,14 +65,16 @@ export function ExamScopePage() {
   async function createSchool() {
     const name = newSchool.trim();
     if (!name) return;
+    const year = newSchoolYear.trim() ? Number(newSchoolYear.trim()) : null;
     try {
       const res = await fetch('/api/agent/schools', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, year }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '생성 실패');
       setNewSchool('');
+      setNewSchoolYear('');
       await loadSchools();
       toast.success(`'${name}' 학교를 만들었어요.`);
     } catch (e) {
@@ -183,22 +186,32 @@ export function ExamScopePage() {
       <div className="grid gap-4 md:grid-cols-[220px_240px_1fr]">
         {/* 1) 학교 */}
         <section className="space-y-2">
-          <div className="flex gap-1.5">
+          <div className="space-y-1.5">
             <input
               value={newSchool}
               onChange={(e) => setNewSchool(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && createSchool()}
               placeholder="학교 이름"
-              className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+              className="w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
             />
-            <button
-              type="button"
-              onClick={createSchool}
-              disabled={!newSchool.trim()}
-              className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-40"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
+            <div className="flex gap-1.5">
+              <input
+                value={newSchoolYear}
+                onChange={(e) => setNewSchoolYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                onKeyDown={(e) => e.key === 'Enter' && createSchool()}
+                inputMode="numeric"
+                placeholder="년도 (예: 2026)"
+                className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
+              />
+              <button
+                type="button"
+                onClick={createSchool}
+                disabled={!newSchool.trim()}
+                className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-40"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
           <div className="space-y-1">
             {schools.length === 0 && (
@@ -219,6 +232,9 @@ export function ExamScopePage() {
                 )}
               >
                 <span className="truncate font-medium">{s.name}</span>
+                {s.year != null && (
+                  <span className="ml-2 shrink-0 text-xs text-zinc-400">{s.year}</span>
+                )}
               </button>
             ))}
           </div>

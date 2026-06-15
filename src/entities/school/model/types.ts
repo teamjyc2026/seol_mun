@@ -3,6 +3,7 @@ export type School = {
   name: string;
   description: string | null;
   grade: string | null;
+  year: number | null;
   created_at: string;
 };
 
