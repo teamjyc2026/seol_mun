@@ -43,6 +43,28 @@ export function ProblemCard({
           <RichText text={problem.passage} />
         </div>
       ) : null}
+
+      {/* 그림/도표는 보통 본문(지문)에 딸리므로 발문 앞, 본문 자리에 보여준다. */}
+      {problem.figures && problem.figures.length > 0 ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {problem.figures.map((fig, i) => (
+            <figure key={i} className="space-y-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={fig.url}
+                alt={fig.caption || `그림 ${i + 1}`}
+                className="w-full rounded-lg border border-zinc-200 bg-white object-contain"
+              />
+              {fig.caption ? (
+                <figcaption className="text-center text-[11px] text-zinc-500">
+                  {fig.caption}
+                </figcaption>
+              ) : null}
+            </figure>
+          ))}
+        </div>
+      ) : null}
+
       <header className="flex items-start gap-2">
         <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-zinc-900 text-xs font-bold text-white">
           {index + 1}
@@ -61,26 +83,6 @@ export function ProblemCard({
           </div>
         </div>
       </header>
-
-      {problem.figures && problem.figures.length > 0 ? (
-        <div className="grid grid-cols-1 gap-2 pl-8 sm:grid-cols-2">
-          {problem.figures.map((fig, i) => (
-            <figure key={i} className="space-y-1">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={fig.url}
-                alt={fig.caption || `그림 ${i + 1}`}
-                className="w-full rounded-lg border border-zinc-200 bg-white object-contain"
-              />
-              {fig.caption ? (
-                <figcaption className="text-center text-[11px] text-zinc-500">
-                  {fig.caption}
-                </figcaption>
-              ) : null}
-            </figure>
-          ))}
-        </div>
-      ) : null}
 
       {problem.choices && problem.choices.length > 0 ? (
         <ul className="space-y-1.5 pl-8">

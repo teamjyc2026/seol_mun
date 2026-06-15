@@ -785,7 +785,7 @@ export function PdfWorkbenchPage() {
           );
         })()}
 
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex flex-wrap items-center gap-1">
           <span className="mr-1 text-xs text-zinc-500">새 박스:</span>
           {(Object.keys(KIND_LABEL) as BoxKind[]).map((k) => {
             const Icon = KIND_ICON[k];
@@ -901,8 +901,8 @@ export function PdfWorkbenchPage() {
           toSelector="[data-answer-link]"
         />
         {/* 메인 뷰어 */}
-        <section className="space-y-2">
-          <div className="flex h-8 items-center gap-2 text-sm">
+        <section className="min-w-0 space-y-2">
+          <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <button
               type="button"
               disabled={s.pageNum <= 1}
@@ -974,7 +974,7 @@ export function PdfWorkbenchPage() {
 
         {/* 보조 뷰어 (답안/해설/부가자료 참조) */}
         {s.refDoc && (
-          <section className="space-y-2">
+          <section className="min-w-0 space-y-2">
             <PdfRefViewer
               key={s.refSel?.type === 'attachment' ? s.refSel.id : 'same'}
               doc={s.refDoc}
@@ -989,7 +989,7 @@ export function PdfWorkbenchPage() {
         )}
 
         {/* 편집 패널 */}
-        <section className="space-y-3">
+        <section className="min-w-0 space-y-3">
           {!selected ? (
             <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
               종류(문제/개념/본문)를 고르고 왼쪽에서 영역을 드래그하세요.
@@ -1025,7 +1025,7 @@ export function PdfWorkbenchPage() {
             <>
               <div
                 className={cn(
-                  'flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs font-medium',
+                  'flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 rounded-lg border px-3 py-2 text-xs font-medium',
                   selected.status === 'saved'
                     ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                     : selected.status === 'failed'
@@ -1033,7 +1033,7 @@ export function PdfWorkbenchPage() {
                       : 'border-zinc-200 bg-white text-zinc-600',
                 )}
               >
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="whitespace-nowrap">
                     p.{selected.page} · {KIND_LABEL[selected.kind]}
                   </span>

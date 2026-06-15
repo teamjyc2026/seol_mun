@@ -194,6 +194,75 @@ export function WorkbenchProblemForm({
         />
       </div>
 
+      {/* 그림/도표는 보통 본문(지문)에 딸리므로 본문 바로 아래에 둔다. */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-zinc-700">그림/도표 (선택)</label>
+        <p className="text-[11px] leading-relaxed text-zinc-400">
+          그림은 보통 본문에 들어가요. 보조 뷰어 “그림” 모드로 영역을 가져오거나 아래로 직접
+          올리세요. 도표는 본문·발문에 마크다운 표로 적으면 됩니다.
+        </p>
+        {value.figures.length > 0 && (
+          <ul className="space-y-2">
+            {value.figures.map((fig, i) => (
+              <li
+                key={i}
+                className="flex gap-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={fig.url}
+                  alt={fig.caption || `그림 ${i + 1}`}
+                  className="h-20 w-20 shrink-0 rounded border border-zinc-200 bg-white object-contain"
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <input
+                    value={fig.caption ?? ''}
+                    onChange={(e) => updFigure(i, { caption: e.target.value })}
+                    placeholder="캡션 (예: [그림 1])"
+                    className="h-7 w-full rounded-md border border-zinc-200 px-2 text-xs outline-none"
+                  />
+                  <textarea
+                    value={fig.explanation ?? ''}
+                    onChange={(e) => updFigure(i, { explanation: e.target.value })}
+                    rows={2}
+                    placeholder="이 그림에 대한 해설 (선택)"
+                    className="block w-full resize-y rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFigure(i)}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                  title="그림 삭제"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <input
+          ref={figFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onPickFigureFile}
+        />
+        <button
+          type="button"
+          disabled={figUploading}
+          onClick={() => figFileRef.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+        >
+          {figUploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ImagePlus className="h-3.5 w-3.5" />
+          )}
+          그림 직접 올리기
+        </button>
+      </div>
+
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-zinc-700">발문 (필수)</label>
         <textarea
@@ -335,74 +404,6 @@ export function WorkbenchProblemForm({
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
         <RichTextPreview value={value.explanation} />
-      </div>
-
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-zinc-700">그림/도표 (선택)</label>
-        <p className="text-[11px] leading-relaxed text-zinc-400">
-          그림은 보조 뷰어 “그림” 모드로 영역을 가져오거나 아래로 직접 올리세요.
-          도표는 본문·발문에 마크다운 표로 적으면 됩니다.
-        </p>
-        {value.figures.length > 0 && (
-          <ul className="space-y-2">
-            {value.figures.map((fig, i) => (
-              <li
-                key={i}
-                className="flex gap-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={fig.url}
-                  alt={fig.caption || `그림 ${i + 1}`}
-                  className="h-20 w-20 shrink-0 rounded border border-zinc-200 bg-white object-contain"
-                />
-                <div className="min-w-0 flex-1 space-y-1">
-                  <input
-                    value={fig.caption ?? ''}
-                    onChange={(e) => updFigure(i, { caption: e.target.value })}
-                    placeholder="캡션 (예: [그림 1])"
-                    className="h-7 w-full rounded-md border border-zinc-200 px-2 text-xs outline-none"
-                  />
-                  <textarea
-                    value={fig.explanation ?? ''}
-                    onChange={(e) => updFigure(i, { explanation: e.target.value })}
-                    rows={2}
-                    placeholder="이 그림에 대한 해설 (선택)"
-                    className="block w-full resize-y rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeFigure(i)}
-                  className="grid h-6 w-6 shrink-0 place-items-center rounded text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
-                  title="그림 삭제"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <input
-          ref={figFileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={onPickFigureFile}
-        />
-        <button
-          type="button"
-          disabled={figUploading}
-          onClick={() => figFileRef.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
-        >
-          {figUploading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <ImagePlus className="h-3.5 w-3.5" />
-          )}
-          그림 직접 올리기
-        </button>
       </div>
     </div>
   );

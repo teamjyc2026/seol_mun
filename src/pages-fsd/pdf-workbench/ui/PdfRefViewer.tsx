@@ -169,8 +169,8 @@ export function PdfRefViewer({
   };
 
   return (
-    <div className="space-y-2">
-      <div className="flex h-8 items-center gap-2 text-sm">
+    <div className="min-w-0 space-y-2">
+      <div className="flex min-h-8 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
         <button
           type="button"
           disabled={pageNum <= 1}
