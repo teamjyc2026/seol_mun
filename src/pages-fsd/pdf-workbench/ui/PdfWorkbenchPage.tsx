@@ -1148,13 +1148,13 @@ export function PdfWorkbenchPage() {
                         type="button"
                         disabled={s.grabbing}
                         onClick={() => void rescanAnswerRefs(selected.id)}
-                        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium hover:bg-emerald-100 disabled:opacity-50"
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
                         title="연결된 해설 영역을 다시 스캔해 정답·해설을 새로 채움"
                       >
                         {s.grabbing ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                         ) : (
-                          <ScanText className="h-3 w-3" />
+                          <ScanText className="h-3.5 w-3.5 shrink-0" />
                         )}
                         다시 스캔
                       </button>

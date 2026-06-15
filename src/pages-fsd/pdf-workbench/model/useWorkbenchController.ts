@@ -573,6 +573,8 @@ export function useWorkbenchController() {
       (b) => b.id === useWorkbenchStore.getState().selectedId,
     );
     if (!sel || sel.id.startsWith('temp-')) return;
+    if (!confirm('이 영역을 다시 인식할까요? 지문·발문·보기가 새로 인식한 내용으로 덮어써집니다. (정답·해설은 유지)'))
+      return;
     await recognizeBox(sel.id);
   }
 
@@ -937,7 +939,7 @@ export function useWorkbenchController() {
       return;
     }
     if (
-      !confirm('연결된 해설 영역을 다시 스캔해 정답·해설을 새로 채울까요? 지금 입력값은 덮어써져요.')
+      !confirm('이 답안 영역을 다시 스캔할까요? 정답·해설·지문해석이 새로 스캔한 내용으로 덮어써집니다.')
     )
       return;
     st.setGrabbing(true);
