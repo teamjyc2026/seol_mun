@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, ScanText, X } from 'lucide-react';
+import { Plus, RefreshCw, ScanText, X } from 'lucide-react';
 import type { ProblemFigure } from '@/entities/problem';
 import { cn } from '@/shared/lib/cn';
 import { RichTextHelp, RichTextPreview } from '@/shared/ui/RichText';
@@ -56,6 +56,9 @@ export function WorkbenchProblemForm({
   isSet: isSetProp,
   activeChild = 0,
   onActiveChild,
+  onRescanChild,
+  childRefCounts,
+  grabbing,
 }: {
   subject: string;
   value: WorkbenchProblemValue;
@@ -68,6 +71,12 @@ export function WorkbenchProblemForm({
   activeChild?: number;
   /** 블록의 "이 문제 풀이 받기" 클릭 시 활성 자식 변경. */
   onActiveChild?: (i: number) => void;
+  /** 블록의 "해설 다시 스캔" 클릭 — 그 자식의 연결된 해설 영역을 재OCR. */
+  onRescanChild?: (i: number) => void;
+  /** 자식별 연결된 해설 영역 수 (0이면 다시 스캔 버튼 숨김). */
+  childRefCounts?: number[];
+  /** 스캔 진행 중(버튼 비활성). */
+  grabbing?: boolean;
 }) {
   const isSet = isSetProp ?? value.extra.length > 0;
   const updExtra = (i: number, sub: WbSubProblem) =>
@@ -94,6 +103,20 @@ export function WorkbenchProblemForm({
         {activeChild === idx ? '✓ 여기로 받기' : '이 문제로 받기'}
       </button>
     );
+
+  /** 그 자식에 연결된 해설이 있을 때만 보이는 "해설 다시 스캔" 버튼. */
+  const rescanButton = (idx: number) =>
+    onRescanChild && (childRefCounts?.[idx] ?? 0) > 0 ? (
+      <button
+        type="button"
+        onClick={() => onRescanChild(idx)}
+        disabled={grabbing}
+        title="연결된 해설 영역을 다시 읽어 이 문제의 정답·해설을 갱신"
+        className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-300 bg-white px-1.5 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+      >
+        <RefreshCw className={cn('h-3 w-3', grabbing && 'animate-spin')} /> 해설 다시 스캔
+      </button>
+    ) : null;
 
   return (
     <div className="space-y-4">
@@ -142,9 +165,12 @@ export function WorkbenchProblemForm({
         )}
       >
         {isSet && (
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-1">
             <p className="text-xs font-bold text-zinc-700">문제 1</p>
-            {answerToggle(0)}
+            <div className="flex flex-wrap items-center gap-1">
+              {answerToggle(0)}
+              {rescanButton(0)}
+            </div>
           </div>
         )}
         <ProblemFields
@@ -165,10 +191,11 @@ export function WorkbenchProblemForm({
               : 'border-indigo-100 bg-indigo-50/40',
           )}
         >
-          <div className="flex items-center justify-between gap-1">
+          <div className="flex flex-wrap items-center justify-between gap-1">
             <p className="text-xs font-bold text-indigo-700">문제 {i + 2}</p>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               {answerToggle(i + 1)}
+              {rescanButton(i + 1)}
               <button
                 type="button"
                 onClick={() => removeExtra(i)}

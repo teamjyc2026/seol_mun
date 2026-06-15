@@ -1255,7 +1255,7 @@ export function PdfWorkbenchPage() {
                         })}
                       </div>
                     )}
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
                       <span className="font-medium">
                         🔗 {isSet ? `문제 ${activeChildSafe + 1} ` : ''}답안 연결 {childRefs.length}곳
                       </span>
@@ -1323,6 +1323,12 @@ export function PdfWorkbenchPage() {
                     isSet={isSet}
                     activeChild={activeChildSafe}
                     onActiveChild={setActiveChild}
+                    onRescanChild={(idx) => void rescanAnswerRefs(selected.id, idx)}
+                    childRefCounts={Array.from(
+                      { length: childCount },
+                      (_, i) => selected.answerRefs.filter((a) => a.childIndex === i).length,
+                    )}
+                    grabbing={s.grabbing}
                   />
                 ) : (
                   <div className="space-y-4">
