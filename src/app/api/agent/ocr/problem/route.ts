@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
-import { claudeJson } from '@/shared/config/anthropic';
+import { claudeJson, llmErrorMessage } from '@/shared/config/anthropic';
 import { topicCategoriesFor } from '@/shared/config/topics';
 
 export const runtime = 'nodejs';
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ problem, usage });
   } catch (e) {
     return NextResponse.json(
-      { message: e instanceof Error ? e.message : '인식 실패' },
+      { message: llmErrorMessage(e) },
       { status: 500 },
     );
   }

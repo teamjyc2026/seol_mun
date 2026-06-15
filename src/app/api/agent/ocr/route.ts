@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
-import { CLAUDE_MODEL, getAnthropic } from '@/shared/config/anthropic';
+import { CLAUDE_MODEL, getAnthropic, llmErrorMessage } from '@/shared/config/anthropic';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     return NextResponse.json(
-      { message: e instanceof Error ? e.message : 'OCR 실패' },
+      { message: llmErrorMessage(e) },
       { status: 500 },
     );
   }

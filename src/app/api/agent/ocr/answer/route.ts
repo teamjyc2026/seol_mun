@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
-import { claudeJson } from '@/shared/config/anthropic';
+import { claudeJson, llmErrorMessage } from '@/shared/config/anthropic';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -63,7 +63,7 @@ ${body.hint ? `힌트(대상 문제): ${body.hint}` : ''}`,
     return NextResponse.json({ ...result, usage });
   } catch (e) {
     return NextResponse.json(
-      { message: e instanceof Error ? e.message : '인식 실패' },
+      { message: llmErrorMessage(e) },
       { status: 500 },
     );
   }

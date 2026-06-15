@@ -11,8 +11,26 @@ export function getAnthropic(): Anthropic {
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not set');
   }
-  cached = new Anthropic({ apiKey });
+  // overloaded(529)·rate-limit(429)·5xx는 SDK가 지수백오프로 재시도 — 횟수를 늘려
+  // 일시적 과부하는 대개 자동 회복되게 한다.
+  cached = new Anthropic({ apiKey, maxRetries: 5 });
   return cached;
+}
+
+/**
+ * LLM 에러를 사용자용 한국어 메시지로 변환 — overloaded/rate-limit 등 원본 JSON
+ * 대신 안내문을 보여준다(라우트 응답·토스트에서 사용).
+ */
+export function llmErrorMessage(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  const status = (e as { status?: number } | null)?.status;
+  if (status === 529 || /overload/i.test(msg))
+    return 'AI 서버가 잠시 혼잡해요. 잠깐 뒤 다시 시도해 주세요.';
+  if (status === 429 || /rate.?limit/i.test(msg))
+    return '요청이 너무 많아요. 잠깐 뒤 다시 시도해 주세요.';
+  if (/timeout|etimedout|abort/i.test(msg))
+    return '응답이 지연됐어요. 다시 시도해 주세요.';
+  return msg;
 }
 
 /**

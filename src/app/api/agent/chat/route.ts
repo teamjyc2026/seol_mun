@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getStudent, requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import type Anthropic from '@anthropic-ai/sdk';
+import { llmErrorMessage } from '@/shared/config/anthropic';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
 import { extractAndSaveMemories } from '@/shared/agent/memory';
 import { maskProblemAnswers } from '@/shared/agent/maskAnswers';
@@ -277,7 +278,7 @@ export async function POST(req: NextRequest) {
           });
         }
       } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = llmErrorMessage(e);
         send({ kind: 'error', message: msg });
         await supabase.from('agent_messages').insert({
           conversation_id: convId,
