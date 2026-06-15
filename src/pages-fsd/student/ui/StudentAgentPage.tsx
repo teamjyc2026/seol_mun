@@ -3,14 +3,25 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { GraduationCap, LogOut, Plus } from 'lucide-react';
+import { LogOut, Plus } from 'lucide-react';
 import type { School } from '@/entities/school';
 import type { Student } from '@/shared/config/auth';
 import type { AgentReply, ToolResult, Citation } from '@/shared/agent/types';
 import type { AgentId } from '@/shared/agent/agents/types';
+import { DEFAULT_QUICK_REPLIES, parseQuickReplies } from '@/shared/agent/quickReplies';
+import { parseSolveStage } from '@/shared/agent/solveStage';
 import { SUBJECTS, type Subject } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
-import { ChatInput, MessageBubble, type ChatMessage } from '@/widgets/agent-chat';
+import {
+  MASCOT_NAME,
+  MascotAvatar,
+  QuickReplies,
+  SolveStepper,
+  StudentAssistantMessage,
+  StudentBubble,
+  StudentChatInput,
+  SUBJECT_EMOJI,
+} from '@/widgets/student-chat';
 import { streamAgentMessage } from '@/features/send-agent-message';
 
 type Conversation = { id: string; title: string; created_at: string };
@@ -22,8 +33,14 @@ type StoredMessage = {
     agent?: AgentId;
     toolResults?: ToolResult[];
     citations?: Citation[];
+    choices?: string[];
+    stage?: number;
   } | null;
 };
+
+type ChatMessage =
+  | { role: 'user'; text: string }
+  | { role: 'assistant'; reply: AgentReply; streaming?: boolean };
 
 export function StudentAgentPage({
   student,
@@ -40,6 +57,8 @@ export function StudentAgentPage({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  /** 문제 풀이 코칭 진행 단계 (1~5, null=풀이 중 아님). */
+  const [solveStage, setSolveStage] = useState<number | null>(null);
 
   useEffect(() => {
     void refreshConversations();
@@ -59,10 +78,16 @@ export function StudentAgentPage({
   async function openConversation(id: string) {
     setConversationId(id);
     setMessages([]);
+    setSolveStage(null);
     try {
       const res = await fetch(`/api/agent/conversations/${id}`);
       if (!res.ok) throw new Error('대화를 불러오지 못했어요.');
       const data = (await res.json()) as { messages: StoredMessage[] };
+      // 마지막으로 기록된 풀이 단계 복원
+      const lastStage = [...data.messages]
+        .reverse()
+        .find((m) => m.role === 'assistant' && m.content?.stage != null);
+      setSolveStage(lastStage?.content?.stage ?? null);
       setMessages(
         data.messages.flatMap<ChatMessage>((m) => {
           const text = m.content?.text ?? '';
@@ -74,6 +99,7 @@ export function StudentAgentPage({
             agent: m.content?.agent,
             toolResults: m.content?.toolResults ?? [],
             citations: m.content?.citations ?? [],
+            choices: m.content?.choices ?? [],
           };
           return [{ role: 'assistant', reply }];
         }),
@@ -86,6 +112,7 @@ export function StudentAgentPage({
   function newConversation() {
     setConversationId(null);
     setMessages([]);
+    setSolveStage(null);
   }
 
   async function logout() {
@@ -100,7 +127,7 @@ export function StudentAgentPage({
     await sendMessage(text);
   }
 
-  /** 입력창 전송과 문제 카드의 "답 제출"이 공용으로 쓰는 전송 함수. */
+  /** 입력창 전송·퀵리플라이 탭·문제 카드 "답 제출"이 공용으로 쓰는 전송 함수. */
   async function sendMessage(text: string) {
     if (!text || sending) return;
     setSending(true);
@@ -169,13 +196,24 @@ export function StudentAgentPage({
               ),
             );
           },
-          onDone: () => {
+          onDone: (e) => {
+            if (e.stage != null) setSolveStage(e.stage);
             setMessages((prev) =>
-              prev.map((m, i) =>
-                i === assistantIndex && m.role === 'assistant'
-                  ? { ...m, streaming: false }
-                  : m,
-              ),
+              prev.map((m, i) => {
+                if (i !== assistantIndex || m.role !== 'assistant') return m;
+                // 서버가 단계 마커·트레일러를 분리해 보내준다 — 누적 텍스트도 정제.
+                const staged = parseSolveStage(m.reply.text);
+                const parsed = parseQuickReplies(staged.text);
+                return {
+                  ...m,
+                  streaming: false,
+                  reply: {
+                    ...m.reply,
+                    text: parsed.text,
+                    choices: e.choices?.length ? e.choices : parsed.choices,
+                  },
+                };
+              }),
             );
           },
         },
@@ -187,33 +225,43 @@ export function StudentAgentPage({
     }
   }
 
+  const lastAssistantIndex = messages.reduce(
+    (acc, m, i) => (m.role === 'assistant' ? i : acc),
+    -1,
+  );
+
   return (
-    <main className="min-h-svh bg-zinc-50">
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-6 sm:px-6">
-        <header className="flex items-center justify-between">
-          <h1 className="flex items-center gap-2 text-base font-bold tracking-tight text-zinc-900 sm:text-lg">
-            <GraduationCap className="h-5 w-5 text-indigo-600" />
-            {student.name}님의 학습 · {subject}
-          </h1>
+    <main className="min-h-svh bg-gradient-to-b from-orange-50/70 via-white to-white">
+      <div className="mx-auto flex min-h-svh max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
+        <header className="flex items-center gap-3">
+          <MascotAvatar size="lg" />
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-extrabold tracking-tight text-zinc-900">
+              {MASCOT_NAME}
+            </h1>
+            <p className="truncate text-xs font-medium text-orange-600">
+              {student.name}랑 공부 중! {SUBJECT_EMOJI[subject]} {subject}
+            </p>
+          </div>
           <button
             type="button"
             onClick={logout}
-            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-100"
+            className="inline-flex items-center gap-1 rounded-full border-2 border-zinc-200 px-3 py-1.5 text-xs font-bold text-zinc-500 hover:bg-zinc-50"
           >
-            <LogOut className="h-3.5 w-3.5" /> 로그아웃
+            <LogOut className="h-3.5 w-3.5" /> 나가기
           </button>
         </header>
 
         {/* 대화 목록 */}
-        <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
           <button
             type="button"
             onClick={newConversation}
             className={cn(
-              'inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium',
+              'inline-flex shrink-0 items-center gap-1 rounded-full border-2 px-3 py-1 text-xs font-bold transition',
               conversationId === null
-                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50',
+                ? 'border-orange-400 bg-orange-100 text-orange-700'
+                : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50',
             )}
           >
             <Plus className="h-3 w-3" /> 새 대화
@@ -224,10 +272,10 @@ export function StudentAgentPage({
               type="button"
               onClick={() => openConversation(c.id)}
               className={cn(
-                'max-w-44 shrink-0 truncate rounded-full border px-2.5 py-0.5 text-xs font-medium',
+                'max-w-44 shrink-0 truncate rounded-full border-2 px-3 py-1 text-xs font-bold transition',
                 c.id === conversationId
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-zinc-200 text-zinc-600 hover:bg-zinc-50',
+                  ? 'border-orange-400 bg-orange-100 text-orange-700'
+                  : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50',
               )}
             >
               {c.title || '대화'}
@@ -236,23 +284,22 @@ export function StudentAgentPage({
         </div>
 
         {/* 과목 / 학교 */}
-        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">
+        <div className="flex flex-wrap items-center gap-1.5">
           {SUBJECTS.map((s) => (
             <button
               key={s}
               type="button"
               onClick={() => setSubject(s)}
               className={cn(
-                'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                'inline-flex min-h-9 items-center gap-1 rounded-full border-2 border-b-4 px-3 py-1 text-xs font-bold transition active:translate-y-[2px] active:border-b-2',
                 s === subject
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                  ? 'border-orange-400 bg-orange-100 text-orange-700'
+                  : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50',
               )}
             >
-              {s}
+              {SUBJECT_EMOJI[s]} {s}
             </button>
           ))}
-          {schools.length > 0 && <span className="mx-1 h-4 w-px bg-zinc-200" />}
           {schools.map((sch) => {
             const active = sch.id === schoolId;
             return (
@@ -261,10 +308,10 @@ export function StudentAgentPage({
                 type="button"
                 onClick={() => setSchoolId(active ? null : sch.id)}
                 className={cn(
-                  'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
+                  'inline-flex min-h-9 items-center gap-1 rounded-full border-2 border-b-4 px-3 py-1 text-xs font-bold transition active:translate-y-[2px] active:border-b-2',
                   active
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                    : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
+                    ? 'border-emerald-400 bg-emerald-100 text-emerald-700'
+                    : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50',
                 )}
               >
                 🏫 {sch.name}
@@ -273,29 +320,57 @@ export function StudentAgentPage({
           })}
         </div>
 
-        <div className="flex-1 space-y-4">
+        {/* 문제 풀이 코칭 스테퍼 — 풀이 시작하면 채팅 위에 떠 있는다 */}
+        {solveStage != null && (
+          <div className="sticky top-2 z-10 rounded-2xl border-2 border-orange-100 bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
+            <SolveStepper stage={solveStage} />
+          </div>
+        )}
+
+        <div className="flex-1 space-y-4 py-2">
           {messages.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
-              {'"Lesson 3 본문 외웠는지 확인해줘" / "관계대명사 문제 내줘" / "오늘 너무 피곤해.." '}
-              <br />
-              무엇이든 보내보세요. 틀린 유형은 기억해뒀다가 다시 물어봐드려요.
+            <div className="flex flex-col items-center gap-4 rounded-3xl border-2 border-dashed border-orange-200 bg-white/70 px-6 py-10 text-center">
+              <MascotAvatar size="xl" />
+              <div>
+                <p className="text-lg font-extrabold text-zinc-900">
+                  안녕! 나는 {MASCOT_NAME} 🦊
+                </p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  같이 놀면서 공부하자! 뭐부터 해볼까?
+                </p>
+              </div>
+              <QuickReplies
+                big
+                choices={DEFAULT_QUICK_REPLIES}
+                onPick={(label) => void sendMessage(label)}
+                disabled={sending}
+              />
             </div>
           ) : (
-            messages.map((m, i) => (
-              <MessageBubble key={i} msg={m} onSubmitAnswer={(t) => void sendMessage(t)} />
-            ))
+            messages.map((m, i) =>
+              m.role === 'user' ? (
+                <StudentBubble key={i} role="user" text={m.text} />
+              ) : (
+                <StudentAssistantMessage
+                  key={i}
+                  reply={m.reply}
+                  streaming={m.streaming}
+                  isLast={i === lastAssistantIndex}
+                  sending={sending}
+                  onQuickReply={(label) => void sendMessage(label)}
+                  onSubmitAnswer={(t) => void sendMessage(t)}
+                />
+              ),
+            )
           )}
         </div>
 
         <div className="sticky bottom-4">
-          <ChatInput
+          <StudentChatInput
             value={input}
             onChange={setInput}
-            onSend={onSend}
+            onSend={() => void onSend()}
             isSending={sending}
-            pinnedSources={[]}
-            onTogglePin={() => {}}
-            sources={[]}
           />
         </div>
       </div>

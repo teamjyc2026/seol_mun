@@ -54,6 +54,8 @@ export type AgentReply = {
   citations: Citation[];
   /** Which specialist produced this reply (undefined on older messages). */
   agent?: AgentId;
+  /** 학생 모드 퀵리플라이 — 답변 끝에 붙는 선택지 버튼 (teacher에는 없음). */
+  choices?: string[];
 };
 
 export type AgentContext = {
@@ -72,4 +74,4 @@ export type StreamEvent =
   | { kind: 'meta'; conversationId: string; agent: AgentId; toolResults: ToolResult[]; citations: Citation[] }
   | { kind: 'token'; text: string }
   | { kind: 'error'; message: string }
-  | { kind: 'done' };
+  | { kind: 'done'; choices?: string[]; stage?: number | null };

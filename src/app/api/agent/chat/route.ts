@@ -1,11 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getStudentId, requireUploader } from '@/shared/config/auth';
+import { getStudent, requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
 import { extractAndSaveMemories } from '@/shared/agent/memory';
 import { maskProblemAnswers } from '@/shared/agent/maskAnswers';
+import { parseQuickReplies } from '@/shared/agent/quickReplies';
+import { parseSolveStage } from '@/shared/agent/solveStage';
 import type { AgentId } from '@/shared/agent/agents/types';
 import type { ToolResult } from '@/shared/agent/types';
 import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
@@ -54,6 +56,7 @@ async function loadHistory(
       text?: string;
       agent?: AgentId;
       toolResults?: ToolResult[];
+      stage?: number;
     } | null;
     let text = (content?.text ?? '').slice(0, HISTORY_TURN_CHARS).trim();
     if (!text) continue;
@@ -80,6 +83,10 @@ async function loadHistory(
       if (notes.length > 0) {
         text += `\n\n[비공개 채점 메모 — 학생 메시지에 답이 오기 전까지 절대 노출 금지]\n${notes.join('\n')}`;
       }
+      // 단계 마커는 저장 전에 제거되므로, 풀이 코칭 연속성을 위해 메모로 복원.
+      if (content?.stage != null) {
+        text += `\n\n[비공개: 이 턴의 풀이 단계 = ${content.stage}]`;
+      }
       if (content?.agent) lastAgent = content.agent;
     }
     history.push({ role: r.role, content: text });
@@ -90,7 +97,8 @@ async function loadHistory(
 export async function POST(req: NextRequest) {
   // Two caller realms: uploader(교사/관리) or logged-in student(학습자).
   const isUploader = await requireUploader();
-  const sessionStudentId = isUploader ? null : await getStudentId();
+  const sessionStudent = isUploader ? null : await getStudent();
+  const sessionStudentId = sessionStudent?.id ?? null;
   if (!isUploader && !sessionStudentId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
@@ -183,6 +191,7 @@ export async function POST(req: NextRequest) {
           schoolId: body.schoolId ?? null,
           history,
           lastAgent,
+          studentGrade: sessionStudent?.grade ?? null,
         });
 
         // 출제 시 정답·해설은 클라이언트로 내려보내지 않는다(마스킹).
@@ -207,6 +216,7 @@ export async function POST(req: NextRequest) {
           studentId,
           schoolName,
           history,
+          studentGrade: sessionStudent?.grade ?? null,
         })) {
           finalText += piece;
           send({ kind: 'token', text: piece });
@@ -216,11 +226,24 @@ export async function POST(req: NextRequest) {
           send({ kind: 'token', text: finalText });
         }
 
+        // 학생 모드: {{단계:N}} 마커와 마지막 줄 [[선택지]] 트레일러를 분리해
+        // 저장한다. 히스토리·리로드가 자동으로 깨끗해진다.
+        const staged =
+          audience === 'student'
+            ? parseSolveStage(finalText)
+            : { text: finalText, stage: null };
+        const parsed =
+          audience === 'student'
+            ? parseQuickReplies(staged.text)
+            : { text: finalText, choices: [] as string[] };
+
         await supabase.from('agent_messages').insert({
           conversation_id: convId,
           role: 'assistant',
           content: {
-            text: finalText,
+            text: parsed.text,
+            ...(parsed.choices.length ? { choices: parsed.choices } : {}),
+            ...(staged.stage != null ? { stage: staged.stage } : {}),
             agent,
             toolResults,
             citations,
@@ -228,7 +251,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        send({ kind: 'done' });
+        send({ kind: 'done', choices: parsed.choices, stage: staged.stage });
 
         // Memory extraction after 'done' (UI never waits on it):
         // - companion/emotion: social facts/jokes/feelings
@@ -239,7 +262,7 @@ export async function POST(req: NextRequest) {
             studentId,
             agent,
             userMessage: body.message,
-            assistantText: finalText,
+            assistantText: parsed.text,
             mode: 'social',
           });
         } else if (studentId) {
@@ -247,7 +270,7 @@ export async function POST(req: NextRequest) {
             studentId,
             agent,
             userMessage: body.message,
-            assistantText: finalText,
+            assistantText: parsed.text,
             mode: 'learning',
           });
         }

@@ -14,7 +14,7 @@ export type StreamHandlers = {
   onMeta?: (e: Extract<StreamEvent, { kind: 'meta' }>) => void;
   onToken?: (e: Extract<StreamEvent, { kind: 'token' }>) => void;
   onError?: (msg: string) => void;
-  onDone?: () => void;
+  onDone?: (e: Extract<StreamEvent, { kind: 'done' }>) => void;
 };
 
 /**
@@ -69,7 +69,7 @@ export async function streamAgentMessage(
           else if (event.kind === 'token') handlers.onToken?.(event);
           else if (event.kind === 'error') handlers.onError?.(event.message);
           else if (event.kind === 'done') {
-            handlers.onDone?.();
+            handlers.onDone?.(event);
             return;
           }
         } catch {

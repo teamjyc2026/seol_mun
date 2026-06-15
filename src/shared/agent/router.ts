@@ -5,6 +5,7 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 import type { AgentContext, AgentReply, Citation, ToolResult } from './types';
 import type { AgentId, AgentProfile, Audience } from './agents/types';
 import { classifyAgent } from './agents/classify';
+import { buildStudentStyleOverlay } from './agents/studentStyle';
 import { formatLearningMemories, formatMemories, loadMemories } from './memory';
 import {
   buildToolDeclarations,
@@ -91,6 +92,7 @@ async function buildAgentSystem(
   audience: Audience,
   studentId: string | null,
   schoolName?: string | null,
+  studentGrade?: string | null,
 ): Promise<string> {
   let system = profile.systemPrompt(subject, audience);
   if (schoolName) {
@@ -104,6 +106,9 @@ async function buildAgentSystem(
     // 튜터링 에이전트 + 식별된 학생: 강약점·진도 프로필 주입 → 약한 유형 우선 출제
     const memories = await loadMemories(studentId);
     system += formatLearningMemories(memories);
+  }
+  if (audience === 'student') {
+    system += buildStudentStyleOverlay(studentGrade ?? null);
   }
   return system;
 }
@@ -162,6 +167,8 @@ export async function runAgentTools(args: {
   history?: Anthropic.MessageParam[];
   /** Specialist that produced the last assistant turn (sticky routing). */
   lastAgent?: AgentId | null;
+  /** 학생 학년 — 학생 모드 말투 오버레이에 주입. */
+  studentGrade?: string | null;
 }): Promise<{
   ctx: AgentContext;
   augmentedMessage: string;
@@ -210,6 +217,7 @@ export async function runAgentTools(args: {
     audience,
     args.studentId,
     school.schoolName,
+    args.studentGrade,
   );
 
   const first = await client.messages.create({
@@ -305,6 +313,8 @@ export async function* streamWrapup(args: {
   studentId?: string | null;
   schoolName?: string | null;
   history?: Anthropic.MessageParam[];
+  /** 학생 학년 — 학생 모드 말투 오버레이에 주입. */
+  studentGrade?: string | null;
 }): AsyncGenerator<string, void, void> {
   const audience: Audience = args.audience ?? 'teacher';
   const subject = args.subject ?? '학습';
@@ -315,6 +325,7 @@ export async function* streamWrapup(args: {
     audience,
     args.studentId ?? null,
     args.schoolName ?? null,
+    args.studentGrade,
   );
 
   if (args.toolResults.length === 0) {
@@ -361,6 +372,7 @@ export async function runAgent(args: {
   schoolId?: string | null;
   history?: Anthropic.MessageParam[];
   lastAgent?: AgentId | null;
+  studentGrade?: string | null;
 }): Promise<AgentReply> {
   const { augmentedMessage, toolResults, citations, directText, profile, agent } =
     await runAgentTools(args);
@@ -374,6 +386,7 @@ export async function runAgent(args: {
     audience: args.audience,
     studentId: args.studentId,
     history: args.history,
+    studentGrade: args.studentGrade,
   })) {
     text += chunk;
   }
