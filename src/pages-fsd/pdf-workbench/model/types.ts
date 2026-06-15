@@ -14,18 +14,21 @@ export type OcrProblem = {
 export type ChunkValue = { category: string | null; topic: string; text: string };
 
 /** 박스 ↔ 부속 PDF 답 영역 연결 (rect는 페이지 비율 0–1 정규화). */
-export type AnswerRef = { attachmentId: string; page: number; rect: BoxRect };
+export type AnswerRef = { id: string; attachmentId: string; page: number; rect: BoxRect };
 
 export type BoxPayload = {
   problem?: WorkbenchProblemValue;
   chunk?: ChunkValue;
-  answerRef?: AnswerRef;
+  /** 여러 영역(다대일) 답 연결. */
+  answerRefs?: AnswerRef[];
+  /** @deprecated 레거시 단일 연결 — fromServerBox에서 배열로 정규화. */
+  answerRef?: Omit<AnswerRef, 'id'> & { id?: string };
 };
 
 export type BoxData = WorkBox & {
   problem: WorkbenchProblemValue;
   chunk: ChunkValue;
-  answerRef: AnswerRef | null;
+  answerRefs: AnswerRef[];
 };
 
 export type Attachment = { id: string; title: string; url: string; rotation: number };

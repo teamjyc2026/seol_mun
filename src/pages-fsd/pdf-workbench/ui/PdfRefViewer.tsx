@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Loader2, RotateCcw, RotateCw, ScanText } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-
-type Rect = { x: number; y: number; w: number; h: number };
+import { HANDLES, selectionReducer, type Pt, type Rect } from '../lib/dragSelection';
 
 export type RefGrab = {
   /** base64 PNG (데이터URL 헤더 제외) */
@@ -26,7 +25,7 @@ export function PdfRefViewer({
   grabbing,
   onGrab,
   onRotate,
-  linkedRef,
+  linkedRefs = [],
 }: {
   doc: PDFDocumentProxy;
   /** PDF 회전 (0/90/180/270). */
@@ -36,8 +35,8 @@ export function PdfRefViewer({
   onGrab: (grab: RefGrab) => void;
   /** 90° 회전 (좌/우). */
   onRotate?: (delta: 90 | -90) => void;
-  /** 선택된 박스의 저장된 답 영역 (현재 열린 부속 PDF 대상일 때만) */
-  linkedRef?: { page: number; rect: Rect } | null;
+  /** 선택된 박스의 저장된 답 영역들 (현재 열린 부속 PDF 대상, 다대일) */
+  linkedRefs?: { id: string; page: number; rect: Rect }[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -45,10 +44,9 @@ export function PdfRefViewer({
   const [rendering, setRendering] = useState(false);
   const [ratio, setRatio] = useState(1);
   const [pageSize, setPageSize] = useState<{ w: number; h: number } | null>(null);
-  const [drag, setDrag] = useState<{ start: { x: number; y: number }; rect: Rect } | null>(
-    null,
-  );
-  const [rect, setRect] = useState<Rect | null>(null);
+  const [sel, dispatch] = useReducer(selectionReducer, { drag: null, rect: null });
+  const drag = sel.drag;
+  const rect = sel.rect;
 
   useEffect(() => {
     let cancelled = false;
@@ -91,17 +89,29 @@ export function PdfRefViewer({
 
   /** 페이지 이동 — 드래그 선택은 페이지에 종속이라 함께 초기화. */
   function goPage(n: number) {
-    setRect(null);
-    setDrag(null);
+    dispatch({ type: 'clear' });
     setPageNum(n);
   }
 
-  function pos(e: React.MouseEvent): { x: number; y: number } {
+  function pos(e: React.MouseEvent): Pt {
     const box = wrapRef.current!.getBoundingClientRect();
     return {
       x: Math.min(Math.max(e.clientX - box.left, 0), box.width) * ratio,
       y: Math.min(Math.max(e.clientY - box.top, 0), box.height) * ratio,
     };
+  }
+
+  function bound(): { w: number; h: number } {
+    const c = canvasRef.current;
+    return { w: c?.width ?? 0, h: c?.height ?? 0 };
+  }
+
+  function onMouseMove(e: React.MouseEvent) {
+    if (drag) dispatch({ type: 'drag', p: pos(e), bound: bound() });
+  }
+
+  function onMouseUp() {
+    if (drag) dispatch({ type: 'end' });
   }
 
   function grab() {
@@ -163,23 +173,25 @@ export function PdfRefViewer({
         >
           <ChevronRight className="h-4 w-4" />
         </button>
-        {linkedRef && linkedRef.page !== pageNum && (
-          <button
-            type="button"
-            onClick={() => goPage(linkedRef.page)}
-            className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
-          >
-            연결 p.{linkedRef.page} 보기
-          </button>
-        )}
+        {Array.from(new Set(linkedRefs.filter((l) => l.page !== pageNum).map((l) => l.page)))
+          .sort((a, b) => a - b)
+          .map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => goPage(p)}
+              className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-medium text-indigo-700 hover:bg-indigo-100"
+            >
+              연결 p.{p}
+            </button>
+          ))}
         {onRotate && (
           <>
             <span className="mx-0.5 h-4 w-px bg-zinc-200" />
             <button
               type="button"
               onClick={() => {
-                setRect(null);
-                setDrag(null);
+                dispatch({ type: 'clear' });
                 onRotate(-90);
               }}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
@@ -190,8 +202,7 @@ export function PdfRefViewer({
             <button
               type="button"
               onClick={() => {
-                setRect(null);
-                setDrag(null);
+                dispatch({ type: 'clear' });
                 onRotate(90);
               }}
               className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
@@ -220,31 +231,11 @@ export function PdfRefViewer({
         className="relative inline-block max-w-full cursor-crosshair select-none"
         onMouseDown={(e) => {
           if (e.button !== 0) return;
-          const p = pos(e);
-          setDrag({ start: p, rect: { x: p.x, y: p.y, w: 0, h: 0 } });
-          setRect(null);
+          dispatch({ type: 'createStart', p: pos(e) });
         }}
-        onMouseMove={(e) => {
-          if (!drag) return;
-          const p = pos(e);
-          setDrag({
-            start: drag.start,
-            rect: {
-              x: Math.min(drag.start.x, p.x),
-              y: Math.min(drag.start.y, p.y),
-              w: Math.abs(p.x - drag.start.x),
-              h: Math.abs(p.y - drag.start.y),
-            },
-          });
-        }}
-        onMouseUp={() => {
-          if (drag) setRect(drag.rect.w >= 8 ? drag.rect : null);
-          setDrag(null);
-        }}
-        onMouseLeave={() => {
-          if (drag) setRect(drag.rect.w >= 8 ? drag.rect : null);
-          setDrag(null);
-        }}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+        onMouseLeave={onMouseUp}
       >
         <canvas
           ref={canvasRef}
@@ -256,18 +247,46 @@ export function PdfRefViewer({
             <Loader2 className="h-6 w-6 animate-spin text-zinc-400" />
           </div>
         )}
-        {linkedRef && linkedRef.page === pageNum && !rendering && (
-          <div
-            data-answer-link
-            className="absolute border-2 border-indigo-500 bg-indigo-500/10"
-            style={normToDisplay(linkedRef.rect)}
-          />
-        )}
-        {(drag?.rect ?? rect) && (
+        {!rendering &&
+          linkedRefs
+            .filter((l) => l.page === pageNum)
+            .map((l) => (
+              <div
+                key={l.id}
+                data-answer-link
+                className="absolute border-2 border-indigo-500 bg-indigo-500/10"
+                style={normToDisplay(l.rect)}
+              />
+            ))}
+        {/* 드래그 중 라이브 미리보기 */}
+        {drag && (
           <div
             className="absolute border-2 border-emerald-500 bg-emerald-500/15"
-            style={toDisplay((drag?.rect ?? rect)!)}
+            style={toDisplay(drag.rect)}
           />
+        )}
+        {/* 확정된 선택 영역 — 끌어 옮기거나 모서리로 크기 조절 */}
+        {!drag && rect && (
+          <div
+            className="absolute cursor-move border-2 border-emerald-500 bg-emerald-500/15"
+            style={toDisplay(rect)}
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              dispatch({ type: 'moveStart', p: pos(e), rect });
+            }}
+          >
+            {HANDLES.map(({ h, cls, cursor }) => (
+              <span
+                key={h}
+                className={`absolute h-2.5 w-2.5 rounded-full border border-white bg-emerald-600 ${cls}`}
+                style={{ cursor }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'resizeStart', p: pos(e), handle: h, rect });
+                }}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>

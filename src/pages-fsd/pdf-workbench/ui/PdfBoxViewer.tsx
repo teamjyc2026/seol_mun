@@ -4,6 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Loader2, Sparkles, X } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { cn } from '@/shared/lib/cn';
+import {
+  HANDLES,
+  MIN_H,
+  MIN_W,
+  applyResize,
+  clampMove,
+  type Handle,
+  type Pt,
+} from '../lib/dragSelection';
 
 /** 박스 좌표는 캔버스 내부 픽셀 기준 (리사이즈와 무관). */
 export type BoxRect = { x: number; y: number; w: number; h: number };
@@ -37,55 +46,11 @@ const KIND_BADGE_CLASS: Record<BoxKind, string> = {
 };
 
 const RENDER_SCALE = 1.5;
-const MIN_W = 24;
-const MIN_H = 16;
-
-type Pt = { x: number; y: number };
-type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 type DragState =
   | { kind: 'create'; start: Pt; rect: BoxRect }
   | { kind: 'move'; id: string; startPos: Pt; orig: BoxRect; rect: BoxRect }
   | { kind: 'resize'; id: string; handle: Handle; startPos: Pt; orig: BoxRect; rect: BoxRect };
-
-const HANDLES: { h: Handle; cls: string; cursor: string }[] = [
-  { h: 'nw', cls: 'left-0 top-0 -translate-x-1/2 -translate-y-1/2', cursor: 'nwse-resize' },
-  { h: 'n', cls: 'left-1/2 top-0 -translate-x-1/2 -translate-y-1/2', cursor: 'ns-resize' },
-  { h: 'ne', cls: 'right-0 top-0 translate-x-1/2 -translate-y-1/2', cursor: 'nesw-resize' },
-  { h: 'e', cls: 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2', cursor: 'ew-resize' },
-  { h: 'se', cls: 'right-0 bottom-0 translate-x-1/2 translate-y-1/2', cursor: 'nwse-resize' },
-  { h: 's', cls: 'left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2', cursor: 'ns-resize' },
-  { h: 'sw', cls: 'left-0 bottom-0 -translate-x-1/2 translate-y-1/2', cursor: 'nesw-resize' },
-  { h: 'w', cls: 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2', cursor: 'ew-resize' },
-];
-
-/** 핸들 드래그 → orig에서 변을 이동, 캔버스 경계·최소 크기 클램프, 변 교차 방지. */
-function applyResize(
-  orig: BoxRect,
-  handle: Handle,
-  dx: number,
-  dy: number,
-  bound: { w: number; h: number },
-): BoxRect {
-  let left = orig.x;
-  let top = orig.y;
-  let right = orig.x + orig.w;
-  let bottom = orig.y + orig.h;
-  if (handle.includes('w')) left = Math.min(Math.max(0, orig.x + dx), right - MIN_W);
-  if (handle.includes('e'))
-    right = Math.max(Math.min(bound.w, orig.x + orig.w + dx), left + MIN_W);
-  if (handle.includes('n')) top = Math.min(Math.max(0, orig.y + dy), bottom - MIN_H);
-  if (handle.includes('s'))
-    bottom = Math.max(Math.min(bound.h, orig.y + orig.h + dy), top + MIN_H);
-  return { x: left, y: top, w: right - left, h: bottom - top };
-}
-
-/** 이동 → 캔버스 경계 안으로 클램프. */
-function clampMove(orig: BoxRect, dx: number, dy: number, bound: { w: number; h: number }): BoxRect {
-  const x = Math.min(Math.max(0, orig.x + dx), Math.max(0, bound.w - orig.w));
-  const y = Math.min(Math.max(0, orig.y + dy), Math.max(0, bound.h - orig.h));
-  return { x, y, w: orig.w, h: orig.h };
-}
 
 export function PdfBoxViewer({
   doc,
@@ -210,6 +175,7 @@ export function PdfBoxViewer({
         p.x - drag.startPos.x,
         p.y - drag.startPos.y,
         bound(),
+        { w: MIN_W, h: MIN_H },
       );
       setDrag({ ...drag, rect });
     }

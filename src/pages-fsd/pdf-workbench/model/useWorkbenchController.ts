@@ -13,6 +13,7 @@ import type { RefGrab } from '../ui/PdfRefViewer';
 import { useWorkbenchStore } from './store';
 import { loadPdfFromUrl } from './loadPdf';
 import type {
+  AnswerRef,
   Attachment,
   BoxData,
   BoxPayload,
@@ -24,23 +25,30 @@ import type {
 } from './types';
 
 function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
+  // 레거시 단일 answerRef → 배열로 정규화.
+  const answerRefs: AnswerRef[] = b.payload.answerRefs
+    ? b.payload.answerRefs
+    : b.payload.answerRef
+      ? [{ id: b.payload.answerRef.id ?? crypto.randomUUID(), ...b.payload.answerRef }]
+      : [];
   return {
     id: b.id,
     page: b.page,
     rect: b.rect,
     kind: b.kind,
     status: b.status === 'ocr' ? 'ready' : b.status,
-    problem: b.payload.problem ?? emptyProblemValue(),
+    // 이전 박스엔 passage_translation 등 새 필드가 없을 수 있어 기본값과 병합.
+    problem: { ...emptyProblemValue(), ...(b.payload.problem ?? {}) },
     chunk: b.payload.chunk ?? { category: null, topic: '', text: '' },
-    answerRef: b.payload.answerRef ?? null,
+    answerRefs,
   };
 }
 
 function toServerPayload(b: BoxData): BoxPayload {
   const base: BoxPayload =
     b.kind === 'problem' ? { problem: b.problem } : { chunk: b.chunk };
-  // answerRef를 빠뜨리면 디바운스 PATCH가 저장된 링크를 지워버린다
-  return b.answerRef ? { ...base, answerRef: b.answerRef } : base;
+  // answerRefs를 빠뜨리면 디바운스 PATCH가 저장된 링크를 지워버린다
+  return b.answerRefs.length ? { ...base, answerRefs: b.answerRefs } : base;
 }
 
 type TokenUsage = { input: number; output: number };
@@ -487,7 +495,7 @@ export function useWorkbenchController() {
       status: 'idle',
       problem: emptyProblemValue(),
       chunk: { category: null, topic: '', text: '' },
-      answerRef: null,
+      answerRefs: [],
     };
     st.addBox(base);
     st.setSelectedId(tempId);
@@ -552,6 +560,7 @@ export function useWorkbenchController() {
           difficulty: f.difficulty,
           problem_type: f.problem_type,
           passage: f.passage.trim() || null,
+          passage_translation: f.passage_translation.trim() || null,
           question: f.question,
           choices:
             f.problem_type === 'objective' ? f.choices.filter((c) => c.text.trim()) : null,
@@ -631,15 +640,18 @@ export function useWorkbenchController() {
     st.setAttachments(
       st.attachments.map((a) => (a.id === attId ? { ...a, rotation: newRot } : a)),
     );
-    // 이 부속을 가리키는 박스 답 링크(정규화 rect)도 함께 회전.
+    // 이 부속을 가리키는 박스 답 링크(정규화 rect)들도 함께 회전.
+    const rot = (r: { x: number; y: number; w: number; h: number }) =>
+      delta === 90
+        ? { x: 1 - (r.y + r.h), y: r.x, w: r.h, h: r.w }
+        : { x: r.y, y: 1 - (r.x + r.w), w: r.h, h: r.w };
     for (const b of st.boxes) {
-      if (b.answerRef?.attachmentId !== attId) continue;
-      const r = b.answerRef.rect;
-      const rect =
-        delta === 90
-          ? { x: 1 - (r.y + r.h), y: r.x, w: r.h, h: r.w }
-          : { x: r.y, y: 1 - (r.x + r.w), w: r.h, h: r.w };
-      patchBox(b.id, { answerRef: { ...b.answerRef, rect } });
+      if (!b.answerRefs.some((a) => a.attachmentId === attId)) continue;
+      patchBox(b.id, {
+        answerRefs: b.answerRefs.map((a) =>
+          a.attachmentId === attId ? { ...a, rect: rot(a.rect) } : a,
+        ),
+      });
     }
     if (st.jobId) {
       void api
@@ -692,16 +704,17 @@ export function useWorkbenchController() {
     if (!confirm(`'${att.title}' 부속 PDF를 삭제할까요? (연결된 답 표시도 함께 지워져요)`))
       return;
     try {
-      const { data } = await api.delete<{ ok: boolean; clearedBoxIds: string[] }>(
-        `/agent/workbench/${jobId}/attachments/${att.id}`,
-      );
+      await api
+        .delete(`/agent/workbench/${jobId}/attachments/${att.id}`)
+        .catch(() => {});
       const st = useWorkbenchStore.getState();
       st.removeAttachment(att.id);
       refDocCache.current.delete(att.id);
-      const cleared = new Set(data.clearedBoxIds);
-      st.setBoxes(
-        st.boxes.map((b) => (cleared.has(b.id) ? { ...b, answerRef: null } : b)),
-      );
+      // 이 부속을 가리키던 답 연결만 제거(다대일) + 영속.
+      for (const b of st.boxes) {
+        if (!b.answerRefs.some((a) => a.attachmentId === att.id)) continue;
+        patchBox(b.id, { answerRefs: b.answerRefs.filter((a) => a.attachmentId !== att.id) });
+      }
       if (st.refSel?.type === 'attachment' && st.refSel.id === att.id) st.clearRef();
     } catch {
       toast.error('부속 PDF 삭제 실패');
@@ -716,10 +729,13 @@ export function useWorkbenchController() {
       toast.error('먼저 왼쪽에서 문제 박스를 선택하세요.');
       return;
     }
-    // 드래그 자체가 "이 영역이 이 문제의 답"이라는 의미 — OCR 결과와 무관하게 연결 저장
+    // 드래그 자체가 "이 영역이 이 문제의 답"이라는 의미 — OCR 결과와 무관하게 연결 추가(다대일)
     if (st.refSel?.type === 'attachment') {
       patchBox(selected.id, {
-        answerRef: { attachmentId: st.refSel.id, page: grab.page, rect: grab.rect },
+        answerRefs: [
+          ...selected.answerRefs,
+          { id: crypto.randomUUID(), attachmentId: st.refSel.id, page: grab.page, rect: grab.rect },
+        ],
       });
     }
     st.setGrabbing(true);
@@ -734,34 +750,50 @@ export function useWorkbenchController() {
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
-      const { answer, explanation, usage } = (await res.json()) as {
+      const { answer, explanation, passage_translation, usage } = (await res.json()) as {
         answer?: string;
         explanation?: string;
+        passage_translation?: string;
         usage?: TokenUsage;
       };
       reportUsage('정답·해설', usage);
-      if (!answer && !explanation) {
+      if (!answer && !explanation && !passage_translation) {
         toast.info('영역에서 정답·해설을 찾지 못했어요.');
         return;
       }
-      // 최신 problem 위에 병합 (answerRef 저장 후 상태가 바뀌었을 수 있음)
+      // 최신 problem 위에 병합. 해설·지문해석은 여러 영역이라 이어붙여 누적.
       const cur =
         useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id) ?? selected;
+      const join = (prev: string, add?: string) =>
+        add ? (prev.trim() ? `${prev.trim()}\n\n${add}` : add) : prev;
       patchBox(selected.id, {
         problem: {
           ...cur.problem,
-          answer: answer || cur.problem.answer,
-          explanation: explanation || cur.problem.explanation,
+          answer: cur.problem.answer || answer || '', // 정답은 비었을 때만
+          explanation: join(cur.problem.explanation, explanation),
+          passage_translation: join(cur.problem.passage_translation, passage_translation),
         },
       });
       toast.success(
-        `가져옴 — ${answer ? `정답 ${answer}` : ''}${answer && explanation ? ' + ' : ''}${explanation ? '해설' : ''}`,
+        `가져옴 — ${[answer ? `정답 ${answer}` : '', explanation ? '해설' : '', passage_translation ? '지문해석' : ''].filter(Boolean).join(' + ')}`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '인식 실패');
     } finally {
       useWorkbenchStore.getState().setGrabbing(false);
     }
+  }
+
+  /** 답 연결 1개 해제 (텍스트는 그대로 둠). */
+  function removeAnswerRef(boxId: string, refId: string) {
+    const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+    if (!box) return;
+    patchBox(boxId, { answerRefs: box.answerRefs.filter((a) => a.id !== refId) });
+  }
+
+  /** 답 연결 전체 해제. */
+  function clearAnswerRefs(boxId: string) {
+    patchBox(boxId, { answerRefs: [] });
   }
 
   return {
@@ -796,5 +828,7 @@ export function useWorkbenchController() {
     addAttachment,
     deleteAttachment,
     grabAnswer,
+    removeAnswerRef,
+    clearAnswerRefs,
   };
 }

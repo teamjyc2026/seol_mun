@@ -35,6 +35,8 @@ export type Problem = {
   problem_type: ProblemType | null;
   /** shared passage / reading text when multiple problems share one source text */
   passage: string | null;
+  /** 지문 해석 (한국어 번역/해석) — 해설과 별개 필드 */
+  passage_translation?: string | null;
   /** uuid grouping problems that share the same passage */
   passage_set_id: string | null;
   question: string;

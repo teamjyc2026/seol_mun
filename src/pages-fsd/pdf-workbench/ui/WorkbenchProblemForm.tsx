@@ -11,6 +11,8 @@ export type WorkbenchProblemValue = {
   category: string | null;
   topic: string;
   passage: string;
+  /** 지문 해석 (영어 지문의 한국어 해석 등) — 해설과 별개 필드. */
+  passage_translation: string;
   question: string;
   choices: ProblemChoice[];
   answer: string;
@@ -24,6 +26,7 @@ export function emptyProblemValue(): WorkbenchProblemValue {
     category: null,
     topic: '',
     passage: '',
+    passage_translation: '',
     question: '',
     choices: [
       { label: '①', text: '' },
@@ -135,6 +138,17 @@ export function WorkbenchProblemForm({
           onChange={(e) => set('passage', e.target.value)}
           rows={5}
           placeholder="지문/제시문 — 없으면 비워두세요"
+          className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-zinc-700">지문 해석 (선택)</label>
+        <textarea
+          value={value.passage_translation}
+          onChange={(e) => set('passage_translation', e.target.value)}
+          rows={4}
+          placeholder="지문의 한국어 해석 — 해설지에서 가져오거나 직접 기입"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
       </div>

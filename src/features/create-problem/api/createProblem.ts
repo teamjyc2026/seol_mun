@@ -7,6 +7,7 @@ export type CreateProblemInput = {
   difficulty?: 'easy' | 'medium' | 'hard' | null;
   problem_type?: 'objective' | 'short' | 'long' | null;
   passage?: string | null;
+  passage_translation?: string | null;
   question: string;
   choices?: ProblemChoice[] | null;
   answer: string;

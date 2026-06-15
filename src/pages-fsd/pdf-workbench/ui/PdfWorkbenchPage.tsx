@@ -90,6 +90,8 @@ export function PdfWorkbenchPage() {
     addAttachment,
     deleteAttachment,
     grabAnswer,
+    removeAnswerRef,
+    clearAnswerRefs,
   } = useWorkbenchController();
 
   const s = useWorkbenchStore(
@@ -161,13 +163,13 @@ export function PdfWorkbenchPage() {
 
   const selected = s.boxes.find((b) => b.id === s.selectedId) ?? null;
   const refSel = s.refSel;
-  /** 선택된 박스의 링크가 현재 열린 부속 PDF를 가리킬 때만 보조 뷰어에 표시. */
-  const linkedRef =
-    selected?.answerRef &&
-    refSel?.type === 'attachment' &&
-    selected.answerRef.attachmentId === refSel.id
-      ? { page: selected.answerRef.page, rect: selected.answerRef.rect }
-      : null;
+  /** 선택 박스의 답 연결 중 현재 열린 부속 PDF 대상인 것들 (다대일). */
+  const linkedRefs =
+    selected && refSel?.type === 'attachment'
+      ? selected.answerRefs
+          .filter((a) => a.attachmentId === refSel.id)
+          .map((a) => ({ id: a.id, page: a.page, rect: a.rect }))
+      : [];
   /** 보조 뷰어 회전 — 부속이면 그 부속의 값, 같은 PDF면 본 작업 회전. */
   const refRotation =
     refSel?.type === 'attachment'
@@ -842,7 +844,7 @@ export function PdfWorkbenchPage() {
       >
         <ConnectionLine
           containerRef={containerRef}
-          active={!!linkedRef && !!s.refDoc}
+          active={linkedRefs.length > 0 && !!s.refDoc}
           fromSelector={`[data-box-id="${s.selectedId}"]`}
           toSelector="[data-answer-link]"
         />
@@ -927,7 +929,7 @@ export function PdfWorkbenchPage() {
               grabLabel="→ 정답·해설 가져오기"
               onGrab={(g) => void grabAnswer(g)}
               onRotate={(d) => void rotateRef(d)}
-              linkedRef={linkedRef}
+              linkedRefs={linkedRefs}
             />
           </section>
         )}
@@ -1014,22 +1016,35 @@ export function PdfWorkbenchPage() {
                 </div>
               </div>
 
-              {selected.kind === 'problem' && selected.answerRef && (
-                <div className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs text-indigo-700">
-                  <span>
-                    🔗 답안 연결됨 —{' '}
-                    {s.attachments.find((a) => a.id === selected.answerRef?.attachmentId)
-                      ?.title ?? '삭제된 부속'}{' '}
-                    p.{selected.answerRef.page}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => patchBox(selected.id, { answerRef: null })}
-                    className="rounded px-1.5 py-0.5 font-medium hover:bg-indigo-100"
-                    title="연결 해제"
-                  >
-                    해제
-                  </button>
+              {selected.kind === 'problem' && selected.answerRefs.length > 0 && (
+                <div className="space-y-1 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">🔗 답안 연결 {selected.answerRefs.length}곳</span>
+                    <button
+                      type="button"
+                      onClick={() => clearAnswerRefs(selected.id)}
+                      className="rounded px-1.5 py-0.5 font-medium hover:bg-indigo-100"
+                    >
+                      전체 해제
+                    </button>
+                  </div>
+                  {selected.answerRefs.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between gap-1">
+                      <span className="truncate">
+                        {s.attachments.find((x) => x.id === a.attachmentId)?.title ??
+                          '삭제된 부속'}{' '}
+                        · p.{a.page}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeAnswerRef(selected.id, a.id)}
+                        className="shrink-0 rounded px-1.5 py-0.5 hover:bg-indigo-100"
+                        title="이 연결 해제"
+                      >
+                        해제
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
