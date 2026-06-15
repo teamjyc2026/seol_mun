@@ -1201,9 +1201,12 @@ export function PdfWorkbenchPage() {
                     onClick={() => void reocrSelected()}
                     disabled={selected.id.startsWith('temp-')}
                     className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
-                    title="영역을 수정한 뒤 이 영역을 다시 인식"
+                    title="왼쪽 본문에서 이 박스(문제) 영역을 다시 인식 — 발문·보기 등"
                   >
-                    <ScanText className="h-3.5 w-3.5 shrink-0" /> 다시 인식
+                    <ScanText className="h-3.5 w-3.5 shrink-0" />{' '}
+                    {selected.kind === 'problem' || selected.kind === 'problemset'
+                      ? '문제 다시 인식'
+                      : '내용 다시 인식'}
                   </button>
                   <button
                     type="button"
@@ -1270,9 +1273,9 @@ export function PdfWorkbenchPage() {
                           {s.grabbing ? (
                             <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                           ) : (
-                            <ScanText className="h-3.5 w-3.5 shrink-0" />
+                            <RefreshCw className="h-3.5 w-3.5 shrink-0" />
                           )}
-                          다시 스캔
+                          해설 다시 스캔
                         </button>
                         <button
                           type="button"

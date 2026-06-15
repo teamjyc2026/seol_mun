@@ -793,18 +793,14 @@ export function useWorkbenchController() {
         });
 
         if (f.extra.length > 0) {
-          // 지문 세트 — 기존 저장분 삭제 후 한 지문 + 여러 문제로 재생성.
-          if (!f.passage.trim()) {
-            toast.error('세트는 공유 지문이 필요해요. (지문 입력)');
-            return;
-          }
+          // 세트 — 기존 저장분 삭제 후 (공유 지문은 선택) 여러 문제로 재생성.
           for (const id of selected.savedRefs) {
             await api.delete(`/agent/problems/${id}`).catch(() => {});
           }
           const r = await createProblemSet({
             subject: source.subject as Subject,
             subjects: [source.subject as Subject],
-            passage: f.passage.trim(),
+            passage: f.passage.trim() || undefined,
             shared: { topic: f.topic || null },
             problems: allSubs.map((sub, i) => subBody(sub, i === 0)),
           });

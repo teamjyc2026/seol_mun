@@ -18,7 +18,8 @@ export type ProblemSetSubProblem = {
 export type CreateProblemSetInput = {
   subject?: Subject;
   subjects?: Subject[];
-  passage: string;
+  /** 공유 지문 (선택 — 지문 없이 문제만 묶는 세트도 가능). */
+  passage?: string;
   shared?: {
     topic?: string | null;
     difficulty?: 'easy' | 'medium' | 'hard' | null;

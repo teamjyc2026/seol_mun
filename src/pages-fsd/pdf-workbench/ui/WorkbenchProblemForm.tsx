@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, RefreshCw, ScanText, X } from 'lucide-react';
+import { Check, Plus, RefreshCw, ScanText, X } from 'lucide-react';
 import type { ProblemFigure } from '@/entities/problem';
 import { cn } from '@/shared/lib/cn';
 import { RichTextHelp, RichTextPreview } from '@/shared/ui/RichText';
@@ -99,8 +99,8 @@ export function WorkbenchProblemForm({
             : 'border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50',
         )}
       >
-        <ScanText className="h-3 w-3" />
-        {activeChild === idx ? '✓ 여기로 받기' : '이 문제로 받기'}
+        {activeChild === idx ? <Check className="h-3 w-3" /> : <ScanText className="h-3 w-3" />}
+        {activeChild === idx ? '선택됨' : '이 문제로 받기'}
       </button>
     );
 

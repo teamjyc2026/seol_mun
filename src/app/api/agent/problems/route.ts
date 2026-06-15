@@ -66,7 +66,8 @@ const createSchema = z.object({
 const createSetSchema = z.object({
   subject: z.string().min(1).max(50).default('국사'),
   subjects: z.array(z.string().min(1).max(50)).max(20).optional(),
-  passage: z.string().min(1).max(20000),
+  // 공유 지문은 선택 — 지문 없이 문제만 묶는 세트(어법 등)도 허용.
+  passage: z.string().max(20000).optional(),
   shared: z
     .object({
       topic: z.string().max(100).nullable().optional(),
@@ -178,7 +179,7 @@ export async function PUT(req: NextRequest) {
   const rows = body.problems.map((p) => ({
     subject: body.subject,
     subjects,
-    passage: body.passage,
+    passage: body.passage?.trim() ? body.passage : null,
     passage_set_id: passageSetId,
     topic: p.topic ?? shared.topic ?? null,
     difficulty: p.difficulty ?? shared.difficulty ?? null,
