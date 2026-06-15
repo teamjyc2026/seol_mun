@@ -43,7 +43,6 @@ export const TOPIC_TAXONOMY: Record<string, TopicCategory[]> = {
         '문장삽입',
         '함의추론',
         '요약문',
-        '어법(밑줄)',
         '심경/분위기',
       ],
     },
