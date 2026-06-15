@@ -790,31 +790,7 @@ export function PdfWorkbenchPage() {
         })()}
 
         <div className="ml-auto flex flex-wrap items-center gap-1">
-          <span className="mr-1 text-xs text-zinc-500">새 박스:</span>
-          {(Object.keys(KIND_LABEL) as BoxKind[]).map((k) => {
-            const Icon = KIND_ICON[k];
-            const active = s.drawKind === k;
-            return (
-              <button
-                key={k}
-                type="button"
-                onClick={() => s.setDrawKind(k)}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition',
-                  active
-                    ? k === 'problem'
-                      ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                      : k === 'concept'
-                        ? 'border-amber-500 bg-amber-50 text-amber-700'
-                        : 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                    : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
-                )}
-              >
-                <Icon className="h-3.5 w-3.5" /> {KIND_LABEL[k]}
-              </button>
-            );
-          })}
-          <span className="mx-1 h-4 w-px bg-zinc-200" />
+          <span className="mr-1 text-xs text-zinc-500">보조 뷰어:</span>
           <button
             type="button"
             onClick={() => toggleSameRef()}
@@ -946,19 +922,46 @@ export function PdfWorkbenchPage() {
               {s.rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
             </button>
             <span className="mx-1 h-4 w-px bg-zinc-200" />
-            <button
-              type="button"
-              onClick={() => s.setFigureCapture(!s.figureCapture)}
-              className={cn(
-                'inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-2 py-1.5 text-xs font-medium transition',
-                s.figureCapture
-                  ? 'border-violet-500 bg-violet-50 text-violet-700'
-                  : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
-              )}
-              title="켜고 본문 영역을 드래그하면 선택한 문제의 그림으로 캡처돼요"
-            >
-              <Scissors className="h-3.5 w-3.5 shrink-0" /> 그림 캡처
-            </button>
+            {/* 좌측 모드 세그먼트 — 우측 보조뷰어(정답·해설/그림)와 일관된 형태 */}
+            <div className="flex rounded-md border border-zinc-200 p-0.5">
+              {(Object.keys(KIND_LABEL) as BoxKind[]).map((k) => {
+                const Icon = KIND_ICON[k];
+                const active = !s.figureCapture && s.drawKind === k;
+                const activeCls =
+                  k === 'problem'
+                    ? 'bg-indigo-600 text-white'
+                    : k === 'concept'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-emerald-600 text-white';
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => {
+                      s.setFigureCapture(false);
+                      s.setDrawKind(k);
+                    }}
+                    className={cn(
+                      'inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-[11px] font-medium transition',
+                      active ? activeCls : 'text-zinc-500 hover:bg-zinc-50',
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5 shrink-0" /> {KIND_LABEL[k]}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => s.setFigureCapture(true)}
+                title="본문 영역을 드래그해 선택한 문제의 그림으로 캡처"
+                className={cn(
+                  'inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-[11px] font-medium transition',
+                  s.figureCapture ? 'bg-violet-600 text-white' : 'text-zinc-500 hover:bg-zinc-50',
+                )}
+              >
+                <Scissors className="h-3.5 w-3.5 shrink-0" /> 그림
+              </button>
+            </div>
             {pageIdleCount > 0 && (
               <button
                 type="button"
@@ -1008,7 +1011,8 @@ export function PdfWorkbenchPage() {
               grabbing={s.grabbing}
               grabLabel="→ 정답·해설 가져오기"
               onGrab={(g) => void grabFromRef(g)}
-              onRotate={(d) => void rotateRef(d)}
+              onRotate={(d, p) => void rotateRef(d, p)}
+              rotating={s.rotating}
               linkedRefs={linkedRefs}
             />
           </section>

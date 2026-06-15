@@ -38,6 +38,7 @@ export function PdfRefViewer({
   grabbing,
   onGrab,
   onRotate,
+  rotating = false,
   linkedRefs = [],
 }: {
   doc: PDFDocumentProxy;
@@ -46,8 +47,10 @@ export function PdfRefViewer({
   grabLabel: string;
   grabbing: boolean;
   onGrab: (grab: RefGrab) => void;
-  /** 90° 회전 (좌/우). */
-  onRotate?: (delta: 90 | -90) => void;
+  /** 90° 회전 (좌/우) — 현재 보는 페이지를 함께 넘긴다(페이지별 회전). */
+  onRotate?: (delta: 90 | -90, page: number) => void;
+  /** 회전을 파일에 굽는 중 — 버튼 비활성. */
+  rotating?: boolean;
   /** 선택된 박스의 저장된 답 영역들 (현재 열린 부속 PDF 대상, 다대일) */
   linkedRefs?: { id: string; page: number; rect: Rect }[];
 }) {
@@ -207,25 +210,27 @@ export function PdfRefViewer({
             <span className="mx-0.5 h-4 w-px bg-zinc-200" />
             <button
               type="button"
+              disabled={rotating}
               onClick={() => {
                 dispatch({ type: 'clear' });
-                onRotate(-90);
+                onRotate(-90, pageNum);
               }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
-              title="왼쪽으로 90° 회전"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+              title="이 페이지만 왼쪽으로 90° 회전 (파일에 저장)"
             >
-              <RotateCcw className="h-4 w-4" />
+              {rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
             </button>
             <button
               type="button"
+              disabled={rotating}
               onClick={() => {
                 dispatch({ type: 'clear' });
-                onRotate(90);
+                onRotate(90, pageNum);
               }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
-              title="오른쪽으로 90° 회전"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+              title="이 페이지만 오른쪽으로 90° 회전 (파일에 저장)"
             >
-              <RotateCw className="h-4 w-4" />
+              {rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
             </button>
           </>
         )}

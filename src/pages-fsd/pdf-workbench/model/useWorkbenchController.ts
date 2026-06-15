@@ -252,10 +252,11 @@ export function useWorkbenchController() {
    * ① 박스 좌표를 새 방향으로 변환·저장 → ② 즉시 화면 회전(낙관적) →
    * ③ 서버가 파일을 회전해 덮어쓰고 → ④ 구운 PDF를 다시 받아 0° 기준으로 교체.
    */
-  async function rotateJob(delta: 90 | -90) {
+  async function rotateJob(delta: 90 | -90, page?: number) {
     if (rotatingRef.current) return;
     const st = useWorkbenchStore.getState();
-    const { jobId, doc, boxes, pageNum } = st;
+    const { jobId, doc, boxes } = st;
+    const pageNum = page ?? st.pageNum;
     if (!jobId || !doc) return;
     rotatingRef.current = true;
     st.setRotating(true);
@@ -704,38 +705,58 @@ export function useWorkbenchController() {
     st.setRefDoc(st.doc);
   }
 
-  /** 보조 뷰어 90° 회전 — 같은 PDF면 본 작업 회전, 부속이면 그 부속의 회전값 저장. */
-  async function rotateRef(delta: 90 | -90) {
+  /**
+   * 보조 뷰어 90° 회전 — 메인이든 부속(해설지)이든 **보는 페이지만** 파일에 구워
+   * 영속. refPage는 보조 뷰어의 현재 페이지.
+   */
+  async function rotateRef(delta: 90 | -90, refPage: number) {
     const st = useWorkbenchStore.getState();
     if (st.refSel?.type === 'same') {
-      await rotateJob(delta);
+      await rotateJob(delta, refPage);
       return;
     }
     if (st.refSel?.type !== 'attachment') return;
+    if (rotatingRef.current) return;
+    const { jobId } = st;
     const attId = st.refSel.id;
     const att = st.attachments.find((a) => a.id === attId);
-    if (!att) return;
-    const newRot = (((att.rotation + delta) % 360) + 360) % 360;
-    st.setAttachments(
-      st.attachments.map((a) => (a.id === attId ? { ...a, rotation: newRot } : a)),
-    );
-    // 이 부속을 가리키는 박스 답 링크(정규화 rect)들도 함께 회전.
+    if (!att || !jobId) return;
+    rotatingRef.current = true;
+    st.setRotating(true);
+    // 정규화 rect 90° 회전 (차원 무관).
     const rot = (r: { x: number; y: number; w: number; h: number }) =>
       delta === 90
         ? { x: 1 - (r.y + r.h), y: r.x, w: r.h, h: r.w }
         : { x: r.y, y: 1 - (r.x + r.w), w: r.h, h: r.w };
-    for (const b of st.boxes) {
-      if (!b.answerRefs.some((a) => a.attachmentId === attId)) continue;
-      patchBox(b.id, {
-        answerRefs: b.answerRefs.map((a) =>
-          a.attachmentId === attId ? { ...a, rect: rot(a.rect) } : a,
-        ),
-      });
-    }
-    if (st.jobId) {
-      void api
-        .patch(`/agent/workbench/${st.jobId}/attachments/${attId}`, { rotation: newRot })
-        .catch(() => {});
+    try {
+      // 서버에서 그 페이지를 굽는다(레거시 전체회전 att.rotation도 함께 마이그레이션).
+      const { data } = await api.post<{ pdfUrl: string }>(
+        `/agent/workbench/${jobId}/rotate`,
+        { delta, page: refPage, attachmentId: attId, baseRotation: att.rotation },
+      );
+      const reloaded = await loadPdfFromUrl(data.pdfUrl);
+      refDocCache.current.set(attId, reloaded);
+      const s2 = useWorkbenchStore.getState();
+      s2.setRefDoc(reloaded);
+      // 파일에 구웠으니 메타데이터 회전 0으로.
+      s2.setAttachments(
+        s2.attachments.map((a) => (a.id === attId ? { ...a, rotation: 0 } : a)),
+      );
+      // 이 부속의 **해당 페이지** 답 링크만 delta 회전(다른 페이지는 base가 구워져 그대로 정합).
+      for (const b of s2.boxes) {
+        if (!b.answerRefs.some((a) => a.attachmentId === attId && a.page === refPage)) continue;
+        patchBox(b.id, {
+          answerRefs: b.answerRefs.map((a) =>
+            a.attachmentId === attId && a.page === refPage ? { ...a, rect: rot(a.rect) } : a,
+          ),
+        });
+      }
+      toast.success('해설지 페이지를 회전해 파일에 저장했어요.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '해설지 회전 실패');
+    } finally {
+      rotatingRef.current = false;
+      useWorkbenchStore.getState().setRotating(false);
     }
   }
 
