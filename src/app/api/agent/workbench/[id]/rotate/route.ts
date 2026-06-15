@@ -17,17 +17,14 @@ const bodySchema = z.object({
   page: z.coerce.number().int().min(1),
   /** 부속(해설지) 회전이면 그 부속 id. 없으면 본 PDF. */
   attachmentId: z.string().uuid().optional(),
-  /**
-   * 레거시 전체회전(메타데이터) 마이그레이션: 0이 아니면 먼저 모든 페이지에
-   * 이 값을 구워 넣어 화면과 파일을 맞춘 뒤 page에 delta를 추가한다.
-   */
-  baseRotation: z.coerce.number().int().optional(),
+  /** true면 delta·page 무시하고 모든 페이지 회전을 0으로(잘못 구워진 파일 복구). */
+  reset: z.boolean().optional(),
 });
 
 /**
- * 본/부속 PDF의 **해당 페이지**를 delta(±90°)만큼 파일에 구워 다시 저장한다.
- * 페이지별 /Rotate에 누적, 같은 Storage 경로로 덮어쓰고(캐시 무효화) 새 서명
- * URL 반환. 회전 메타데이터는 0으로 리셋(파일에 영속).
+ * 본/부속 PDF의 **해당 페이지 하나만** delta(±90°)만큼 파일에 구워 저장한다.
+ * (reset이면 전 페이지 0으로.) 같은 Storage 경로로 덮어쓰고 회전된 PDF 바이트를
+ * 그대로 반환 → 클라가 즉시 로드(CDN 캐시 우회). 회전 메타데이터는 0으로 유지.
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
   if (!(await requireUploader())) {
@@ -83,17 +80,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
     const pages = pdf.getPages();
-    if (!pages[body.page - 1]) {
-      return NextResponse.json({ message: '없는 페이지예요.' }, { status: 400 });
+    if (body.reset) {
+      // 전 페이지 회전 0으로 (잘못 구워진 파일 복구).
+      pages.forEach((p) => {
+        if (p.getRotation().angle !== 0) p.setRotation(degrees(0));
+      });
+    } else {
+      const target = pages[body.page - 1];
+      if (!target) {
+        return NextResponse.json({ message: '없는 페이지예요.' }, { status: 400 });
+      }
+      const cur = target.getRotation().angle;
+      target.setRotation(degrees((((cur + body.delta) % 360) + 360) % 360));
     }
-    const base = ((((body.baseRotation ?? 0) % 360) + 360) % 360);
-    pages.forEach((p, i) => {
-      const extra = i === body.page - 1 ? body.delta : 0;
-      // 레거시 전체회전(base)을 모든 페이지에 굽고, 대상 페이지엔 delta 추가.
-      if (base === 0 && extra === 0) return;
-      const cur = p.getRotation().angle;
-      p.setRotation(degrees((((cur + base + extra) % 360) + 360) % 360));
-    });
     const out = await pdf.save();
 
     const { error: upErr } = await supabase.storage
@@ -118,12 +117,11 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         .eq('id', id);
     }
 
-    const { data: signed, error: sErr } = await supabase.storage
-      .from('sources')
-      .createSignedUrl(filePath, 60 * 60);
-    if (sErr || !signed) throw new Error(sErr?.message ?? '서명 URL 실패');
-
-    return NextResponse.json({ pdfUrl: signed.signedUrl });
+    // 덮어쓴 PDF 바이트를 그대로 반환 → 클라가 즉시 로드(CDN 캐시 우회).
+    return new NextResponse(Buffer.from(out), {
+      status: 200,
+      headers: { 'Content-Type': 'application/pdf', 'Cache-Control': 'no-store' },
+    });
   } catch (e) {
     return NextResponse.json(
       { message: e instanceof Error ? e.message : 'PDF 회전 실패' },

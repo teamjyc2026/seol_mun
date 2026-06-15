@@ -79,6 +79,7 @@ export function PdfWorkbenchPage() {
     patchBox,
     rotateJob,
     onCreate,
+    resetRotation,
     recognizeBox,
     recognizeIdleOnPage,
     reocrSelected,
@@ -921,12 +922,23 @@ export function PdfWorkbenchPage() {
             >
               {s.rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
             </button>
+            <button
+              type="button"
+              disabled={s.rotating}
+              onClick={() => void resetRotation('main')}
+              className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 px-2 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-40"
+              title="이 PDF의 모든 페이지 회전을 0°로 되돌림"
+            >
+              초기화
+            </button>
             <span className="mx-1 h-4 w-px bg-zinc-200" />
             {/* 좌측 모드 세그먼트 — 우측 보조뷰어(정답·해설/그림)와 일관된 형태 */}
             <div className="flex rounded-md border border-zinc-200 p-0.5">
               {(Object.keys(KIND_LABEL) as BoxKind[]).map((k) => {
                 const Icon = KIND_ICON[k];
-                const active = !s.figureCapture && s.drawKind === k;
+                // 박스 선택 시 그 박스 종류를 반영, 아니면 새 박스(drawKind).
+                const active =
+                  !s.figureCapture && (selected ? selected.kind === k : s.drawKind === k);
                 const activeCls =
                   k === 'problem'
                     ? 'bg-indigo-600 text-white'
@@ -940,6 +952,10 @@ export function PdfWorkbenchPage() {
                     onClick={() => {
                       s.setFigureCapture(false);
                       s.setDrawKind(k);
+                      // 선택된(미저장) 박스가 있으면 그 박스 종류를 바꿔 오른쪽 패널을 갱신.
+                      if (selected && selected.status !== 'saved') {
+                        patchBox(selected.id, { kind: k });
+                      }
                     }}
                     className={cn(
                       'inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-[11px] font-medium transition',
@@ -1012,6 +1028,7 @@ export function PdfWorkbenchPage() {
               grabLabel="→ 정답·해설 가져오기"
               onGrab={(g) => void grabFromRef(g)}
               onRotate={(d, p) => void rotateRef(d, p)}
+              onReset={() => void resetRotation('ref')}
               rotating={s.rotating}
               linkedRefs={linkedRefs}
             />
@@ -1067,18 +1084,6 @@ export function PdfWorkbenchPage() {
                   <span className="whitespace-nowrap">
                     p.{selected.page} · {KIND_LABEL[selected.kind]}
                   </span>
-                  <select
-                    value={selected.kind}
-                    onChange={(e) => patchBox(selected.id, { kind: e.target.value as BoxKind })}
-                    disabled={selected.status === 'saved'}
-                    className="rounded border border-zinc-200 bg-white px-1 py-0.5 text-[11px]"
-                  >
-                    {(Object.keys(KIND_LABEL) as BoxKind[]).map((k) => (
-                      <option key={k} value={k}>
-                        {KIND_LABEL[k]}
-                      </option>
-                    ))}
-                  </select>
                   <span className="truncate">
                     {selected.status === 'saved'
                       ? '저장됨 ✓'

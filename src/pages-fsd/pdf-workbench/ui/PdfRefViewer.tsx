@@ -38,6 +38,7 @@ export function PdfRefViewer({
   grabbing,
   onGrab,
   onRotate,
+  onReset,
   rotating = false,
   linkedRefs = [],
 }: {
@@ -49,6 +50,8 @@ export function PdfRefViewer({
   onGrab: (grab: RefGrab) => void;
   /** 90° 회전 (좌/우) — 현재 보는 페이지를 함께 넘긴다(페이지별 회전). */
   onRotate?: (delta: 90 | -90, page: number) => void;
+  /** 전 페이지 회전 0으로 초기화. */
+  onReset?: () => void;
   /** 회전을 파일에 굽는 중 — 버튼 비활성. */
   rotating?: boolean;
   /** 선택된 박스의 저장된 답 영역들 (현재 열린 부속 PDF 대상, 다대일) */
@@ -232,6 +235,17 @@ export function PdfRefViewer({
             >
               {rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
             </button>
+            {onReset && (
+              <button
+                type="button"
+                disabled={rotating}
+                onClick={onReset}
+                className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 px-2 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-40"
+                title="이 PDF의 모든 페이지 회전을 0°로 되돌림"
+              >
+                초기화
+              </button>
+            )}
           </>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1">

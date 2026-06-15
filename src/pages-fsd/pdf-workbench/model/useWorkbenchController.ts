@@ -12,7 +12,7 @@ import { KIND_LABEL } from '../ui/PdfBoxViewer';
 import { emptyProblemValue, type WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
 import type { RefGrab } from '../ui/PdfRefViewer';
 import { useWorkbenchStore } from './store';
-import { loadPdfFromUrl } from './loadPdf';
+import { loadPdfFromUrl, loadPdfFromBytes } from './loadPdf';
 import type {
   AnswerRef,
   Attachment,
@@ -260,45 +260,41 @@ export function useWorkbenchController() {
     if (!jobId || !doc) return;
     rotatingRef.current = true;
     st.setRotating(true);
-
-    // 보고 있는 페이지만 회전 — 그 페이지(0° 기준) 캔버스 크기로 박스를 변환.
-    const vp = (await doc.getPage(pageNum)).getViewport({ scale: 1.5, rotation: 0 });
-    const d = { w: vp.width, h: vp.height };
-    const rotated = boxes.map((b) => {
-      if (b.page !== pageNum) return b; // 다른 페이지는 그대로
-      const { x, y, w, h } = b.rect;
-      const rect =
-        delta === 90
-          ? { x: d.h - (y + h), y: x, w: h, h: w } // CW
-          : { x: y, y: d.w - (x + w), w: h, h: w }; // CCW
-      return { ...b, rect };
-    });
-
-    st.setBoxes(rotated);
-    // 낙관적 화면 회전(굽기 완료 전까지 기존 doc을 viewport로 돌려 보여준다).
-    st.setRotation(((delta % 360) + 360) % 360);
-
-    // 이 페이지 박스 rect만 영속 (temp 제외).
-    for (const b of rotated) {
-      if (b.page !== pageNum || b.id.startsWith('temp-')) continue;
-      void api
-        .patch(`/agent/workbench/${jobId}/boxes/${b.id}`, { rect: b.rect })
-        .catch(() => {});
-    }
-
     try {
-      // 서버에서 그 페이지를 회전해 덮어쓰고 새 서명 URL을 받는다.
-      const { data } = await api.post<{ pdfUrl: string }>(
+      // 보고 있는 페이지만 회전 — 그 페이지(0° 기준) 캔버스 크기로 박스를 변환.
+      const vp = (await doc.getPage(pageNum)).getViewport({ scale: 1.5, rotation: 0 });
+      const d = { w: vp.width, h: vp.height };
+      const rotated = boxes.map((b) => {
+        if (b.page !== pageNum) return b; // 다른 페이지는 그대로
+        const { x, y, w, h } = b.rect;
+        const rect =
+          delta === 90
+            ? { x: d.h - (y + h), y: x, w: h, h: w } // CW
+            : { x: y, y: d.w - (x + w), w: h, h: w }; // CCW
+        return { ...b, rect };
+      });
+      st.setBoxes(rotated);
+      // 낙관적 화면 회전(교체 전까지 기존 doc을 viewport로 돌려 보여준다).
+      st.setRotation(((delta % 360) + 360) % 360);
+      // 이 페이지 박스 rect만 영속 (temp 제외).
+      for (const b of rotated) {
+        if (b.page !== pageNum || b.id.startsWith('temp-')) continue;
+        void api
+          .patch(`/agent/workbench/${jobId}/boxes/${b.id}`, { rect: b.rect })
+          .catch(() => {});
+      }
+      // 서버에서 그 페이지를 회전해 굽고, 회전된 PDF 바이트를 바로 받아 교체(CDN 우회).
+      const { data } = await api.post<ArrayBuffer>(
         `/agent/workbench/${jobId}/rotate`,
         { delta, page: pageNum },
+        { responseType: 'arraybuffer' },
       );
-      const reloaded = await loadPdfFromUrl(data.pdfUrl);
+      const reloaded = await loadPdfFromBytes(data);
       const s2 = useWorkbenchStore.getState();
       s2.setDoc(reloaded);
       s2.setRotation(0);
-      // 보조 뷰어가 같은 PDF를 보고 있으면 함께 교체.
       if (s2.refSel?.type === 'same') s2.setRefDoc(reloaded);
-      toast.success('PDF를 회전해 원본 파일에 저장했어요.');
+      toast.success('이 페이지를 회전해 파일에 저장했어요.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'PDF 회전 저장 실패');
       void refreshBoxes();
@@ -729,20 +725,20 @@ export function useWorkbenchController() {
         ? { x: 1 - (r.y + r.h), y: r.x, w: r.h, h: r.w }
         : { x: r.y, y: 1 - (r.x + r.w), w: r.h, h: r.w };
     try {
-      // 서버에서 그 페이지를 굽는다(레거시 전체회전 att.rotation도 함께 마이그레이션).
-      const { data } = await api.post<{ pdfUrl: string }>(
+      // 그 부속의 **그 페이지 하나만** 굽고, 회전된 바이트를 바로 받아 교체(CDN 우회).
+      const { data } = await api.post<ArrayBuffer>(
         `/agent/workbench/${jobId}/rotate`,
-        { delta, page: refPage, attachmentId: attId, baseRotation: att.rotation },
+        { delta, page: refPage, attachmentId: attId },
+        { responseType: 'arraybuffer' },
       );
-      const reloaded = await loadPdfFromUrl(data.pdfUrl);
+      const reloaded = await loadPdfFromBytes(data);
       refDocCache.current.set(attId, reloaded);
       const s2 = useWorkbenchStore.getState();
       s2.setRefDoc(reloaded);
-      // 파일에 구웠으니 메타데이터 회전 0으로.
       s2.setAttachments(
         s2.attachments.map((a) => (a.id === attId ? { ...a, rotation: 0 } : a)),
       );
-      // 이 부속의 **해당 페이지** 답 링크만 delta 회전(다른 페이지는 base가 구워져 그대로 정합).
+      // 이 부속의 **해당 페이지** 답 링크만 회전.
       for (const b of s2.boxes) {
         if (!b.answerRefs.some((a) => a.attachmentId === attId && a.page === refPage)) continue;
         patchBox(b.id, {
@@ -751,9 +747,50 @@ export function useWorkbenchController() {
           ),
         });
       }
-      toast.success('해설지 페이지를 회전해 파일에 저장했어요.');
+      toast.success('해설지 이 페이지를 회전해 파일에 저장했어요.');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '해설지 회전 실패');
+    } finally {
+      rotatingRef.current = false;
+      useWorkbenchStore.getState().setRotating(false);
+    }
+  }
+
+  /**
+   * PDF 전 페이지 회전을 0으로 굽기 — 잘못 구워진 파일 복구.
+   * target='main'이면 본 PDF, 'ref'면 보조 뷰어가 보는 것(부속이면 그 부속, 같은 PDF면 본 PDF).
+   */
+  async function resetRotation(target: 'main' | 'ref' = 'ref') {
+    if (rotatingRef.current) return;
+    const st = useWorkbenchStore.getState();
+    const { jobId } = st;
+    if (!jobId) return;
+    const attId =
+      target === 'ref' && st.refSel?.type === 'attachment' ? st.refSel.id : null;
+    rotatingRef.current = true;
+    st.setRotating(true);
+    try {
+      const { data } = await api.post<ArrayBuffer>(
+        `/agent/workbench/${jobId}/rotate`,
+        { delta: 90, page: 1, reset: true, ...(attId ? { attachmentId: attId } : {}) },
+        { responseType: 'arraybuffer' },
+      );
+      const reloaded = await loadPdfFromBytes(data);
+      const s2 = useWorkbenchStore.getState();
+      if (attId) {
+        refDocCache.current.set(attId, reloaded);
+        s2.setRefDoc(reloaded);
+        s2.setAttachments(
+          s2.attachments.map((a) => (a.id === attId ? { ...a, rotation: 0 } : a)),
+        );
+      } else {
+        s2.setDoc(reloaded);
+        s2.setRotation(0);
+        if (s2.refSel?.type === 'same') s2.setRefDoc(reloaded);
+      }
+      toast.success('회전을 초기화했어요(전 페이지 0°). 필요한 페이지만 다시 돌려주세요.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '회전 초기화 실패');
     } finally {
       rotatingRef.current = false;
       useWorkbenchStore.getState().setRotating(false);
@@ -1141,6 +1178,7 @@ export function useWorkbenchController() {
     patchBox,
     rotateJob,
     onCreate,
+    resetRotation,
     recognizeBox,
     recognizeIdleOnPage,
     reocrSelected,
