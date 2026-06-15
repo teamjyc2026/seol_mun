@@ -1150,10 +1150,6 @@ export function useWorkbenchController() {
       toast.info('다시 스캔할 연결된 해설 영역이 없어요. (같은 PDF 연결은 대상 아님)');
       return;
     }
-    if (
-      !confirm('이 답안 영역을 다시 스캔할까요? 이 문제의 정답·해설이 새로 스캔한 내용으로 덮어써집니다.')
-    )
-      return;
     st.setGrabbing(true);
     try {
       const answers: string[] = [];
@@ -1190,19 +1186,25 @@ export function useWorkbenchController() {
       }
       const cur = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
       if (!cur) return;
-      const rescanAnswer = mapAnswer(
-        subProblemAt(cur.problem, childIdx),
-        answers.find((a) => a.trim()) ?? '',
-      );
+      const rescanRaw = answers.find((a) => a.trim()) ?? '';
+      // 빈 결과로 기존 정답·해설을 지우지 않는다 — 찾은 항목만 덮어쓴다.
+      if (!rescanRaw && explanations.length === 0 && translations.length === 0) {
+        toast.info('재스캔했지만 정답·해설을 못 찾았어요. 연결 영역을 조정해 보세요.');
+        return;
+      }
+      const targetSub = subProblemAt(cur.problem, childIdx);
       patchBox(boxId, {
         problem: applyAnswerToSub(
           cur.problem,
           childIdx,
-          { answer: rescanAnswer, explanation: explanations.join('\n\n') },
+          {
+            answer: rescanRaw ? mapAnswer(targetSub, rescanRaw) : targetSub.answer,
+            explanation: explanations.length ? explanations.join('\n\n') : targetSub.explanation,
+          },
           translations.length ? translations.join('\n\n') : cur.problem.passage_translation,
         ),
       });
-      toast.success(`해설 ${refs.length}곳 다시 스캔 완료`);
+      toast.success(`문제 ${childIdx + 1} 해설 다시 스캔 완료`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '재스캔 실패');
     } finally {

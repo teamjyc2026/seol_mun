@@ -1233,13 +1233,14 @@ export function PdfWorkbenchPage() {
                       <div className="flex flex-wrap items-center gap-1">
                         <span className="mr-0.5 font-medium">풀이 받을 문제:</span>
                         {Array.from({ length: childCount }).map((_, i) => {
-                          const n = selected.answerRefs.filter((a) => a.childIndex === i).length;
+                          const linked = selected.answerRefs.some((a) => a.childIndex === i);
                           const active = i === activeChildSafe;
                           return (
                             <button
                               key={i}
                               type="button"
                               onClick={() => setActiveChild(i)}
+                              title={linked ? '해설 연결됨' : '아직 해설 연결 없음'}
                               className={cn(
                                 'rounded-full border px-2 py-0.5 text-[11px] font-medium transition',
                                 active
@@ -1248,7 +1249,7 @@ export function PdfWorkbenchPage() {
                               )}
                             >
                               문제 {i + 1}
-                              {n > 0 ? ` · ${n}` : ''}
+                              {linked ? ' ✓' : ''}
                             </button>
                           );
                         })}
