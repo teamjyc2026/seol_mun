@@ -8,7 +8,8 @@ import {
   Loader2,
   RotateCcw,
   RotateCw,
-  ScanText,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import { cn } from '@/shared/lib/cn';
@@ -34,18 +35,17 @@ export type RefGrab = {
 export function PdfRefViewer({
   doc,
   pageRotations = {},
-  grabLabel,
   grabbing,
   onGrab,
   onRotate,
   onReset,
   linkedRefs = [],
   onUpdateLinkedRef,
+  onDeleteLinkedRef,
 }: {
   doc: PDFDocumentProxy;
   /** 페이지별 회전 맵(메타데이터). 현재 페이지 회전은 여기서 해석. */
   pageRotations?: Record<number, number>;
-  grabLabel: string;
   grabbing: boolean;
   onGrab: (grab: RefGrab) => void;
   /** 90° 회전 (좌/우) — 현재 보는 페이지를 함께 넘긴다(페이지별 회전). */
@@ -56,6 +56,8 @@ export function PdfRefViewer({
   linkedRefs?: { id: string; page: number; rect: Rect }[];
   /** 연결된 답 영역을 재선택·이동·리사이즈했을 때 (rect는 정규화 0–1). */
   onUpdateLinkedRef?: (refId: string, rect: Rect) => void;
+  /** 연결된 답 영역 삭제(연결 해제). */
+  onDeleteLinkedRef?: (refId: string) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -302,24 +304,6 @@ export function PdfRefViewer({
               그림
             </button>
           </div>
-          <button
-            type="button"
-            disabled={!rect || rect.w < 8 || grabbing}
-            onClick={grab}
-            className={cn(
-              'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40',
-              mode === 'figure' ? 'bg-violet-600' : 'bg-emerald-600',
-            )}
-          >
-            {grabbing ? (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-            ) : mode === 'figure' ? (
-              <ImagePlus className="h-3.5 w-3.5 shrink-0" />
-            ) : (
-              <ScanText className="h-3.5 w-3.5 shrink-0" />
-            )}
-            {mode === 'figure' ? '그림 가져오기' : grabLabel}
-          </button>
         </div>
       </div>
       <div
@@ -370,6 +354,19 @@ export function PdfRefViewer({
                     linkDispatch({ type: 'moveStart', id: l.id, p: pos(e), rect: normToPx(l.rect) });
                   }}
                 >
+                  {isSel && onDeleteLinkedRef && (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        onDeleteLinkedRef(l.id);
+                      }}
+                      className="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-zinc-700 text-white hover:bg-rose-600"
+                      title="이 답 연결 삭제"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  )}
                   {isSel &&
                     HANDLES.map(({ h, cls, cursor }) => (
                       <span
@@ -414,7 +411,18 @@ export function PdfRefViewer({
               dispatch({ type: 'moveStart', p: pos(e), rect });
             }}
           >
-            {/* 영역 위 가져오기 버튼 — 드래그한 자리에서 바로 실행 */}
+            {/* 영역 취소 X — 메인 뷰어 박스와 동일 위치/스타일 */}
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                dispatch({ type: 'clear' });
+              }}
+              className="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-zinc-700 text-white hover:bg-rose-600"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+            {/* 가운데 인식 버튼 — 메인 뷰어 "인식"과 동일 패턴 */}
             <button
               type="button"
               disabled={grabbing}
@@ -423,19 +431,16 @@ export function PdfRefViewer({
                 e.stopPropagation();
                 grab();
               }}
-              className={cn(
-                'absolute -top-7 right-0 inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold text-white shadow disabled:opacity-50',
-                mode === 'figure' ? 'bg-violet-600' : 'bg-emerald-600',
-              )}
+              className="absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-zinc-900/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-zinc-900 disabled:opacity-50"
             >
               {grabbing ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : mode === 'figure' ? (
-                <ImagePlus className="h-3 w-3" />
+                <ImagePlus className="h-3.5 w-3.5" />
               ) : (
-                <ScanText className="h-3 w-3" />
+                <Sparkles className="h-3.5 w-3.5" />
               )}
-              {mode === 'figure' ? '그림' : '정답·해설'}
+              {mode === 'figure' ? '그림 인식' : '정답·해설 인식'}
             </button>
             {HANDLES.map(({ h, cls, cursor }) => (
               <span

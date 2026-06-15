@@ -1026,13 +1026,15 @@ export function PdfWorkbenchPage() {
               doc={s.refDoc}
               pageRotations={refPageRotations}
               grabbing={s.grabbing}
-              grabLabel="→ 정답·해설 가져오기"
               onGrab={(g) => void grabFromRef(g)}
               onRotate={(d, p) => void rotateRef(d, p)}
               onReset={() => void resetRotation('ref')}
               linkedRefs={linkedRefs}
               onUpdateLinkedRef={(refId, rect) => {
                 if (selected) updateAnswerRefRect(selected.id, refId, rect);
+              }}
+              onDeleteLinkedRef={(refId) => {
+                if (selected) removeAnswerRef(selected.id, refId);
               }}
             />
           </section>
