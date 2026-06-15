@@ -37,6 +37,55 @@ const KIND_BADGE_CLASS: Record<BoxKind, string> = {
 };
 
 const RENDER_SCALE = 1.5;
+const MIN_W = 24;
+const MIN_H = 16;
+
+type Pt = { x: number; y: number };
+type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+
+type DragState =
+  | { kind: 'create'; start: Pt; rect: BoxRect }
+  | { kind: 'move'; id: string; startPos: Pt; orig: BoxRect; rect: BoxRect }
+  | { kind: 'resize'; id: string; handle: Handle; startPos: Pt; orig: BoxRect; rect: BoxRect };
+
+const HANDLES: { h: Handle; cls: string; cursor: string }[] = [
+  { h: 'nw', cls: 'left-0 top-0 -translate-x-1/2 -translate-y-1/2', cursor: 'nwse-resize' },
+  { h: 'n', cls: 'left-1/2 top-0 -translate-x-1/2 -translate-y-1/2', cursor: 'ns-resize' },
+  { h: 'ne', cls: 'right-0 top-0 translate-x-1/2 -translate-y-1/2', cursor: 'nesw-resize' },
+  { h: 'e', cls: 'right-0 top-1/2 translate-x-1/2 -translate-y-1/2', cursor: 'ew-resize' },
+  { h: 'se', cls: 'right-0 bottom-0 translate-x-1/2 translate-y-1/2', cursor: 'nwse-resize' },
+  { h: 's', cls: 'left-1/2 bottom-0 -translate-x-1/2 translate-y-1/2', cursor: 'ns-resize' },
+  { h: 'sw', cls: 'left-0 bottom-0 -translate-x-1/2 translate-y-1/2', cursor: 'nesw-resize' },
+  { h: 'w', cls: 'left-0 top-1/2 -translate-x-1/2 -translate-y-1/2', cursor: 'ew-resize' },
+];
+
+/** 핸들 드래그 → orig에서 변을 이동, 캔버스 경계·최소 크기 클램프, 변 교차 방지. */
+function applyResize(
+  orig: BoxRect,
+  handle: Handle,
+  dx: number,
+  dy: number,
+  bound: { w: number; h: number },
+): BoxRect {
+  let left = orig.x;
+  let top = orig.y;
+  let right = orig.x + orig.w;
+  let bottom = orig.y + orig.h;
+  if (handle.includes('w')) left = Math.min(Math.max(0, orig.x + dx), right - MIN_W);
+  if (handle.includes('e'))
+    right = Math.max(Math.min(bound.w, orig.x + orig.w + dx), left + MIN_W);
+  if (handle.includes('n')) top = Math.min(Math.max(0, orig.y + dy), bottom - MIN_H);
+  if (handle.includes('s'))
+    bottom = Math.max(Math.min(bound.h, orig.y + orig.h + dy), top + MIN_H);
+  return { x: left, y: top, w: right - left, h: bottom - top };
+}
+
+/** 이동 → 캔버스 경계 안으로 클램프. */
+function clampMove(orig: BoxRect, dx: number, dy: number, bound: { w: number; h: number }): BoxRect {
+  const x = Math.min(Math.max(0, orig.x + dx), Math.max(0, bound.w - orig.w));
+  const y = Math.min(Math.max(0, orig.y + dy), Math.max(0, bound.h - orig.h));
+  return { x, y, w: orig.w, h: orig.h };
+}
 
 export function PdfBoxViewer({
   doc,
@@ -46,6 +95,7 @@ export function PdfBoxViewer({
   onSelect,
   onDelete,
   onCreate,
+  onUpdateRect,
   canvasRef,
 }: {
   doc: PDFDocumentProxy;
@@ -56,12 +106,14 @@ export function PdfBoxViewer({
   onDelete: (id: string) => void;
   /** rect는 캔버스 내부 픽셀 좌표 */
   onCreate: (rect: BoxRect) => void;
+  /** 기존 박스 이동·리사이즈 커밋 (캔버스 내부 px) */
+  onUpdateRect: (id: string, rect: BoxRect) => void;
   /** 부모가 크롭에 쓸 수 있도록 캔버스 ref 공유 */
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [rendering, setRendering] = useState(false);
-  const [drag, setDrag] = useState<{ start: { x: number; y: number }; rect: BoxRect } | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
   // display(px) = internal(px) / ratio
   const [ratio, setRatio] = useState(1);
 
@@ -104,8 +156,13 @@ export function PdfBoxViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function bound(): { w: number; h: number } {
+    const canvas = canvasRef.current;
+    return { w: canvas?.width ?? 0, h: canvas?.height ?? 0 };
+  }
+
   /** 마우스 위치 → 캔버스 내부 픽셀 좌표 */
-  function pos(e: React.MouseEvent): { x: number; y: number } {
+  function pos(e: React.MouseEvent): Pt {
     const box = wrapRef.current!.getBoundingClientRect();
     return {
       x: Math.min(Math.max(e.clientX - box.left, 0), box.width) * ratio,
@@ -113,29 +170,56 @@ export function PdfBoxViewer({
     };
   }
 
-  function onMouseDown(e: React.MouseEvent) {
+  // 빈 캔버스에서 시작 → 새 박스 그리기
+  function onWrapMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
     const p = pos(e);
-    setDrag({ start: p, rect: { x: p.x, y: p.y, w: 0, h: 0 } });
+    setDrag({ kind: 'create', start: p, rect: { x: p.x, y: p.y, w: 0, h: 0 } });
   }
+
   function onMouseMove(e: React.MouseEvent) {
     if (!drag) return;
     const p = pos(e);
-    setDrag({
-      start: drag.start,
-      rect: {
-        x: Math.min(drag.start.x, p.x),
-        y: Math.min(drag.start.y, p.y),
-        w: Math.abs(p.x - drag.start.x),
-        h: Math.abs(p.y - drag.start.y),
-      },
-    });
+    if (drag.kind === 'create') {
+      setDrag({
+        ...drag,
+        rect: {
+          x: Math.min(drag.start.x, p.x),
+          y: Math.min(drag.start.y, p.y),
+          w: Math.abs(p.x - drag.start.x),
+          h: Math.abs(p.y - drag.start.y),
+        },
+      });
+    } else if (drag.kind === 'move') {
+      const rect = clampMove(drag.orig, p.x - drag.startPos.x, p.y - drag.startPos.y, bound());
+      setDrag({ ...drag, rect });
+    } else {
+      const rect = applyResize(
+        drag.orig,
+        drag.handle,
+        p.x - drag.startPos.x,
+        p.y - drag.startPos.y,
+        bound(),
+      );
+      setDrag({ ...drag, rect });
+    }
   }
+
   function onMouseUp() {
     if (!drag) return;
-    const r = drag.rect;
+    const d = drag;
     setDrag(null);
-    if (r.w >= 24 && r.h >= 16) onCreate(r);
+    if (d.kind === 'create') {
+      if (d.rect.w >= MIN_W && d.rect.h >= MIN_H) onCreate(d.rect);
+      return;
+    }
+    // move/resize: 의미 있는 변화가 있으면 커밋
+    const moved =
+      Math.abs(d.rect.x - d.orig.x) > 1 ||
+      Math.abs(d.rect.y - d.orig.y) > 1 ||
+      Math.abs(d.rect.w - d.orig.w) > 1 ||
+      Math.abs(d.rect.h - d.orig.h) > 1;
+    if (moved) onUpdateRect(d.id, d.rect);
   }
 
   const toDisplay = (r: BoxRect) => ({
@@ -151,7 +235,7 @@ export function PdfBoxViewer({
     <div
       ref={wrapRef}
       className="relative inline-block max-w-full cursor-crosshair select-none"
-      onMouseDown={onMouseDown}
+      onMouseDown={onWrapMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
@@ -168,17 +252,19 @@ export function PdfBoxViewer({
       )}
 
       {pageBoxes.map((b, i) => {
-        const d = toDisplay(b.rect);
+        const live =
+          drag && (drag.kind === 'move' || drag.kind === 'resize') && drag.id === b.id
+            ? drag.rect
+            : b.rect;
+        const d = toDisplay(live);
         const selected = b.id === selectedId;
         return (
           <div
             key={b.id}
             data-box-id={b.id}
             className={cn(
-              'absolute border-2',
-              b.status === 'failed'
-                ? 'border-rose-500 bg-rose-500/10'
-                : KIND_BOX_CLASS[b.kind],
+              'absolute cursor-move border-2',
+              b.status === 'failed' ? 'border-rose-500 bg-rose-500/10' : KIND_BOX_CLASS[b.kind],
               selected && 'ring-2 ring-zinc-900/40',
               b.status === 'saved' && 'opacity-80',
             )}
@@ -186,6 +272,7 @@ export function PdfBoxViewer({
             onMouseDown={(e) => {
               e.stopPropagation();
               onSelect(b.id);
+              setDrag({ kind: 'move', id: b.id, startPos: pos(e), orig: b.rect, rect: b.rect });
             }}
           >
             <span
@@ -208,11 +295,34 @@ export function PdfBoxViewer({
             >
               <X className="h-2.5 w-2.5" />
             </button>
+            {/* 선택된 박스에만 8방향 리사이즈 핸들 */}
+            {selected &&
+              HANDLES.map(({ h, cls, cursor }) => (
+                <span
+                  key={h}
+                  className={cn(
+                    'absolute h-2.5 w-2.5 rounded-full border border-white bg-zinc-900',
+                    cls,
+                  )}
+                  style={{ cursor }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setDrag({
+                      kind: 'resize',
+                      id: b.id,
+                      handle: h,
+                      startPos: pos(e),
+                      orig: b.rect,
+                      rect: b.rect,
+                    });
+                  }}
+                />
+              ))}
           </div>
         );
       })}
 
-      {drag && drag.rect.w > 0 && (
+      {drag?.kind === 'create' && drag.rect.w > 0 && (
         <div
           className="absolute border-2 border-dashed border-indigo-500 bg-indigo-500/10"
           style={toDisplay(drag.rect)}
