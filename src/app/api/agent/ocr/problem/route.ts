@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
 - passage_translation: 지문의 한국어 해석이 보이면 그 전체. 없으면 생략.
 - problems: 이 영역의 문제를 **각각** 배열로. 문제가 1개면 1개, [5~6]처럼 여러 개면 그 수만큼.
   각 문제: question(발문, 번호 제외), choices(객관식이면 보기 전부 label "①"~), answer/explanation(보일 때만), problem_type(objective|short|long), category/topic(아래 목록에서).
+- 어법/어휘 선택형(한 발문 안에 네모나 번호 밑줄 택1이 **여러 번** 나오는 형태, 예 "다음 네모 안에서 어법상 알맞은 것을 고르시오"): choices로 쪼개지 말고 **problem_type='short'(다중 빈칸)** 으로 두고, answer에 각 자리의 정답을 **등장 순서대로 줄바꿈(\\n)** 으로 모두 넣어라(보일 때만). 발문엔 그 네모를 <box>…</box>, 번호 밑줄을 <u n="1">…</u>로 그대로 표시.
 - category와 topic은 [분류 목록]에서 정확히 골라라.${taxonomyText}
 - 글자는 보이는 그대로, 요약·번역 금지.
 ${MARKUP_RULES}`,

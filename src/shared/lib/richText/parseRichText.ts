@@ -12,7 +12,7 @@
  * See docs/passage-markup.md for the full tag spec.
  */
 
-export const RICH_TAGS = ['u', 'box', 'num', 'p', 'blank', 'b'] as const;
+export const RICH_TAGS = ['u', 'box', 'num', 'p', 'blank', 'b', 'i'] as const;
 export type RichTag = (typeof RICH_TAGS)[number];
 
 export type RichAttrs = { n?: string; label?: string };

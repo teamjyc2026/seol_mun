@@ -18,6 +18,8 @@ const schema = z.object({
     .array(z.object({ label: z.string().max(8), text: z.string().max(500) }))
     .max(12)
     .optional(),
+  /** 단답형 다중 빈칸(어법 선택 등) — 빈칸 수. 1보다 크면 정답을 그 수만큼 줄바꿈으로. */
+  blanks: z.coerce.number().int().min(1).max(20).optional(),
 });
 
 /** 답안지/해설 영역에서 정답과 해설을 추출 — 보조 뷰어의 "정답·해설 가져오기". */
@@ -52,6 +54,11 @@ ${
   body.choices?.length
     ? `이 문제의 보기: ${body.choices.map((c) => `${c.label} ${c.text}`).join(' / ')}
 정답이 보기 중 하나면 반드시 그 보기의 번호(${body.choices.map((c) => c.label).join('·')})로만 answer를 채워라. 해설에 정답 단어만 적혀 있어도 보기와 대조해 번호로 바꿔라.`
+    : ''
+}
+${
+  body.blanks && body.blanks > 1
+    ? `이 문제는 정답이 ${body.blanks}개다(어법/어휘 선택 등 빈칸 여러 개). 첫 칸만 X — 각 자리의 정답을 등장 순서대로 줄바꿈(\\n)으로 정확히 ${body.blanks}개를 answer에 넣어라.`
     : ''
 }
 ${MARKUP_RULES}`,

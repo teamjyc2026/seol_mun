@@ -29,6 +29,8 @@ function renderNode(node: RichNode): ReactNode {
       );
     case 'b':
       return <strong className="font-semibold">{kids}</strong>;
+    case 'i':
+      return <em className="italic">{kids}</em>;
     case 'box':
       return (
         <span className="mx-0.5 inline-flex items-center rounded-[3px] border border-zinc-400 px-1 leading-snug">

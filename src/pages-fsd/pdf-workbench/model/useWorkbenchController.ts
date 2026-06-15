@@ -131,6 +131,17 @@ function answerChoicesPayload(sub: WbSubProblem): { label: string; text: string 
   return list.length ? list : undefined;
 }
 
+/**
+ * 단답형 다중 빈칸(어법/어휘 선택)의 예상 빈칸 수 — 현재 정답 줄 수와 발문 마크업
+ * (<box>·<u n=>) 개수 중 큰 값. 1이면 답안 라우트에 굳이 넘기지 않는다.
+ */
+function countBlanks(sub: WbSubProblem): number {
+  if (sub.problem_type !== 'short') return 1;
+  const lines = sub.answer.split('\n').filter((a) => a.trim()).length;
+  const marks = (sub.question.match(/<box|<u\s+n=/gi) ?? []).length;
+  return Math.max(lines, marks, 1);
+}
+
 /** 자식 문제(0=대표, i+1=extra[i]) 조회 — 없으면 대표. */
 function subProblemAt(p: WorkbenchProblemValue, idx: number): WbSubProblem {
   return idx > 0 ? (p.extra[idx - 1] ?? p) : p;
@@ -755,9 +766,15 @@ export function useWorkbenchController() {
           explanation: f.explanation,
         };
         const allSubs = [primary, ...f.extra];
-        for (const sub of allSubs) {
-          if (!sub.question.trim() || !sub.answer.trim()) {
-            toast.error('각 문제의 발문과 정답을 채워주세요.');
+        for (let i = 0; i < allSubs.length; i++) {
+          const sub = allSubs[i];
+          const where = allSubs.length > 1 ? `문제 ${i + 1}: ` : '';
+          if (!sub.question.trim()) {
+            toast.error(`${where}발문을 입력하세요.`);
+            return;
+          }
+          if (!sub.answer.trim()) {
+            toast.error(`${where}정답을 입력하세요.`);
             return;
           }
         }
@@ -819,7 +836,7 @@ export function useWorkbenchController() {
       } else {
         const c = selected.chunk;
         if (c.text.trim().length < 10) {
-          toast.error('내용이 너무 짧아요 (10자 이상).');
+          toast.error(`${KIND_LABEL[selected.kind]} 내용이 너무 짧아요 (10자 이상).`);
           return;
         }
         const chapterPath = [
@@ -1024,6 +1041,7 @@ export function useWorkbenchController() {
           mediaType: 'image/png',
           hint: targetSub.question.slice(0, 200),
           choices: answerChoicesPayload(targetSub),
+          blanks: countBlanks(targetSub) > 1 ? countBlanks(targetSub) : undefined,
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
@@ -1146,14 +1164,16 @@ export function useWorkbenchController() {
         const att = useWorkbenchStore.getState().attachments.find((a) => a.id === ref.attachmentId);
         if (!att) continue;
         const image = await renderRefRegion(att, ref.page, ref.rect);
+        const rescanSub = subProblemAt(box.problem, childIdx);
         const res = await fetch('/api/agent/ocr/answer', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image,
             mediaType: 'image/png',
-            hint: subProblemAt(box.problem, childIdx).question.slice(0, 200),
-            choices: answerChoicesPayload(subProblemAt(box.problem, childIdx)),
+            hint: rescanSub.question.slice(0, 200),
+            choices: answerChoicesPayload(rescanSub),
+            blanks: countBlanks(rescanSub) > 1 ? countBlanks(rescanSub) : undefined,
           }),
         });
         if (!res.ok)

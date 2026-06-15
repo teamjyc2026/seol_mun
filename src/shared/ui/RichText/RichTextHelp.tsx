@@ -12,6 +12,7 @@ const TAGS: { label: string; code: string }[] = [
   { label: '문단 (글의 순서)', code: '<p label="A">First...</p>' },
   { label: '빈칸 (빈칸추론)', code: '핵심은 <blank/> 이다' },
   { label: '굵게', code: '<b>강조</b>' },
+  { label: '기울임', code: '<i>강조</i>' },
 ];
 
 /** Collapsible cheat sheet for 지문 마크업 태그, shown in the problem editors. */
