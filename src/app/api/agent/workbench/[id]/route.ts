@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   const supabase = getSupabaseServer();
   const { data: job } = await supabase
     .from('workbench_jobs')
-    .select('id, source_id, title, rotation, created_at, updated_at')
+    .select('id, source_id, title, page_rotations, created_at, updated_at')
     .eq('id', id)
     .maybeSingle();
   if (!job) return NextResponse.json({ message: 'not found' }, { status: 404 });
@@ -41,7 +41,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
       supabase.storage.from('sources').createSignedUrl(source.file_path, 60 * 60),
       supabase
         .from('workbench_attachments')
-        .select('id, title, file_path, rotation')
+        .select('id, title, file_path, page_rotations')
         .eq('job_id', id)
         .order('created_at', { ascending: true }),
       supabase
@@ -63,7 +63,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         id: a.id,
         title: a.title,
         url: signed?.signedUrl ?? null,
-        rotation: a.rotation ?? 0,
+        pageRotations: a.page_rotations ?? {},
       };
     }),
   );
@@ -76,7 +76,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }));
 
   return NextResponse.json({
-    job: { id: job.id, title: job.title, rotation: job.rotation ?? 0 },
+    job: { id: job.id, title: job.title, pageRotations: job.page_rotations ?? {} },
     source: {
       id: source.id,
       title: source.title,
@@ -93,8 +93,8 @@ const patchSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   /** 폴더 이동 (null = 미분류). */
   folder_id: z.string().uuid().nullable().optional(),
-  /** PDF 회전 (0/90/180/270). */
-  rotation: z.number().int().optional(),
+  /** 페이지별 회전 메타데이터 (page→deg). */
+  page_rotations: z.record(z.string(), z.number().int()).optional(),
 });
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {

@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
-import type { JobSource } from '../types';
+import type { JobSource, PageRotations } from '../types';
 import type { WorkbenchState } from '../store';
 
 /** 열린 작업 세션 (메인 PDF·소스 메타·페이지 네비). */
@@ -12,10 +12,8 @@ export type SessionSlice = {
   opening: boolean;
   pageNum: number;
   numPages: number;
-  /** PDF 회전 (0/90/180/270) — 본 PDF는 파일에 굽기 때문에 보통 0. */
-  rotation: number;
-  /** 본 PDF를 회전해 원본 파일에 굽는 중 (다운로드→변환→재업로드). */
-  rotating: boolean;
+  /** 본 PDF 페이지별 회전(메타데이터, 즉시 렌더). 빈 키는 0°. */
+  pageRotations: PageRotations;
   /** 이 작업 세션에서 Opus(OCR)가 쓴 누적 토큰. */
   tokensIn: number;
   tokensOut: number;
@@ -30,15 +28,12 @@ export type SessionSlice = {
     source: JobSource;
     doc: PDFDocumentProxy;
     numPages: number;
-    rotation: number;
+    pageRotations: PageRotations;
   }) => void;
   closeSession: () => void;
   setPage: (n: number) => void;
   setOpening: (v: boolean) => void;
-  setRotation: (r: number) => void;
-  setRotating: (v: boolean) => void;
-  /** 회전 후 구운 PDF를 다시 로드해 교체. */
-  setDoc: (doc: PDFDocumentProxy) => void;
+  setPageRotations: (r: PageRotations) => void;
   addTokens: (input: number, output: number) => void;
   setEmbedPending: (p: { problems: number; chunks: number }) => void;
   setEmbedRunning: (v: boolean) => void;
@@ -57,23 +52,21 @@ export const createSessionSlice: StateCreator<
   opening: false,
   pageNum: 1,
   numPages: 0,
-  rotation: 0,
-  rotating: false,
+  pageRotations: {},
   tokensIn: 0,
   tokensOut: 0,
   embedPending: { problems: 0, chunks: 0 },
   embedRunning: false,
 
-  openSession: ({ jobId, jobTitle, source, doc, numPages, rotation }) =>
+  openSession: ({ jobId, jobTitle, source, doc, numPages, pageRotations }) =>
     set({
       jobId,
       jobTitle,
       source,
       doc,
       numPages,
-      rotation,
+      pageRotations,
       pageNum: 1,
-      rotating: false,
       tokensIn: 0,
       tokensOut: 0,
     }),
@@ -85,16 +78,13 @@ export const createSessionSlice: StateCreator<
       doc: null,
       numPages: 0,
       pageNum: 1,
-      rotation: 0,
-      rotating: false,
+      pageRotations: {},
       tokensIn: 0,
       tokensOut: 0,
     }),
   setPage: (pageNum) => set({ pageNum }),
   setOpening: (opening) => set({ opening }),
-  setRotation: (rotation) => set({ rotation }),
-  setRotating: (rotating) => set({ rotating }),
-  setDoc: (doc) => set({ doc }),
+  setPageRotations: (pageRotations) => set({ pageRotations }),
   addTokens: (input, output) =>
     set((st) => ({ tokensIn: st.tokensIn + input, tokensOut: st.tokensOut + output })),
   setEmbedPending: (embedPending) => set({ embedPending }),

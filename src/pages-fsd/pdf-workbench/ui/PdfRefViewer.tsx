@@ -33,18 +33,17 @@ export type RefGrab = {
  */
 export function PdfRefViewer({
   doc,
-  rotation = 0,
+  pageRotations = {},
   grabLabel,
   grabbing,
   onGrab,
   onRotate,
   onReset,
-  rotating = false,
   linkedRefs = [],
 }: {
   doc: PDFDocumentProxy;
-  /** PDF 회전 (0/90/180/270). */
-  rotation?: number;
+  /** 페이지별 회전 맵(메타데이터). 현재 페이지 회전은 여기서 해석. */
+  pageRotations?: Record<number, number>;
   grabLabel: string;
   grabbing: boolean;
   onGrab: (grab: RefGrab) => void;
@@ -52,8 +51,6 @@ export function PdfRefViewer({
   onRotate?: (delta: 90 | -90, page: number) => void;
   /** 전 페이지 회전 0으로 초기화. */
   onReset?: () => void;
-  /** 회전을 파일에 굽는 중 — 버튼 비활성. */
-  rotating?: boolean;
   /** 선택된 박스의 저장된 답 영역들 (현재 열린 부속 PDF 대상, 다대일) */
   linkedRefs?: { id: string; page: number; rect: Rect }[];
 }) {
@@ -67,6 +64,7 @@ export function PdfRefViewer({
   const [mode, setMode] = useState<RefGrabMode>('answer');
   const drag = sel.drag;
   const rect = sel.rect;
+  const rotation = pageRotations[pageNum] ?? 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -213,34 +211,31 @@ export function PdfRefViewer({
             <span className="mx-0.5 h-4 w-px bg-zinc-200" />
             <button
               type="button"
-              disabled={rotating}
               onClick={() => {
                 dispatch({ type: 'clear' });
                 onRotate(-90, pageNum);
               }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
-              title="이 페이지만 왼쪽으로 90° 회전 (파일에 저장)"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="이 페이지만 왼쪽으로 90° 회전"
             >
-              {rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              <RotateCcw className="h-4 w-4" />
             </button>
             <button
               type="button"
-              disabled={rotating}
               onClick={() => {
                 dispatch({ type: 'clear' });
                 onRotate(90, pageNum);
               }}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
-              title="이 페이지만 오른쪽으로 90° 회전 (파일에 저장)"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="이 페이지만 오른쪽으로 90° 회전"
             >
-              {rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
+              <RotateCw className="h-4 w-4" />
             </button>
             {onReset && (
               <button
                 type="button"
-                disabled={rotating}
                 onClick={onReset}
-                className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 px-2 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-40"
+                className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 px-2 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50"
                 title="이 PDF의 모든 페이지 회전을 0°로 되돌림"
               >
                 초기화

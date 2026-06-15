@@ -9,7 +9,9 @@ export const dynamic = 'force-dynamic';
 const idSchema = z.string().uuid();
 type Ctx = { params: Promise<{ id: string; attachmentId: string }> };
 
-const patchSchema = z.object({ rotation: z.number().int() });
+const patchSchema = z.object({
+  page_rotations: z.record(z.string(), z.number().int()),
+});
 
 /** 부속 PDF 회전값 저장. */
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -29,7 +31,7 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const supabase = getSupabaseServer();
   const { error } = await supabase
     .from('workbench_attachments')
-    .update({ rotation: body.rotation })
+    .update({ page_rotations: body.page_rotations })
     .eq('id', attachmentId)
     .eq('job_id', id);
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });

@@ -29,8 +29,12 @@ export async function GET() {
       ? supabase.from('sources').select('id, subject, grade, total_pages').in('id', sourceIds)
       : Promise.resolve({ data: [] as { id: string; subject: string; grade: string | null }[] }),
     jobIds.length
-      ? supabase.from('workbench_attachments').select('job_id').in('job_id', jobIds)
-      : Promise.resolve({ data: [] as { job_id: string }[] }),
+      ? supabase
+          .from('workbench_attachments')
+          .select('job_id, title')
+          .in('job_id', jobIds)
+          .order('created_at', { ascending: true })
+      : Promise.resolve({ data: [] as { job_id: string; title: string }[] }),
   ]);
   const counts = new Map<string, { total: number; saved: number }>();
   for (const b of boxRows ?? []) {
@@ -39,16 +43,19 @@ export async function GET() {
     if (b.status === 'saved') c.saved += 1;
     counts.set(b.job_id, c);
   }
-  const attCounts = new Map<string, number>();
+  const attTitles = new Map<string, string[]>();
   for (const a of attRows ?? []) {
-    attCounts.set(a.job_id, (attCounts.get(a.job_id) ?? 0) + 1);
+    const list = attTitles.get(a.job_id) ?? [];
+    list.push(a.title);
+    attTitles.set(a.job_id, list);
   }
   const srcById = new Map((srcRows ?? []).map((s) => [s.id, s]));
 
   return NextResponse.json({
     jobs: (jobs ?? []).map((j) => ({
       ...j,
-      attachmentCount: attCounts.get(j.id) ?? 0,
+      attachmentCount: attTitles.get(j.id)?.length ?? 0,
+      attachmentTitles: attTitles.get(j.id) ?? [],
       subject: srcById.get(j.source_id)?.subject ?? null,
       grade: srcById.get(j.source_id)?.grade ?? null,
       boxCount: counts.get(j.id)?.total ?? 0,

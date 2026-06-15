@@ -30,10 +30,17 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
   }
 }
 
+const figureSchema = z.object({
+  url: z.string().url().max(1000),
+  caption: z.string().max(500).optional(),
+  explanation: z.string().max(4000).optional(),
+});
+
 const createChunkSchema = z.object({
   page_number: z.coerce.number().int().min(1),
   content: z.string().trim().min(10).max(20_000),
   chapter_path: z.array(z.string().min(1).max(80)).max(6).default([]),
+  figures: z.array(figureSchema).max(10).default([]),
 });
 
 function sanitize(s: string): string {
@@ -106,6 +113,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         chunk_index: chunkIndex,
         content,
         chapter_path: chapterPath,
+        figures: body.figures ?? [],
         embedding: null,
         created_by: uploaderId,
       })

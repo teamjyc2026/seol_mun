@@ -31,6 +31,7 @@ import { SUBJECTS } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
 import { PdfBoxViewer, KIND_LABEL, type BoxKind } from './PdfBoxViewer';
 import { ConnectionLine } from './ConnectionLine';
+import { FiguresEditor } from './FiguresEditor';
 import { PdfRefViewer } from './PdfRefViewer';
 import { TopicPicker } from './TopicPicker';
 import { WorkbenchProblemForm } from './WorkbenchProblemForm';
@@ -127,8 +128,7 @@ export function PdfWorkbenchPage() {
       opening: st.opening,
       pageNum: st.pageNum,
       numPages: st.numPages,
-      rotation: st.rotation,
-      rotating: st.rotating,
+      pageRotations: st.pageRotations,
       tokensIn: st.tokensIn,
       tokensOut: st.tokensOut,
       embedPending: st.embedPending,
@@ -181,11 +181,11 @@ export function PdfWorkbenchPage() {
           .filter((a) => a.attachmentId === refSel.id)
           .map((a) => ({ id: a.id, page: a.page, rect: a.rect }))
       : [];
-  /** 보조 뷰어 회전 — 부속이면 그 부속의 값, 같은 PDF면 본 작업 회전. */
-  const refRotation =
+  /** 보조 뷰어 페이지별 회전 맵 — 부속이면 그 부속 것, 같은 PDF면 본 작업 것. */
+  const refPageRotations =
     refSel?.type === 'attachment'
-      ? (s.attachments.find((a) => a.id === refSel.id)?.rotation ?? 0)
-      : s.rotation;
+      ? (s.attachments.find((a) => a.id === refSel.id)?.pageRotations ?? {})
+      : s.pageRotations;
   useEffect(() => {
     useWorkbenchStore.getState().resetAll();
     void refreshJobs();
@@ -689,12 +689,15 @@ export function PdfWorkbenchPage() {
                 <Scissors className="h-4 w-4 shrink-0 text-zinc-400" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-zinc-900">{j.title}</p>
-                  <p className="text-xs text-zinc-500">
-                    {[j.subject, j.grade].filter(Boolean).join(' · ')}
-                    {j.attachmentCount > 0 ? ` · 부속 PDF ${j.attachmentCount}개` : ''} · 박스{' '}
-                    {j.boxCount}개 (저장 {j.savedCount}) ·{' '}
-                    {new Date(j.updated_at).toLocaleString('ko-KR')}
+                  <p className="truncate text-xs text-zinc-500">
+                    {[j.subject, j.grade].filter(Boolean).join(' · ')} · 박스 {j.boxCount}개 (저장{' '}
+                    {j.savedCount}) · {new Date(j.updated_at).toLocaleString('ko-KR')}
                   </p>
+                  {j.attachmentTitles.length > 0 && (
+                    <p className="truncate text-[11px] text-zinc-400" title={j.attachmentTitles.join(', ')}>
+                      📎 {j.attachmentTitles.join(', ')}
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -906,27 +909,24 @@ export function PdfWorkbenchPage() {
             <span className="mx-1 h-4 w-px bg-zinc-200" />
             <button
               type="button"
-              disabled={s.rotating}
               onClick={() => void rotateJob(-90)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
-              title="왼쪽으로 90° 회전 (원본 파일에 저장)"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="이 페이지만 왼쪽으로 90° 회전"
             >
-              {s.rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              <RotateCcw className="h-4 w-4" />
             </button>
             <button
               type="button"
-              disabled={s.rotating}
               onClick={() => void rotateJob(90)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
-              title="오른쪽으로 90° 회전 (원본 파일에 저장)"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
+              title="이 페이지만 오른쪽으로 90° 회전"
             >
-              {s.rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
+              <RotateCw className="h-4 w-4" />
             </button>
             <button
               type="button"
-              disabled={s.rotating}
-              onClick={() => void resetRotation('main')}
-              className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 px-2 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-40"
+              onClick={() => resetRotation('main')}
+              className="inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 px-2 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50"
               title="이 PDF의 모든 페이지 회전을 0°로 되돌림"
             >
               초기화
@@ -1003,7 +1003,7 @@ export function PdfWorkbenchPage() {
           <PdfBoxViewer
             doc={s.doc}
             pageNum={s.pageNum}
-            rotation={s.rotation}
+            rotation={s.pageRotations[s.pageNum] ?? 0}
             boxes={s.boxes}
             selectedId={s.selectedId}
             onSelect={s.setSelectedId}
@@ -1023,13 +1023,12 @@ export function PdfWorkbenchPage() {
             <PdfRefViewer
               key={s.refSel?.type === 'attachment' ? s.refSel.id : 'same'}
               doc={s.refDoc}
-              rotation={refRotation}
+              pageRotations={refPageRotations}
               grabbing={s.grabbing}
               grabLabel="→ 정답·해설 가져오기"
               onGrab={(g) => void grabFromRef(g)}
               onRotate={(d, p) => void rotateRef(d, p)}
               onReset={() => void resetRotation('ref')}
-              rotating={s.rotating}
               linkedRefs={linkedRefs}
             />
           </section>
@@ -1217,6 +1216,14 @@ export function PdfWorkbenchPage() {
                         className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
                       />
                     </div>
+                    <FiguresEditor
+                      figures={selected.chunk.figures}
+                      onChange={(figures) =>
+                        patchBox(selected.id, { chunk: { ...selected.chunk, figures } })
+                      }
+                      uploadFigure={uploadFigureFile}
+                      hint="개념·본문에 딸린 그림/도표. 보조 뷰어 “그림” 모드로 가져오거나 직접 올리세요."
+                    />
                   </div>
                 )}
               </div>

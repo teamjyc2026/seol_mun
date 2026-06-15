@@ -1,5 +1,9 @@
+import type { ProblemFigure } from '@/entities/problem';
 import type { BoxKind, BoxRect, WorkBox } from '../ui/PdfBoxViewer';
 import type { WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
+
+/** 페이지(1-base 문자열 키) → 회전각(0/90/180/270). 빈 키는 0. */
+export type PageRotations = Record<string, number>;
 
 export type OcrProblem = {
   passage?: string;
@@ -12,7 +16,13 @@ export type OcrProblem = {
   topic?: string;
 };
 
-export type ChunkValue = { category: string | null; topic: string; text: string };
+export type ChunkValue = {
+  category: string | null;
+  topic: string;
+  text: string;
+  /** 개념/본문에 딸린 그림/도표 (문제와 동일 구조). */
+  figures: ProblemFigure[];
+};
 
 /** 박스 ↔ 부속 PDF 답 영역 연결 (rect는 페이지 비율 0–1 정규화). */
 export type AnswerRef = { id: string; attachmentId: string; page: number; rect: BoxRect };
@@ -41,7 +51,13 @@ export type BoxData = WorkBox & {
   savedRef: string | null;
 };
 
-export type Attachment = { id: string; title: string; url: string; rotation: number };
+export type Attachment = {
+  id: string;
+  title: string;
+  url: string;
+  /** 페이지별 회전(메타데이터, 즉시 렌더). */
+  pageRotations: PageRotations;
+};
 
 /** 보조 뷰어 선택 — 같은 PDF 또는 부속 PDF 하나. */
 export type RefSel = { type: 'same' } | { type: 'attachment'; id: string } | null;
@@ -62,6 +78,8 @@ export type JobSummary = {
   grade: string | null;
   folder_id: string | null;
   attachmentCount: number;
+  /** 부속 PDF 파일명들 (목록에 표시). */
+  attachmentTitles: string[];
   boxCount: number;
   savedCount: number;
   updated_at: string;
@@ -75,7 +93,7 @@ export type JobSource = {
 };
 
 export type JobDetail = {
-  job: { id: string; title: string; rotation: number };
+  job: { id: string; title: string; pageRotations: PageRotations };
   source: JobSource;
   pdfUrl: string;
   attachments: Attachment[];

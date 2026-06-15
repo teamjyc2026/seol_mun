@@ -12,7 +12,7 @@ import { KIND_LABEL } from '../ui/PdfBoxViewer';
 import { emptyProblemValue, type WorkbenchProblemValue } from '../ui/WorkbenchProblemForm';
 import type { RefGrab } from '../ui/PdfRefViewer';
 import { useWorkbenchStore } from './store';
-import { loadPdfFromUrl, loadPdfFromBytes } from './loadPdf';
+import { loadPdfFromUrl } from './loadPdf';
 import type {
   AnswerRef,
   Attachment,
@@ -23,6 +23,7 @@ import type {
   JobDetail,
   JobSummary,
   OcrProblem,
+  PageRotations,
 } from './types';
 
 function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
@@ -40,7 +41,7 @@ function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
     status: b.status === 'ocr' ? 'ready' : b.status,
     // 이전 박스엔 passage_translation·figures 등 새 필드가 없을 수 있어 기본값과 병합.
     problem: { ...emptyProblemValue(), ...(b.payload.problem ?? {}) },
-    chunk: b.payload.chunk ?? { category: null, topic: '', text: '' },
+    chunk: { category: null, topic: '', text: '', figures: [], ...(b.payload.chunk ?? {}) },
     answerRefs,
     tokensIn: b.payload.tokens?.in ?? 0,
     tokensOut: b.payload.tokens?.out ?? 0,
@@ -96,8 +97,6 @@ export function useWorkbenchController() {
   const patchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   /** 부속 PDF 문서 캐시 — 탭 전환 시 재다운로드 방지. */
   const refDocCache = useRef<Map<string, PDFDocumentProxy>>(new Map());
-  /** 본 PDF 회전 굽기 동시 실행 방지. */
-  const rotatingRef = useRef(false);
 
   // ---------- 목록 ----------
   async function refreshJobs() {
@@ -247,61 +246,48 @@ export function useWorkbenchController() {
     toast.info(`${label} · 토큰 ↑${fmtTok(usage.input)} ↓${fmtTok(usage.output)}`);
   }
 
-  /**
-   * 본 PDF 90° 회전 — 회전을 **원본 파일에 구워** 영속한다.
-   * ① 박스 좌표를 새 방향으로 변환·저장 → ② 즉시 화면 회전(낙관적) →
-   * ③ 서버가 파일을 회전해 덮어쓰고 → ④ 구운 PDF를 다시 받아 0° 기준으로 교체.
-   */
+  /** 페이지 회전 맵에 delta를 적용한 새 맵 반환. */
+  function rotatePageRotations(
+    pageRotations: PageRotations,
+    pageNum: number,
+    delta: 90 | -90,
+  ): PageRotations {
+    const cur = pageRotations[pageNum] ?? 0;
+    return { ...pageRotations, [pageNum]: (((cur + delta) % 360) + 360) % 360 };
+  }
+
+  /** 보고 있는 페이지만 90° 회전 — 클라 메타데이터(즉시) + 가벼운 PATCH 저장. */
   async function rotateJob(delta: 90 | -90, page?: number) {
-    if (rotatingRef.current) return;
     const st = useWorkbenchStore.getState();
-    const { jobId, doc, boxes } = st;
+    const { jobId, doc, boxes, pageRotations } = st;
     const pageNum = page ?? st.pageNum;
     if (!jobId || !doc) return;
-    rotatingRef.current = true;
-    st.setRotating(true);
-    try {
-      // 보고 있는 페이지만 회전 — 그 페이지(0° 기준) 캔버스 크기로 박스를 변환.
-      const vp = (await doc.getPage(pageNum)).getViewport({ scale: 1.5, rotation: 0 });
-      const d = { w: vp.width, h: vp.height };
-      const rotated = boxes.map((b) => {
-        if (b.page !== pageNum) return b; // 다른 페이지는 그대로
-        const { x, y, w, h } = b.rect;
-        const rect =
-          delta === 90
-            ? { x: d.h - (y + h), y: x, w: h, h: w } // CW
-            : { x: y, y: d.w - (x + w), w: h, h: w }; // CCW
-        return { ...b, rect };
-      });
-      st.setBoxes(rotated);
-      // 낙관적 화면 회전(교체 전까지 기존 doc을 viewport로 돌려 보여준다).
-      st.setRotation(((delta % 360) + 360) % 360);
-      // 이 페이지 박스 rect만 영속 (temp 제외).
-      for (const b of rotated) {
-        if (b.page !== pageNum || b.id.startsWith('temp-')) continue;
-        void api
-          .patch(`/agent/workbench/${jobId}/boxes/${b.id}`, { rect: b.rect })
-          .catch(() => {});
-      }
-      // 서버에서 그 페이지를 회전해 굽고, 회전된 PDF 바이트를 바로 받아 교체(CDN 우회).
-      const { data } = await api.post<ArrayBuffer>(
-        `/agent/workbench/${jobId}/rotate`,
-        { delta, page: pageNum },
-        { responseType: 'arraybuffer' },
-      );
-      const reloaded = await loadPdfFromBytes(data);
-      const s2 = useWorkbenchStore.getState();
-      s2.setDoc(reloaded);
-      s2.setRotation(0);
-      if (s2.refSel?.type === 'same') s2.setRefDoc(reloaded);
-      toast.success('이 페이지를 회전해 파일에 저장했어요.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'PDF 회전 저장 실패');
-      void refreshBoxes();
-    } finally {
-      rotatingRef.current = false;
-      useWorkbenchStore.getState().setRotating(false);
+    // 현재 표시 회전(cur) 기준 캔버스 치수로 그 페이지 박스 rect를 회전.
+    const cur = pageRotations[pageNum] ?? 0;
+    const vp = (await doc.getPage(pageNum)).getViewport({ scale: 1.5, rotation: cur });
+    const d = { w: vp.width, h: vp.height };
+    const rotated = boxes.map((b) => {
+      if (b.page !== pageNum) return b;
+      const { x, y, w, h } = b.rect;
+      const rect =
+        delta === 90
+          ? { x: d.h - (y + h), y: x, w: h, h: w } // CW
+          : { x: y, y: d.w - (x + w), w: h, h: w }; // CCW
+      return { ...b, rect };
+    });
+    const nextMap = rotatePageRotations(pageRotations, pageNum, delta);
+    st.setBoxes(rotated);
+    st.setPageRotations(nextMap); // 즉시 화면 회전
+    // 영속: 박스 rect + 회전 메타데이터 (둘 다 가벼움).
+    for (const b of rotated) {
+      if (b.page !== pageNum || b.id.startsWith('temp-')) continue;
+      void api
+        .patch(`/agent/workbench/${jobId}/boxes/${b.id}`, { rect: b.rect })
+        .catch(() => {});
     }
+    void api
+      .patch(`/agent/workbench/${jobId}`, { page_rotations: nextMap })
+      .catch(() => {});
   }
 
   // ---------- 작업 열기 / 닫기 ----------
@@ -324,7 +310,7 @@ export function useWorkbenchController() {
         source: data.source,
         doc: loaded,
         numPages: loaded.numPages,
-        rotation: data.job.rotation ?? 0,
+        pageRotations: data.job.pageRotations ?? {},
       });
       // 부속(부교재)이 있으면 자동으로 첫 부속을 분할 화면에 띄운다.
       if (data.attachments.length > 0) {
@@ -558,7 +544,7 @@ export function useWorkbenchController() {
       kind: drawKind,
       status: 'idle',
       problem: emptyProblemValue(),
-      chunk: { category: null, topic: '', text: '' },
+      chunk: { category: null, topic: '', text: '', figures: [] },
       answerRefs: [],
       tokensIn: 0,
       tokensOut: 0,
@@ -669,7 +655,12 @@ export function useWorkbenchController() {
         ];
         const { data } = await api.post<{ id: string }>(
           `/agent/sources/${source.id}/chunks`,
-          { page_number: selected.page, content: c.text, chapter_path: chapterPath },
+          {
+            page_number: selected.page,
+            content: c.text,
+            chapter_path: chapterPath,
+            figures: c.figures.filter((f) => f.url),
+          },
         );
         savedRef = data.id;
         toast.success(`${KIND_LABEL[selected.kind]} 저장 완료 (임베딩 대기)`);
@@ -712,89 +703,55 @@ export function useWorkbenchController() {
       return;
     }
     if (st.refSel?.type !== 'attachment') return;
-    if (rotatingRef.current) return;
     const { jobId } = st;
     const attId = st.refSel.id;
     const att = st.attachments.find((a) => a.id === attId);
     if (!att || !jobId) return;
-    rotatingRef.current = true;
-    st.setRotating(true);
     // 정규화 rect 90° 회전 (차원 무관).
     const rot = (r: { x: number; y: number; w: number; h: number }) =>
       delta === 90
         ? { x: 1 - (r.y + r.h), y: r.x, w: r.h, h: r.w }
         : { x: r.y, y: 1 - (r.x + r.w), w: r.h, h: r.w };
-    try {
-      // 그 부속의 **그 페이지 하나만** 굽고, 회전된 바이트를 바로 받아 교체(CDN 우회).
-      const { data } = await api.post<ArrayBuffer>(
-        `/agent/workbench/${jobId}/rotate`,
-        { delta, page: refPage, attachmentId: attId },
-        { responseType: 'arraybuffer' },
-      );
-      const reloaded = await loadPdfFromBytes(data);
-      refDocCache.current.set(attId, reloaded);
-      const s2 = useWorkbenchStore.getState();
-      s2.setRefDoc(reloaded);
-      s2.setAttachments(
-        s2.attachments.map((a) => (a.id === attId ? { ...a, rotation: 0 } : a)),
-      );
-      // 이 부속의 **해당 페이지** 답 링크만 회전.
-      for (const b of s2.boxes) {
-        if (!b.answerRefs.some((a) => a.attachmentId === attId && a.page === refPage)) continue;
-        patchBox(b.id, {
-          answerRefs: b.answerRefs.map((a) =>
-            a.attachmentId === attId && a.page === refPage ? { ...a, rect: rot(a.rect) } : a,
-          ),
-        });
-      }
-      toast.success('해설지 이 페이지를 회전해 파일에 저장했어요.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '해설지 회전 실패');
-    } finally {
-      rotatingRef.current = false;
-      useWorkbenchStore.getState().setRotating(false);
+    const nextMap = rotatePageRotations(att.pageRotations, refPage, delta);
+    // 즉시: 부속 회전 메타데이터 + 그 페이지 답 링크 회전.
+    st.setAttachments(
+      st.attachments.map((a) => (a.id === attId ? { ...a, pageRotations: nextMap } : a)),
+    );
+    for (const b of st.boxes) {
+      if (!b.answerRefs.some((a) => a.attachmentId === attId && a.page === refPage)) continue;
+      patchBox(b.id, {
+        answerRefs: b.answerRefs.map((a) =>
+          a.attachmentId === attId && a.page === refPage ? { ...a, rect: rot(a.rect) } : a,
+        ),
+      });
     }
+    void api
+      .patch(`/agent/workbench/${jobId}/attachments/${attId}`, { page_rotations: nextMap })
+      .catch(() => {});
   }
 
   /**
-   * PDF 전 페이지 회전을 0으로 굽기 — 잘못 구워진 파일 복구.
-   * target='main'이면 본 PDF, 'ref'면 보조 뷰어가 보는 것(부속이면 그 부속, 같은 PDF면 본 PDF).
+   * 전 페이지 회전을 0으로 초기화(메타데이터 비움) — 잘못 회전된 것 복구.
+   * target='main'이면 본 PDF, 'ref'면 보조 뷰어가 보는 부속(같은 PDF면 본 PDF).
    */
-  async function resetRotation(target: 'main' | 'ref' = 'ref') {
-    if (rotatingRef.current) return;
+  function resetRotation(target: 'main' | 'ref' = 'ref') {
     const st = useWorkbenchStore.getState();
     const { jobId } = st;
     if (!jobId) return;
     const attId =
       target === 'ref' && st.refSel?.type === 'attachment' ? st.refSel.id : null;
-    rotatingRef.current = true;
-    st.setRotating(true);
-    try {
-      const { data } = await api.post<ArrayBuffer>(
-        `/agent/workbench/${jobId}/rotate`,
-        { delta: 90, page: 1, reset: true, ...(attId ? { attachmentId: attId } : {}) },
-        { responseType: 'arraybuffer' },
+    if (attId) {
+      st.setAttachments(
+        st.attachments.map((a) => (a.id === attId ? { ...a, pageRotations: {} } : a)),
       );
-      const reloaded = await loadPdfFromBytes(data);
-      const s2 = useWorkbenchStore.getState();
-      if (attId) {
-        refDocCache.current.set(attId, reloaded);
-        s2.setRefDoc(reloaded);
-        s2.setAttachments(
-          s2.attachments.map((a) => (a.id === attId ? { ...a, rotation: 0 } : a)),
-        );
-      } else {
-        s2.setDoc(reloaded);
-        s2.setRotation(0);
-        if (s2.refSel?.type === 'same') s2.setRefDoc(reloaded);
-      }
-      toast.success('회전을 초기화했어요(전 페이지 0°). 필요한 페이지만 다시 돌려주세요.');
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '회전 초기화 실패');
-    } finally {
-      rotatingRef.current = false;
-      useWorkbenchStore.getState().setRotating(false);
+      void api
+        .patch(`/agent/workbench/${jobId}/attachments/${attId}`, { page_rotations: {} })
+        .catch(() => {});
+    } else {
+      st.setPageRotations({});
+      void api.patch(`/agent/workbench/${jobId}`, { page_rotations: {} }).catch(() => {});
     }
+    toast.success('회전을 초기화했어요. 필요한 페이지만 다시 돌려주세요.');
   }
 
   async function openAttachment(att: Attachment) {
@@ -826,7 +783,7 @@ export function useWorkbenchController() {
       const { data } = await api.post<{
         attachment: { id: string; title: string; url: string };
       }>(`/agent/workbench/${jobId}/attachments`, { path, title: attTitle });
-      const att: Attachment = { ...data.attachment, rotation: 0 };
+      const att: Attachment = { ...data.attachment, pageRotations: {} };
       useWorkbenchStore.getState().appendAttachment(att);
       await openAttachment(att);
       toast.success(`'${att.title}' 부속 PDF를 연결했어요.`);
@@ -945,7 +902,7 @@ export function useWorkbenchController() {
       refDocCache.current.set(att.id, doc);
     }
     const p = await doc.getPage(page);
-    const vp = p.getViewport({ scale: 1.5, rotation: att.rotation });
+    const vp = p.getViewport({ scale: 1.5, rotation: att.pageRotations[page] ?? 0 });
     const canvas = document.createElement('canvas');
     canvas.width = vp.width;
     canvas.height = vp.height;
@@ -1035,35 +992,42 @@ export function useWorkbenchController() {
     }
   }
 
-  /** 보조 뷰어에서 잡은 영역을 선택된 문제의 그림으로 추가 (크롭→압축→업로드). */
+  /** 선택된 박스(문제/개념/본문)의 figures에 url을 추가. */
+  function appendFigureToBox(boxId: string, url: string) {
+    const cur = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+    if (!cur) return;
+    if (cur.kind === 'problem') {
+      patchBox(boxId, { problem: { ...cur.problem, figures: [...cur.problem.figures, { url }] } });
+    } else {
+      patchBox(boxId, { chunk: { ...cur.chunk, figures: [...cur.chunk.figures, { url }] } });
+    }
+  }
+
+  /** 보조 뷰어에서 잡은 영역을 선택된 박스의 그림으로 추가 (크롭→압축→업로드). */
   async function grabFigure(grab: RefGrab) {
     const st = useWorkbenchStore.getState();
     const selected = st.boxes.find((b) => b.id === st.selectedId);
-    if (!selected || selected.kind !== 'problem') {
-      toast.error('먼저 왼쪽에서 문제 박스를 선택하세요.');
+    if (!selected) {
+      toast.error('먼저 왼쪽에서 박스를 선택하세요.');
       return;
     }
     st.setGrabbing(true);
     try {
       const url = await uploadFigure(grab.image, 'image/jpeg');
       if (!url) return;
-      const cur =
-        useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id) ?? selected;
-      patchBox(selected.id, {
-        problem: { ...cur.problem, figures: [...cur.problem.figures, { url }] },
-      });
+      appendFigureToBox(selected.id, url);
       toast.success('그림을 추가했어요.');
     } finally {
       useWorkbenchStore.getState().setGrabbing(false);
     }
   }
 
-  /** 메인 뷰어에서 잡은 영역을 선택된 문제의 그림으로 추가 (본문 그림 캡처). */
+  /** 메인 뷰어에서 잡은 영역을 선택된 박스의 그림으로 추가 (본문 그림 캡처). */
   async function captureFigureFromMain(rect: BoxRect) {
     const st = useWorkbenchStore.getState();
     const selected = st.boxes.find((b) => b.id === st.selectedId);
-    if (!selected || selected.kind !== 'problem') {
-      toast.error('먼저 문제 박스를 선택하세요. (그림은 그 문제에 추가돼요)');
+    if (!selected) {
+      toast.error('먼저 박스를 선택하세요. (그림은 그 박스에 추가돼요)');
       return;
     }
     const canvas = canvasRef.current;
@@ -1076,12 +1040,8 @@ export function useWorkbenchController() {
     try {
       const url = await uploadFigure(image, 'image/jpeg');
       if (!url) return;
-      const cur =
-        useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id) ?? selected;
-      patchBox(selected.id, {
-        problem: { ...cur.problem, figures: [...cur.problem.figures, { url }] },
-      });
-      toast.success('본문 그림을 문제에 추가했어요.');
+      appendFigureToBox(selected.id, url);
+      toast.success('그림을 추가했어요.');
     } finally {
       useWorkbenchStore.getState().setGrabbing(false);
     }
