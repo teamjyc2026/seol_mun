@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
 import { cn } from '@/shared/lib/cn';
 import { topicCategoriesFor } from '@/shared/config/topics';
 
 /**
- * 대분류 칩 → 세부 토픽 칩 선택 (목록에 없으면 직접 입력 폴백).
- * value = 선택된 세부 토픽(또는 직접 입력 문자열) 1개.
+ * 대분류 칩 → 세부 토픽 칩 선택. 과목에 분류 목록이 있으면 **반드시 목록에서만**
+ * 고르게 한다(자유 입력 금지). 목록이 아예 없는 과목만 직접 입력으로 폴백.
+ * value = 선택된 세부 토픽 1개.
  */
 export function TopicPicker({
   subject,
@@ -20,9 +20,9 @@ export function TopicPicker({
   onChange: (next: { category: string | null; topic: string }) => void;
 }) {
   const cats = topicCategoriesFor(subject);
-  const [custom, setCustom] = useState(false);
   const activeCat = cats.find((c) => c.category === category) ?? null;
-  const knownTopic = !!activeCat?.topics.includes(value);
+  // 목록에 없는 토픽이 들어와 있으면(OCR 오분류 등) 사용자가 다시 고르게 알린다.
+  const offList = !!value && (!activeCat || !activeCat.topics.includes(value));
 
   return (
     <div className="space-y-1.5">
@@ -59,10 +59,7 @@ export function TopicPicker({
                   <button
                     key={t}
                     type="button"
-                    onClick={() => {
-                      setCustom(false);
-                      onChange({ category, topic: active ? '' : t });
-                    }}
+                    onClick={() => onChange({ category, topic: active ? '' : t })}
                     className={cn(
                       'rounded-full border px-2 py-0.5 text-[11px] font-medium transition',
                       active
@@ -74,31 +71,24 @@ export function TopicPicker({
                   </button>
                 );
               })}
-              <button
-                type="button"
-                onClick={() => setCustom((v) => !v)}
-                className={cn(
-                  'rounded-full border border-dashed px-2 py-0.5 text-[11px] font-medium',
-                  custom || (!knownTopic && value)
-                    ? 'border-indigo-400 text-indigo-600'
-                    : 'border-zinc-300 text-zinc-500',
-                )}
-              >
-                직접 입력
-              </button>
             </div>
           )}
+          {offList && (
+            <p className="text-[11px] text-amber-600">
+              ⚠ 분류를 목록에서 골라주세요{value ? ` (현재 “${value}”는 목록에 없음)` : ''}.
+            </p>
+          )}
         </>
-      ) : null}
-      {(custom || cats.length === 0 || (!knownTopic && value && !activeCat)) && (
+      ) : (
+        // 분류 목록이 없는 과목만 자유 입력.
         <input
-          value={knownTopic ? '' : value}
+          value={value}
           onChange={(e) => onChange({ category, topic: e.target.value })}
-          placeholder="토픽 직접 입력 (예: 임진왜란)"
+          placeholder="토픽 입력 (예: 임진왜란)"
           className="h-8 w-full rounded-md border border-zinc-200 px-2 text-xs outline-none focus:border-indigo-400"
         />
       )}
-      {value && (
+      {value && !offList && (
         <p className="text-[11px] text-zinc-500">
           선택됨: <b className="text-zinc-700">{category ? `${category} › ` : ''}{value}</b>
         </p>

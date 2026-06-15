@@ -62,6 +62,26 @@ export function ProblemCard({
         </div>
       </header>
 
+      {problem.figures && problem.figures.length > 0 ? (
+        <div className="grid grid-cols-1 gap-2 pl-8 sm:grid-cols-2">
+          {problem.figures.map((fig, i) => (
+            <figure key={i} className="space-y-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={fig.url}
+                alt={fig.caption || `그림 ${i + 1}`}
+                className="w-full rounded-lg border border-zinc-200 bg-white object-contain"
+              />
+              {fig.caption ? (
+                <figcaption className="text-center text-[11px] text-zinc-500">
+                  {fig.caption}
+                </figcaption>
+              ) : null}
+            </figure>
+          ))}
+        </div>
+      ) : null}
+
       {problem.choices && problem.choices.length > 0 ? (
         <ul className="space-y-1.5 pl-8">
           {problem.choices.map((c) => {
@@ -148,6 +168,16 @@ export function ProblemCard({
               {problem.explanation ? (
                 <RichText text={problem.explanation} className="block text-zinc-600" />
               ) : null}
+              {problem.figures
+                ?.filter((f) => f.explanation)
+                .map((f, i) => (
+                  <p key={i} className="text-zinc-600">
+                    <span className="mr-1 font-semibold text-violet-700">
+                      {f.caption || `그림 ${i + 1}`}
+                    </span>
+                    {f.explanation}
+                  </p>
+                ))}
             </div>
           ) : null}
         </>

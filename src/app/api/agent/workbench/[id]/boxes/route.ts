@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { requireUploader } from '@/shared/config/auth';
+import { getUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 export const runtime = 'nodejs';
@@ -26,7 +26,8 @@ const createSchema = z.object({
 
 /** 박스 생성 (공동 작업·이어하기를 위해 서버에 영속). */
 export async function POST(req: NextRequest, ctx: Ctx) {
-  if (!(await requireUploader())) {
+  const uploader = await getUploader();
+  if (!uploader) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       kind: body.kind,
       status: body.status,
       payload: body.payload,
+      created_by: uploader.id,
     })
     .select('id')
     .single();
@@ -59,5 +61,5 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     .from('workbench_jobs')
     .update({ updated_at: new Date().toISOString() })
     .eq('id', id);
-  return NextResponse.json({ id: data.id }, { status: 201 });
+  return NextResponse.json({ id: data.id, actor: uploader.nickname }, { status: 201 });
 }

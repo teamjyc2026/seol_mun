@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
 import { claudeJson, llmErrorMessage } from '@/shared/config/anthropic';
+import { MARKUP_RULES } from '@/shared/config/markup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -41,7 +42,8 @@ export async function POST(req: NextRequest) {
 - explanation: 해설 전체 (보이는 그대로, 요약 금지). 없으면 생략.
 - passage_translation: 지문(영어 본문 등)의 한국어 해석/번역이 보이면 그 전체. 해설과 별개. 없으면 생략.
 - 영역에 여러 문제의 답이 있으면${body.hint ? ' 힌트에 해당하는 문제의 것만' : ' 가장 위(첫 번째) 문제의 것만'} 추출하라.
-${body.hint ? `힌트(대상 문제): ${body.hint}` : ''}`,
+${body.hint ? `힌트(대상 문제): ${body.hint}` : ''}
+${MARKUP_RULES}`,
       content: [
         {
           type: 'image',

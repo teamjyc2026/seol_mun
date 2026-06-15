@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
+import { nicknamesByIds } from '@/shared/api/authors';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -45,7 +46,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
         .order('created_at', { ascending: true }),
       supabase
         .from('workbench_boxes')
-        .select('id, page, rect, kind, status, payload, saved_ref, updated_at')
+        .select('id, page, rect, kind, status, payload, saved_ref, created_by, updated_at')
         .eq('job_id', id)
         .order('created_at', { ascending: true }),
     ]);
@@ -67,6 +68,13 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     }),
   );
 
+  // 박스별 올린이(created_by) 닉네임 해석.
+  const nickMap = await nicknamesByIds((boxes ?? []).map((b) => b.created_by));
+  const boxesWithActor = (boxes ?? []).map((b) => ({
+    ...b,
+    actor: b.created_by ? (nickMap.get(b.created_by) ?? null) : null,
+  }));
+
   return NextResponse.json({
     job: { id: job.id, title: job.title, rotation: job.rotation ?? 0 },
     source: {
@@ -77,7 +85,7 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     },
     pdfUrl: pdfSigned.signedUrl,
     attachments: attachments.filter((a) => a.url),
-    boxes: boxes ?? [],
+    boxes: boxesWithActor,
   });
 }
 

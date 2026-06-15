@@ -22,6 +22,8 @@ export type BoxPayload = {
   chunk?: ChunkValue;
   /** 여러 영역(다대일) 답 연결. */
   answerRefs?: AnswerRef[];
+  /** 이 박스 인식에 쓴 누적 토큰 (분류+OCR+정답·해설). */
+  tokens?: { in: number; out: number };
   /** @deprecated 레거시 단일 연결 — fromServerBox에서 배열로 정규화. */
   answerRef?: Omit<AnswerRef, 'id'> & { id?: string };
 };
@@ -30,6 +32,13 @@ export type BoxData = WorkBox & {
   problem: WorkbenchProblemValue;
   chunk: ChunkValue;
   answerRefs: AnswerRef[];
+  /** 이 박스에 쓴 누적 토큰. */
+  tokensIn: number;
+  tokensOut: number;
+  /** 이 박스를 만든 사람(올린이) 닉네임 — 서버 created_by에서 해석. */
+  actor: string | null;
+  /** 저장된 문제/청크 id — 재저장 시 새로 만들지 않고 이 레코드를 갱신. */
+  savedRef: string | null;
 };
 
 export type Attachment = { id: string; title: string; url: string; rotation: number };
@@ -77,5 +86,8 @@ export type JobDetail = {
     kind: BoxKind;
     status: WorkBox['status'];
     payload: BoxPayload;
+    saved_ref?: string | null;
+    /** 올린이 닉네임 (created_by 해석). */
+    actor?: string | null;
   }[];
 };

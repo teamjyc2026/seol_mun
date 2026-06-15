@@ -6,6 +6,7 @@ export {
   type Difficulty,
   type ProblemType,
   type ProblemChoice,
+  type ProblemFigure,
   type ProblemCitation,
   type Problem,
   type ProblemDraft,

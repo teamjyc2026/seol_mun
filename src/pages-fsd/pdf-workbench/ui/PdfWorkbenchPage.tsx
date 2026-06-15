@@ -89,7 +89,8 @@ export function PdfWorkbenchPage() {
     openAttachment,
     addAttachment,
     deleteAttachment,
-    grabAnswer,
+    grabFromRef,
+    uploadFigureFile,
     removeAnswerRef,
     clearAnswerRefs,
   } = useWorkbenchController();
@@ -122,6 +123,7 @@ export function PdfWorkbenchPage() {
       pageNum: st.pageNum,
       numPages: st.numPages,
       rotation: st.rotation,
+      rotating: st.rotating,
       tokensIn: st.tokensIn,
       tokensOut: st.tokensOut,
       // 박스
@@ -724,14 +726,12 @@ export function PdfWorkbenchPage() {
         >
           <RefreshCw className="h-3.5 w-3.5" /> 동기화
         </button>
-        {(s.tokensIn > 0 || s.tokensOut > 0) && (
-          <span
-            className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700"
-            title="이 작업에서 Opus(OCR)가 쓴 누적 토큰"
-          >
-            🪙 ↑{fmtTok(s.tokensIn)} ↓{fmtTok(s.tokensOut)}
-          </span>
-        )}
+        <span
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs font-medium tabular-nums text-amber-700"
+          title="이 작업에서 Opus(OCR)가 쓴 누적 토큰"
+        >
+          🪙 ↑{fmtTok(s.tokensIn)} ↓{fmtTok(s.tokensOut)}
+        </span>
 
         <div className="ml-auto flex items-center gap-1">
           <span className="mr-1 text-xs text-zinc-500">새 박스:</span>
@@ -873,28 +873,30 @@ export function PdfWorkbenchPage() {
             <span className="mx-1 h-4 w-px bg-zinc-200" />
             <button
               type="button"
+              disabled={s.rotating}
               onClick={() => void rotateJob(-90)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
-              title="왼쪽으로 90° 회전"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+              title="왼쪽으로 90° 회전 (원본 파일에 저장)"
             >
-              <RotateCcw className="h-4 w-4" />
+              {s.rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
             </button>
             <button
               type="button"
+              disabled={s.rotating}
               onClick={() => void rotateJob(90)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50"
-              title="오른쪽으로 90° 회전"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+              title="오른쪽으로 90° 회전 (원본 파일에 저장)"
             >
-              <RotateCw className="h-4 w-4" />
+              {s.rotating ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />}
             </button>
             {pageIdleCount > 0 && (
               <button
                 type="button"
                 onClick={() => void recognizeIdleOnPage()}
-                className="ml-auto inline-flex items-center gap-1 rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+                className="ml-auto inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
                 title="이 페이지의 미인식 박스를 모두 인식"
               >
-                <Sparkles className="h-3.5 w-3.5" /> 미인식 {pageIdleCount}개 인식
+                <Sparkles className="h-3.5 w-3.5 shrink-0" /> 미인식 {pageIdleCount}개 인식
               </button>
             )}
             <span
@@ -927,7 +929,7 @@ export function PdfWorkbenchPage() {
               rotation={refRotation}
               grabbing={s.grabbing}
               grabLabel="→ 정답·해설 가져오기"
-              onGrab={(g) => void grabAnswer(g)}
+              onGrab={(g) => void grabFromRef(g)}
               onRotate={(d) => void rotateRef(d)}
               linkedRefs={linkedRefs}
             />
@@ -979,8 +981,10 @@ export function PdfWorkbenchPage() {
                       : 'border-zinc-200 bg-white text-zinc-600',
                 )}
               >
-                <span className="flex items-center gap-2">
-                  p.{selected.page} · {KIND_LABEL[selected.kind]}
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="whitespace-nowrap">
+                    p.{selected.page} · {KIND_LABEL[selected.kind]}
+                  </span>
                   <select
                     value={selected.kind}
                     onChange={(e) => patchBox(selected.id, { kind: e.target.value as BoxKind })}
@@ -993,34 +997,52 @@ export function PdfWorkbenchPage() {
                       </option>
                     ))}
                   </select>
-                  {selected.status === 'saved'
-                    ? '저장됨 ✓'
-                    : selected.status === 'failed'
-                      ? '인식 실패 — 직접 입력 가능'
-                      : ''}
+                  <span className="truncate">
+                    {selected.status === 'saved'
+                      ? '저장됨 ✓'
+                      : selected.status === 'failed'
+                        ? '인식 실패'
+                        : ''}
+                  </span>
+                  {(selected.tokensIn > 0 || selected.tokensOut > 0) && (
+                    <span
+                      className="shrink-0 whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-amber-700"
+                      title="이 항목 인식에 쓴 토큰"
+                    >
+                      🪙↑{fmtTok(selected.tokensIn)} ↓{fmtTok(selected.tokensOut)}
+                    </span>
+                  )}
+                  {selected.actor && (
+                    <span
+                      className="shrink-0 truncate text-[10px] font-normal text-zinc-400"
+                      title="올린 사람"
+                    >
+                      · {selected.actor}
+                    </span>
+                  )}
                 </span>
-                <div className="flex items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-1.5">
                   <button
                     type="button"
                     onClick={() => void reocrSelected()}
                     disabled={selected.id.startsWith('temp-')}
-                    className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40"
                     title="영역을 수정한 뒤 이 영역을 다시 인식"
                   >
-                    <ScanText className="h-3.5 w-3.5" /> 다시 인식
+                    <ScanText className="h-3.5 w-3.5 shrink-0" /> 다시 인식
                   </button>
                   <button
                     type="button"
                     onClick={() => void saveSelected()}
-                    disabled={s.saving || selected.status === 'saved'}
-                    className="inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                    disabled={s.saving}
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-indigo-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
                   >
                     {s.saving ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                     ) : (
-                      <Save className="h-3.5 w-3.5" />
+                      <Save className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    저장
+                    {selected.status === 'saved' ? '다시 저장' : '저장'}
                   </button>
                 </div>
               </div>
@@ -1063,6 +1085,7 @@ export function PdfWorkbenchPage() {
                     subject={s.source.subject}
                     value={selected.problem}
                     onChange={(next) => patchBox(selected.id, { problem: next })}
+                    uploadFigure={uploadFigureFile}
                   />
                 ) : (
                   <div className="space-y-4">

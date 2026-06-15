@@ -38,10 +38,14 @@ function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
     rect: b.rect,
     kind: b.kind,
     status: b.status === 'ocr' ? 'ready' : b.status,
-    // 이전 박스엔 passage_translation 등 새 필드가 없을 수 있어 기본값과 병합.
+    // 이전 박스엔 passage_translation·figures 등 새 필드가 없을 수 있어 기본값과 병합.
     problem: { ...emptyProblemValue(), ...(b.payload.problem ?? {}) },
     chunk: b.payload.chunk ?? { category: null, topic: '', text: '' },
     answerRefs,
+    tokensIn: b.payload.tokens?.in ?? 0,
+    tokensOut: b.payload.tokens?.out ?? 0,
+    actor: b.actor ?? null,
+    savedRef: b.saved_ref ?? null,
   };
 }
 
@@ -49,7 +53,10 @@ function toServerPayload(b: BoxData): BoxPayload {
   const base: BoxPayload =
     b.kind === 'problem' ? { problem: b.problem } : { chunk: b.chunk };
   // answerRefs를 빠뜨리면 디바운스 PATCH가 저장된 링크를 지워버린다
-  return b.answerRefs.length ? { ...base, answerRefs: b.answerRefs } : base;
+  if (b.answerRefs.length) base.answerRefs = b.answerRefs;
+  if (b.tokensIn > 0 || b.tokensOut > 0)
+    base.tokens = { in: b.tokensIn, out: b.tokensOut };
+  return base;
 }
 
 type TokenUsage = { input: number; output: number };
@@ -84,6 +91,8 @@ export function useWorkbenchController() {
   const patchTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   /** 부속 PDF 문서 캐시 — 탭 전환 시 재다운로드 방지. */
   const refDocCache = useRef<Map<string, PDFDocumentProxy>>(new Map());
+  /** 본 PDF 회전 굽기 동시 실행 방지. */
+  const rotatingRef = useRef(false);
 
   // ---------- 목록 ----------
   async function refreshJobs() {
@@ -214,27 +223,44 @@ export function useWorkbenchController() {
     }
   }
 
-  /** OCR 토큰 사용량을 세션 누계에 더하고 토스트로 표시. */
-  function reportUsage(label: string, usage?: TokenUsage) {
+  /**
+   * OCR 토큰 사용량을 세션 누계 + (boxId가 있으면) 그 박스 누계에 더하고
+   * 토스트로 표시. 박스 토큰은 로컬만 갱신하고 영속은 호출부의 PATCH가 맡는다.
+   */
+  function reportUsage(label: string, usage?: TokenUsage, boxId?: string) {
     if (!usage) return;
     useWorkbenchStore.getState().addTokens(usage.input, usage.output);
+    if (boxId) {
+      const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+      if (box)
+        patchBox(
+          boxId,
+          { tokensIn: box.tokensIn + usage.input, tokensOut: box.tokensOut + usage.output },
+          false,
+        );
+    }
     toast.info(`${label} · 토큰 ↑${fmtTok(usage.input)} ↓${fmtTok(usage.output)}`);
   }
 
-  /** PDF 90° 회전 — 박스 좌표도 함께 회전시켜 정합 유지 + 영속. */
+  /**
+   * 본 PDF 90° 회전 — 회전을 **원본 파일에 구워** 영속한다.
+   * ① 박스 좌표를 새 방향으로 변환·저장 → ② 즉시 화면 회전(낙관적) →
+   * ③ 서버가 파일을 회전해 덮어쓰고 → ④ 구운 PDF를 다시 받아 0° 기준으로 교체.
+   */
   async function rotateJob(delta: 90 | -90) {
+    if (rotatingRef.current) return;
     const st = useWorkbenchStore.getState();
-    const { jobId, doc, rotation, boxes } = st;
+    const { jobId, doc, boxes } = st;
     if (!jobId || !doc) return;
-    const oldRotation = rotation;
-    const newRotation = ((oldRotation + delta) % 360 + 360) % 360;
+    rotatingRef.current = true;
+    st.setRotating(true);
 
-    // 각 박스를 자기 페이지의 (기존 회전 기준) 캔버스 크기로 회전 변환.
+    // 현재 화면 방향(0°) 기준 캔버스 크기로 박스를 회전 변환.
     const pages = Array.from(new Set(boxes.map((b) => b.page)));
     const dims = new Map<number, { w: number; h: number }>();
     await Promise.all(
       pages.map(async (p) => {
-        const vp = (await doc.getPage(p)).getViewport({ scale: 1.5, rotation: oldRotation });
+        const vp = (await doc.getPage(p)).getViewport({ scale: 1.5, rotation: 0 });
         dims.set(p, { w: vp.width, h: vp.height });
       }),
     );
@@ -250,15 +276,36 @@ export function useWorkbenchController() {
     });
 
     st.setBoxes(rotated);
-    st.setRotation(newRotation);
+    // 낙관적 화면 회전(굽기 완료 전까지 기존 doc을 viewport로 돌려 보여준다).
+    st.setRotation(((delta % 360) + 360) % 360);
 
-    // 영속: 회전값 + 변경된 박스 rect (temp 제외).
-    void api.patch(`/agent/workbench/${jobId}`, { rotation: newRotation }).catch(() => {});
+    // 박스 rect 영속 (temp 제외).
     for (const b of rotated) {
       if (b.id.startsWith('temp-')) continue;
       void api
         .patch(`/agent/workbench/${jobId}/boxes/${b.id}`, { rect: b.rect })
         .catch(() => {});
+    }
+
+    try {
+      // 서버에서 파일을 회전해 덮어쓰고 새 서명 URL을 받는다.
+      const { data } = await api.post<{ pdfUrl: string }>(
+        `/agent/workbench/${jobId}/rotate`,
+        { delta },
+      );
+      const reloaded = await loadPdfFromUrl(data.pdfUrl);
+      const s2 = useWorkbenchStore.getState();
+      s2.setDoc(reloaded);
+      s2.setRotation(0);
+      // 보조 뷰어가 같은 PDF를 보고 있으면 함께 교체.
+      if (s2.refSel?.type === 'same') s2.setRefDoc(reloaded);
+      toast.success('PDF를 회전해 원본 파일에 저장했어요.');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'PDF 회전 저장 실패');
+      void refreshBoxes();
+    } finally {
+      rotatingRef.current = false;
+      useWorkbenchStore.getState().setRotating(false);
     }
   }
 
@@ -421,10 +468,9 @@ export function useWorkbenchController() {
         throw new Error((await clsRes.json().catch(() => null))?.message ?? '분류 실패');
       const cls = (await clsRes.json()) as { kind: BoxKind; usage?: TokenUsage };
       const kind = cls.kind;
-      reportUsage('종류 분류', cls.usage);
+      reportUsage('종류 분류', cls.usage, boxId);
 
       // ② 종류별 OCR
-      let payload: BoxPayload;
       let patch: Partial<BoxData>;
       if (kind === 'problem') {
         const subject = st.source?.subject ?? '';
@@ -438,8 +484,8 @@ export function useWorkbenchController() {
           problem: OcrProblem;
           usage?: TokenUsage;
         };
-        reportUsage('문제 인식', usage);
-        // 분류는 기존 목록에 스냅 — topic이 목록에 있으면 그 대분류로 category 설정.
+        reportUsage('문제 인식', usage, boxId);
+        // 분류는 반드시 기존 목록에 스냅 — 목록에 없는 OCR 토픽은 버린다(자유입력 금지).
         const tax = topicCategoriesFor(subject);
         const matchedCat = problem.topic
           ? tax.find((c) => c.topics.includes(problem.topic as string))
@@ -449,18 +495,23 @@ export function useWorkbenchController() {
           (problem.category && tax.some((c) => c.category === problem.category)
             ? problem.category
             : box.problem.category);
+        // topic은 목록에 있을 때만 채우고, 아니면 비워 사용자가 고르게 한다.
+        const topic = matchedCat
+          ? (problem.topic as string)
+          : tax.length === 0
+            ? (problem.topic ?? box.problem.topic)
+            : box.problem.topic;
         const value: WorkbenchProblemValue = {
           ...box.problem,
           problem_type: problem.problem_type,
           category,
-          topic: problem.topic ?? box.problem.topic,
+          topic,
           passage: problem.passage ?? '',
           question: problem.question,
           choices: problem.choices?.length ? problem.choices : box.problem.choices,
           answer: problem.answer ?? '',
           explanation: problem.explanation ?? '',
         };
-        payload = { problem: value };
         patch = { status: 'ready', kind, problem: value };
       } else {
         const res = await fetch('/api/agent/ocr', {
@@ -470,18 +521,21 @@ export function useWorkbenchController() {
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
         const { text, usage } = (await res.json()) as { text: string; usage?: TokenUsage };
-        reportUsage('내용 인식', usage);
+        reportUsage('내용 인식', usage, boxId);
         const value: ChunkValue = { ...box.chunk, text };
-        payload = { chunk: value };
         patch = { status: 'ready', kind, chunk: value };
       }
       patchBox(boxId, patch, false);
       if (jobId) {
-        await api.patch(`/agent/workbench/${jobId}/boxes/${boxId}`, {
-          status: 'ready',
-          kind,
-          payload,
-        });
+        // 토큰 누계도 함께 영속되도록 최신 박스의 payload로 저장.
+        const fresh = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+        if (fresh) {
+          await api.patch(`/agent/workbench/${jobId}/boxes/${boxId}`, {
+            status: 'ready',
+            kind,
+            payload: toServerPayload(fresh),
+          });
+        }
       }
     } catch (e) {
       patchBox(boxId, { status: 'failed' }, false);
@@ -509,18 +563,21 @@ export function useWorkbenchController() {
       problem: emptyProblemValue(),
       chunk: { category: null, topic: '', text: '' },
       answerRefs: [],
+      tokensIn: 0,
+      tokensOut: 0,
+      actor: null,
+      savedRef: null,
     };
     st.addBox(base);
     st.setSelectedId(tempId);
     try {
-      const { data } = await api.post<{ id: string }>(`/agent/workbench/${jobId}/boxes`, {
-        page: pageNum,
-        rect,
-        kind: drawKind,
-        status: 'idle',
-        payload: {},
-      });
-      useWorkbenchStore.getState().swapBoxId(tempId, data.id);
+      const { data } = await api.post<{ id: string; actor?: string | null }>(
+        `/agent/workbench/${jobId}/boxes`,
+        { page: pageNum, rect, kind: drawKind, status: 'idle', payload: {} },
+      );
+      const s2 = useWorkbenchStore.getState();
+      s2.swapBoxId(tempId, data.id);
+      if (data.actor) s2.updateBox(data.id, { actor: data.actor });
     } catch (e) {
       patchBox(tempId, { status: 'failed' }, false);
       toast.error(e instanceof Error ? e.message : '박스 생성 실패');
@@ -567,7 +624,7 @@ export function useWorkbenchController() {
           toast.error('발문과 정답을 채워주세요.');
           return;
         }
-        const { id } = await createProblem({
+        const body = {
           subject: source.subject,
           topic: f.topic || null,
           difficulty: f.difficulty,
@@ -577,8 +634,9 @@ export function useWorkbenchController() {
           question: f.question,
           choices:
             f.problem_type === 'objective' ? f.choices.filter((c) => c.text.trim()) : null,
-          answer: f.answer,
+          answer: f.answer.trim(),
           explanation: f.explanation || null,
+          figures: f.figures.filter((fig) => fig.url),
           notes: 'PDF 워크벤치 등록',
           citations: [
             {
@@ -588,12 +646,18 @@ export function useWorkbenchController() {
               snippet: (f.passage || f.question).slice(0, 160),
             },
           ],
-        });
-        savedRef = id;
-        await api.post(`/agent/problems/${id}/embed`).catch(() => {
+        };
+        // 이미 저장한 박스면 새로 만들지 않고 그 문제를 갱신(중복 방지) — 계속 저장 가능.
+        if (selected.savedRef) {
+          await api.patch(`/agent/problems/${selected.savedRef}`, body);
+          savedRef = selected.savedRef;
+        } else {
+          savedRef = (await createProblem(body)).id;
+        }
+        await api.post(`/agent/problems/${savedRef}/embed`).catch(() => {
           toast.info('저장됐지만 임베딩 실패 — 문제 목록 ⚡로 재시도하세요.');
         });
-        toast.success('문제 저장 + 임베딩 완료');
+        toast.success(selected.savedRef ? '문제 수정 저장 완료' : '문제 저장 + 임베딩 완료');
       } else {
         const c = selected.chunk;
         if (c.text.trim().length < 10) {
@@ -612,7 +676,7 @@ export function useWorkbenchController() {
         savedRef = data.id;
         toast.success(`${KIND_LABEL[selected.kind]} 청크 저장 + 임베딩 완료`);
       }
-      patchBox(selected.id, { status: 'saved' }, false);
+      patchBox(selected.id, { status: 'saved', savedRef }, false);
       await api
         .patch(`/agent/workbench/${jobId}/boxes/${selected.id}`, {
           status: 'saved',
@@ -769,7 +833,7 @@ export function useWorkbenchController() {
         passage_translation?: string;
         usage?: TokenUsage;
       };
-      reportUsage('정답·해설', usage);
+      reportUsage('정답·해설', usage, selected.id);
       if (!answer && !explanation && !passage_translation) {
         toast.info('영역에서 정답·해설을 찾지 못했어요.');
         return;
@@ -809,6 +873,60 @@ export function useWorkbenchController() {
     patchBox(boxId, { answerRefs: [] });
   }
 
+  // ---------- 그림/도표 ----------
+  /** base64 이미지를 Storage(problem-figures)에 올리고 public URL을 돌려준다. */
+  async function uploadFigure(image: string, mediaType: string): Promise<string | null> {
+    try {
+      const { data } = await api.post<{ url: string }>('/agent/figures', { image, mediaType });
+      return data.url;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '그림 업로드 실패');
+      return null;
+    }
+  }
+
+  /** 보조 뷰어에서 잡은 영역을 선택된 문제의 그림으로 추가 (크롭→압축→업로드). */
+  async function grabFigure(grab: RefGrab) {
+    const st = useWorkbenchStore.getState();
+    const selected = st.boxes.find((b) => b.id === st.selectedId);
+    if (!selected || selected.kind !== 'problem') {
+      toast.error('먼저 왼쪽에서 문제 박스를 선택하세요.');
+      return;
+    }
+    st.setGrabbing(true);
+    try {
+      const url = await uploadFigure(grab.image, 'image/jpeg');
+      if (!url) return;
+      const cur =
+        useWorkbenchStore.getState().boxes.find((b) => b.id === selected.id) ?? selected;
+      patchBox(selected.id, {
+        problem: { ...cur.problem, figures: [...cur.problem.figures, { url }] },
+      });
+      toast.success('그림을 추가했어요.');
+    } finally {
+      useWorkbenchStore.getState().setGrabbing(false);
+    }
+  }
+
+  /** 보조 뷰어 grab — 모드에 따라 정답·해설 또는 그림으로 분기. */
+  async function grabFromRef(grab: RefGrab) {
+    if (grab.mode === 'figure') return grabFigure(grab);
+    return grabAnswer(grab);
+  }
+
+  /** 폼에서 파일을 직접 그림으로 업로드 → URL 반환. */
+  async function uploadFigureFile(file: File): Promise<string | null> {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(String(fr.result));
+      fr.onerror = () => reject(new Error('파일 읽기 실패'));
+      fr.readAsDataURL(file);
+    });
+    const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+    const mediaType = dataUrl.slice(5, dataUrl.indexOf(';')) || 'image/png';
+    return uploadFigure(base64, mediaType);
+  }
+
   return {
     canvasRef,
     fileRef,
@@ -841,6 +959,8 @@ export function useWorkbenchController() {
     addAttachment,
     deleteAttachment,
     grabAnswer,
+    grabFromRef,
+    uploadFigureFile,
     removeAnswerRef,
     clearAnswerRefs,
   };

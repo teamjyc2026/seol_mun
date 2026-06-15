@@ -1,8 +1,10 @@
 'use client';
 
-import { Plus, X } from 'lucide-react';
-import type { ProblemChoice } from '@/entities/problem';
+import { useRef, useState } from 'react';
+import { ImagePlus, Loader2, Plus, X } from 'lucide-react';
+import type { ProblemChoice, ProblemFigure } from '@/entities/problem';
 import { cn } from '@/shared/lib/cn';
+import { RichTextHelp, RichTextPreview } from '@/shared/ui/RichText';
 import { TopicPicker } from './TopicPicker';
 
 export type WorkbenchProblemValue = {
@@ -15,8 +17,11 @@ export type WorkbenchProblemValue = {
   passage_translation: string;
   question: string;
   choices: ProblemChoice[];
+  /** 정답. 단답형은 줄바꿈으로 여러 답(빈칸 순서대로)을 구분한다. */
   answer: string;
   explanation: string;
+  /** 그림/도표 — 보조 뷰어의 "그림 가져오기" 또는 직접 업로드로 채운다. */
+  figures: ProblemFigure[];
 };
 
 export function emptyProblemValue(): WorkbenchProblemValue {
@@ -37,6 +42,7 @@ export function emptyProblemValue(): WorkbenchProblemValue {
     ],
     answer: '',
     explanation: '',
+    figures: [],
   };
 }
 
@@ -56,11 +62,16 @@ export function WorkbenchProblemForm({
   subject,
   value,
   onChange,
+  uploadFigure,
 }: {
   subject: string;
   value: WorkbenchProblemValue;
   onChange: (next: WorkbenchProblemValue) => void;
+  /** 파일을 Storage에 올리고 public URL을 돌려준다 (실패 시 null). */
+  uploadFigure: (file: File) => Promise<string | null>;
 }) {
+  const figFileRef = useRef<HTMLInputElement | null>(null);
+  const [figUploading, setFigUploading] = useState(false);
   const set = <K extends keyof WorkbenchProblemValue>(
     k: K,
     v: WorkbenchProblemValue[K],
@@ -79,8 +90,37 @@ export function WorkbenchProblemForm({
     set('choices', next);
   }
 
+  // 단답형 정답은 줄바꿈으로 여러 답(빈칸 순서대로)을 구분해 저장한다.
+  const shortAnswers = value.answer.length ? value.answer.split('\n') : [''];
+  function setShortAnswers(list: string[]) {
+    set('answer', list.join('\n'));
+  }
+
+  function updFigure(i: number, patch: Partial<ProblemFigure>) {
+    const next = value.figures.slice();
+    next[i] = { ...next[i], ...patch };
+    set('figures', next);
+  }
+  function removeFigure(i: number) {
+    set('figures', value.figures.filter((_, idx) => idx !== i));
+  }
+  async function onPickFigureFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setFigUploading(true);
+    try {
+      const url = await uploadFigure(file);
+      if (url) set('figures', [...value.figures, { url }]);
+    } finally {
+      setFigUploading(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
+      <RichTextHelp />
+
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-zinc-700">유형</label>
@@ -140,6 +180,7 @@ export function WorkbenchProblemForm({
           placeholder="지문/제시문 — 없으면 비워두세요"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
+        <RichTextPreview value={value.passage} />
       </div>
 
       <div className="space-y-1.5">
@@ -162,6 +203,7 @@ export function WorkbenchProblemForm({
           placeholder="문제 발문"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
+        <RichTextPreview value={value.question} />
       </div>
 
       {value.problem_type === 'objective' && (
@@ -206,9 +248,21 @@ export function WorkbenchProblemForm({
       )}
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-zinc-700">
-          정답 (필수{value.problem_type === 'objective' ? ' — 번호만' : ''})
-        </label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-zinc-700">
+            정답 (필수{value.problem_type === 'objective' ? ' — 번호만' : ''}
+            {value.problem_type === 'short' ? ' — 빈칸 순서대로' : ''})
+          </label>
+          {value.problem_type === 'short' && (
+            <button
+              type="button"
+              onClick={() => setShortAnswers([...shortAnswers, ''])}
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-zinc-200 px-1.5 text-[11px] text-zinc-600 hover:bg-zinc-50"
+            >
+              <Plus className="h-3 w-3" /> 답 추가
+            </button>
+          )}
+        </div>
         {value.problem_type === 'objective' ? (
           // 번호만 저장 — 보기 내용이 나중에 바뀌어도 정답은 라벨로 유지된다.
           <div className="flex flex-wrap gap-1">
@@ -231,11 +285,41 @@ export function WorkbenchProblemForm({
               </button>
             ))}
           </div>
+        ) : value.problem_type === 'short' ? (
+          // 단답형: 빈칸처럼 답을 여러 개 — 줄바꿈으로 합쳐 저장.
+          <ul className="space-y-1">
+            {shortAnswers.map((ans, i) => (
+              <li key={i} className="flex items-center gap-1.5">
+                <span className="w-12 shrink-0 text-center text-[11px] font-medium text-zinc-400">
+                  빈칸 {i + 1}
+                </span>
+                <input
+                  value={ans}
+                  onChange={(e) => {
+                    const next = shortAnswers.slice();
+                    next[i] = e.target.value;
+                    setShortAnswers(next);
+                  }}
+                  placeholder="예) restored"
+                  className="h-8 min-w-0 flex-1 rounded-md border border-zinc-200 px-2 text-sm outline-none"
+                />
+                {shortAnswers.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setShortAnswers(shortAnswers.filter((_, idx) => idx !== i))}
+                    className="grid h-6 w-6 shrink-0 place-items-center rounded text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         ) : (
           <input
             value={value.answer}
             onChange={(e) => set('answer', e.target.value)}
-            placeholder={value.problem_type === 'short' ? '예) restored' : '모범 답안'}
+            placeholder="모범 답안"
             className="h-9 w-full rounded-md border border-zinc-200 px-2 text-sm outline-none"
           />
         )}
@@ -250,6 +334,75 @@ export function WorkbenchProblemForm({
           placeholder="풀이 과정·근거"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
+        <RichTextPreview value={value.explanation} />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-zinc-700">그림/도표 (선택)</label>
+        <p className="text-[11px] leading-relaxed text-zinc-400">
+          그림은 보조 뷰어 “그림” 모드로 영역을 가져오거나 아래로 직접 올리세요.
+          도표는 본문·발문에 마크다운 표로 적으면 됩니다.
+        </p>
+        {value.figures.length > 0 && (
+          <ul className="space-y-2">
+            {value.figures.map((fig, i) => (
+              <li
+                key={i}
+                className="flex gap-2 rounded-lg border border-zinc-200 bg-zinc-50/50 p-2"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={fig.url}
+                  alt={fig.caption || `그림 ${i + 1}`}
+                  className="h-20 w-20 shrink-0 rounded border border-zinc-200 bg-white object-contain"
+                />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <input
+                    value={fig.caption ?? ''}
+                    onChange={(e) => updFigure(i, { caption: e.target.value })}
+                    placeholder="캡션 (예: [그림 1])"
+                    className="h-7 w-full rounded-md border border-zinc-200 px-2 text-xs outline-none"
+                  />
+                  <textarea
+                    value={fig.explanation ?? ''}
+                    onChange={(e) => updFigure(i, { explanation: e.target.value })}
+                    rows={2}
+                    placeholder="이 그림에 대한 해설 (선택)"
+                    className="block w-full resize-y rounded-md border border-zinc-200 px-2 py-1 text-xs outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFigure(i)}
+                  className="grid h-6 w-6 shrink-0 place-items-center rounded text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+                  title="그림 삭제"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <input
+          ref={figFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onPickFigureFile}
+        />
+        <button
+          type="button"
+          disabled={figUploading}
+          onClick={() => figFileRef.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-md border border-dashed border-zinc-300 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-50"
+        >
+          {figUploading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <ImagePlus className="h-3.5 w-3.5" />
+          )}
+          그림 직접 올리기
+        </button>
       </div>
     </div>
   );

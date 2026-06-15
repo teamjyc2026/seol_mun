@@ -1,7 +1,7 @@
 import 'server-only';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedQuery } from '@/shared/lib/embedding';
-import type { ProblemChoice, ProblemCitation } from '../model/types';
+import type { ProblemChoice, ProblemCitation, ProblemFigure } from '../model/types';
 
 export type ProblemMatch = {
   id: string;
@@ -16,6 +16,7 @@ export type ProblemMatch = {
   choices: ProblemChoice[] | null;
   answer: string;
   explanation: string | null;
+  figures: ProblemFigure[] | null;
   citations: ProblemCitation[] | null;
   similarity: number;
 };

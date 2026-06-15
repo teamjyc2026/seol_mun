@@ -21,6 +21,8 @@ export type ProblemDraft = {
   choices: { label: string; text: string }[] | null;
   answer: string;
   explanation: string | null;
+  /** 그림/도표 — Storage URL + 캡션·해설 */
+  figures?: { url: string; caption?: string; explanation?: string }[] | null;
   citations: Citation[];
 };
 

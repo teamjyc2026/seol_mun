@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getSourceChunks } from '@/entities/source/api/getSourceChunks';
-import { requireUploader } from '@/shared/config/auth';
+import { getUploaderId, requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 import { embedQuery } from '@/shared/lib/embedding';
 import { buildEmbeddingText, type EmbedMeta } from '@/shared/agent/buildEmbeddingText';
@@ -55,7 +55,8 @@ function sanitize(s: string): string {
 
 /** PDF 워크벤치: 개념/본문 박스 1개를 청크로 적재 (임베딩 포함). */
 export async function POST(req: NextRequest, ctx: Ctx) {
-  if (!(await requireUploader())) {
+  const uploaderId = await getUploaderId();
+  if (!uploaderId) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
   const { id } = await ctx.params;
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         content,
         chapter_path: chapterPath,
         embedding: embedding as unknown as string,
+        created_by: uploaderId,
       })
       .select('id')
       .single();

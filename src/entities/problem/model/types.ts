@@ -18,6 +18,16 @@ export const PROBLEM_TYPE_LABEL: Record<ProblemType, string> = {
 
 export type ProblemChoice = { label: string; text: string };
 
+/** 문제에 딸린 그림/도표 — Storage에 올린 이미지 주소 + 캡션·해설. */
+export type ProblemFigure = {
+  /** public 스토리지 URL (problem-figures 버킷). */
+  url: string;
+  /** 그림 설명/캡션 (선택). */
+  caption?: string;
+  /** 이 그림에 대한 해설 (선택). */
+  explanation?: string;
+};
+
 export type ProblemCitation = {
   sourceId: string;
   sourceTitle?: string;
@@ -43,6 +53,8 @@ export type Problem = {
   choices: ProblemChoice[] | null;
   answer: string;
   explanation: string | null;
+  /** 그림/도표 (이미지는 Storage URL, 도표는 본문 마크다운으로) */
+  figures?: ProblemFigure[];
   citations: ProblemCitation[];
   notes: string | null;
   created_by: string | null;

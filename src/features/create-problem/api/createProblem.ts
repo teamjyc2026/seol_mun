@@ -1,5 +1,5 @@
 import { api } from '@/shared/api/axios';
-import type { ProblemCitation, ProblemChoice } from '@/entities/problem';
+import type { ProblemCitation, ProblemChoice, ProblemFigure } from '@/entities/problem';
 
 export type CreateProblemInput = {
   subject?: string;
@@ -12,6 +12,7 @@ export type CreateProblemInput = {
   choices?: ProblemChoice[] | null;
   answer: string;
   explanation?: string | null;
+  figures?: ProblemFigure[];
   notes?: string | null;
   citations?: ProblemCitation[];
 };

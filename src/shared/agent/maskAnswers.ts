@@ -13,6 +13,8 @@ export function maskProblemAnswers(results: ToolResult[]): ToolResult[] {
         ...p,
         answer: '',
         explanation: null,
+        // 그림은 보여주되 그림 해설은 정답 힌트가 될 수 있어 가린다.
+        figures: p.figures?.map((f) => ({ url: f.url, caption: f.caption })),
       })),
     };
   });

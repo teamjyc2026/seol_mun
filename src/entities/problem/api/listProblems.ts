@@ -16,7 +16,7 @@ export type ListProblemsFilters = {
 };
 
 const COLUMNS =
-  'id, created_at, subject, subjects, topic, difficulty, problem_type, passage, passage_set_id, question, choices, answer, explanation, citations, notes, created_by, conversation_id, embedded_at';
+  'id, created_at, subject, subjects, topic, difficulty, problem_type, passage, passage_set_id, question, choices, answer, explanation, figures, citations, notes, created_by, conversation_id, embedded_at';
 
 async function attachAuthors(rows: Problem[]): Promise<Problem[]> {
   const map = await nicknamesByIds(rows.map((r) => r.created_by));

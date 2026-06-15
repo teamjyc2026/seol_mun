@@ -1,16 +1,29 @@
 'use client';
 
 import { useEffect, useReducer, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Loader2, RotateCcw, RotateCw, ScanText } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ImagePlus,
+  Loader2,
+  RotateCcw,
+  RotateCw,
+  ScanText,
+} from 'lucide-react';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { cn } from '@/shared/lib/cn';
 import { HANDLES, selectionReducer, type Pt, type Rect } from '../lib/dragSelection';
 
+/** 보조 뷰어 grab 모드 — 정답·해설 OCR / 그림(이미지) 추가. */
+export type RefGrabMode = 'answer' | 'figure';
+
 export type RefGrab = {
-  /** base64 PNG (데이터URL 헤더 제외) */
+  /** base64 이미지 (데이터URL 헤더 제외) — answer=PNG, figure=JPEG(압축) */
   image: string;
   page: number;
   /** 페이지 비율 기준 정규화 좌표 (0–1) — 렌더 스케일 독립 */
   rect: Rect;
+  mode: RefGrabMode;
 };
 
 /**
@@ -45,6 +58,7 @@ export function PdfRefViewer({
   const [ratio, setRatio] = useState(1);
   const [pageSize, setPageSize] = useState<{ w: number; h: number } | null>(null);
   const [sel, dispatch] = useReducer(selectionReducer, { drag: null, rect: null });
+  const [mode, setMode] = useState<RefGrabMode>('answer');
   const drag = sel.drag;
   const rect = sel.rect;
 
@@ -123,7 +137,9 @@ export function PdfRefViewer({
     crop
       .getContext('2d')!
       .drawImage(canvas, rect.x, rect.y, rect.w, rect.h, 0, 0, crop.width, crop.height);
-    const dataUrl = crop.toDataURL('image/png');
+    // 그림은 저장·전송용이라 JPEG로 압축, 정답·해설 OCR은 선명한 PNG.
+    const dataUrl =
+      mode === 'figure' ? crop.toDataURL('image/jpeg', 0.85) : crop.toDataURL('image/png');
     onGrab({
       image: dataUrl.slice(dataUrl.indexOf(',') + 1),
       page: pageNum,
@@ -133,6 +149,7 @@ export function PdfRefViewer({
         w: rect.w / canvas.width,
         h: rect.h / canvas.height,
       },
+      mode,
     });
   }
 
@@ -212,19 +229,49 @@ export function PdfRefViewer({
             </button>
           </>
         )}
-        <button
-          type="button"
-          disabled={!rect || rect.w < 8 || grabbing}
-          onClick={grab}
-          className="ml-auto inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
-        >
-          {grabbing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <ScanText className="h-3.5 w-3.5" />
-          )}
-          {grabLabel}
-        </button>
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {/* 가져오기 모드 — 정답·해설 OCR / 그림 추가 */}
+          <div className="flex rounded-md border border-zinc-200 p-0.5">
+            <button
+              type="button"
+              onClick={() => setMode('answer')}
+              className={cn(
+                'rounded px-1.5 py-1 text-[11px] font-medium',
+                mode === 'answer' ? 'bg-emerald-600 text-white' : 'text-zinc-500 hover:bg-zinc-50',
+              )}
+            >
+              정답·해설
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('figure')}
+              className={cn(
+                'rounded px-1.5 py-1 text-[11px] font-medium',
+                mode === 'figure' ? 'bg-violet-600 text-white' : 'text-zinc-500 hover:bg-zinc-50',
+              )}
+            >
+              그림
+            </button>
+          </div>
+          <button
+            type="button"
+            disabled={!rect || rect.w < 8 || grabbing}
+            onClick={grab}
+            className={cn(
+              'inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-semibold text-white disabled:opacity-40',
+              mode === 'figure' ? 'bg-violet-600' : 'bg-emerald-600',
+            )}
+          >
+            {grabbing ? (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+            ) : mode === 'figure' ? (
+              <ImagePlus className="h-3.5 w-3.5 shrink-0" />
+            ) : (
+              <ScanText className="h-3.5 w-3.5 shrink-0" />
+            )}
+            {mode === 'figure' ? '그림 가져오기' : grabLabel}
+          </button>
+        </div>
       </div>
       <div
         ref={wrapRef}
@@ -268,13 +315,39 @@ export function PdfRefViewer({
         {/* 확정된 선택 영역 — 끌어 옮기거나 모서리로 크기 조절 */}
         {!drag && rect && (
           <div
-            className="absolute cursor-move border-2 border-emerald-500 bg-emerald-500/15"
+            className={cn(
+              'absolute cursor-move border-2 bg-emerald-500/15',
+              mode === 'figure' ? 'border-violet-500' : 'border-emerald-500',
+            )}
             style={toDisplay(rect)}
             onMouseDown={(e) => {
               e.stopPropagation();
               dispatch({ type: 'moveStart', p: pos(e), rect });
             }}
           >
+            {/* 영역 위 가져오기 버튼 — 드래그한 자리에서 바로 실행 */}
+            <button
+              type="button"
+              disabled={grabbing}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                grab();
+              }}
+              className={cn(
+                'absolute -top-7 right-0 inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[11px] font-semibold text-white shadow disabled:opacity-50',
+                mode === 'figure' ? 'bg-violet-600' : 'bg-emerald-600',
+              )}
+            >
+              {grabbing ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : mode === 'figure' ? (
+                <ImagePlus className="h-3 w-3" />
+              ) : (
+                <ScanText className="h-3 w-3" />
+              )}
+              {mode === 'figure' ? '그림' : '정답·해설'}
+            </button>
             {HANDLES.map(({ h, cls, cursor }) => (
               <span
                 key={h}

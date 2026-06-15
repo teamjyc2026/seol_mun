@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
 import { claudeJson, llmErrorMessage } from '@/shared/config/anthropic';
 import { topicCategoriesFor } from '@/shared/config/topics';
+import { MARKUP_RULES } from '@/shared/config/markup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,12 +55,13 @@ export async function POST(req: NextRequest) {
       },
       system: `너는 한국 고등학교 시험지 디지털화 전문가다. 이미지 속 문제 1개를 구조화 추출하라.
 - question: 발문(번호 제외). 지문이 있으면 발문만 넣고 지문은 passage에.
-- passage: 지문/제시문 전체. 밑줄 친 어구는 "ⓐ **word**" 형태로, 네모 선택은 "[which / that]", 빈칸은 "______"로 표기 유지.
+- passage: 지문/제시문 전체.
 - choices: 객관식이면 보기 전부 (label "①"~"⑤"), 아니면 생략.
 - answer/explanation: 이미지에 정답·해설이 보일 때만 채우고, 안 보이면 생략(빈칸으로 두면 관리자가 기입).
 - problem_type: objective(객관식)|short(단답)|long(서술) 추정.
 - category와 topic은 위 [분류 목록]에서 정확히 골라라.${taxonomyText}
-- 글자는 보이는 그대로, 요약·번역 금지.`,
+- 글자는 보이는 그대로, 요약·번역 금지.
+${MARKUP_RULES}`,
       content: [
         {
           type: 'image',

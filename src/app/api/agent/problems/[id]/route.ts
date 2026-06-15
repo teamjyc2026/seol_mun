@@ -23,6 +23,11 @@ const citationSchema = z.object({
   page: z.coerce.number().int().min(1).nullable().optional(),
   snippet: z.string().max(500).default(''),
 });
+const figureSchema = z.object({
+  url: z.string().url().max(1000),
+  caption: z.string().max(500).optional(),
+  explanation: z.string().max(4000).optional(),
+});
 
 const patchSchema = z
   .object({
@@ -30,10 +35,13 @@ const patchSchema = z
     topic: z.string().max(100).nullable(),
     difficulty: z.enum(DIFFICULTIES).nullable(),
     problem_type: z.enum(PROBLEM_TYPES).nullable(),
+    passage: z.string().max(20000).nullable(),
+    passage_translation: z.string().max(20000).nullable(),
     question: z.string().min(1).max(4000),
     choices: z.array(choiceSchema).max(10).nullable(),
     answer: z.string().min(1).max(2000),
     explanation: z.string().max(4000).nullable(),
+    figures: z.array(figureSchema).max(10),
     notes: z.string().max(2000).nullable(),
     citations: z.array(citationSchema).max(20),
   })
@@ -87,6 +95,8 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     'topic',
     'difficulty',
     'problem_type',
+    'passage',
+    'passage_translation',
     'question',
     'choices',
     'answer',

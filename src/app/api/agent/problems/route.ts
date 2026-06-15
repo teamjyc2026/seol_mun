@@ -26,6 +26,12 @@ const citationSchema = z.object({
   snippet: z.string().max(500).default(''),
 });
 
+const figureSchema = z.object({
+  url: z.string().url().max(1000),
+  caption: z.string().max(500).optional(),
+  explanation: z.string().max(4000).optional(),
+});
+
 const subProblemSchema = z.object({
   topic: z.string().max(100).nullable().optional(),
   difficulty: z.enum(DIFFICULTIES).nullable().optional(),
@@ -50,6 +56,7 @@ const createSchema = z.object({
   choices: z.array(choiceSchema).max(10).nullable().optional(),
   answer: z.string().min(1).max(2000),
   explanation: z.string().max(4000).nullable().optional(),
+  figures: z.array(figureSchema).max(10).default([]),
   notes: z.string().max(2000).nullable().optional(),
   citations: z.array(citationSchema).max(20).default([]),
 });
@@ -128,6 +135,7 @@ export async function POST(req: NextRequest) {
       choices: body.choices ?? null,
       answer: body.answer,
       explanation: body.explanation ?? null,
+      figures: body.figures ?? [],
       notes: body.notes ?? null,
       citations: body.citations ?? [],
       created_by: userId,

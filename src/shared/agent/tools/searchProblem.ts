@@ -23,6 +23,7 @@ export function toProblemDrafts(matches: ProblemMatch[]): ProblemDraft[] {
     choices: m.choices,
     answer: m.answer,
     explanation: m.explanation,
+    figures: m.figures ?? [],
     citations: (m.citations ?? []).map((c) => ({
       sourceId: c.sourceId,
       sourceTitle: c.sourceTitle,
