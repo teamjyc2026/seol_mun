@@ -11,6 +11,7 @@ import {
   Columns2,
   FileUp,
   Folder as FolderIcon,
+  FolderOpen,
   Lightbulb,
   Loader2,
   Pencil,
@@ -42,6 +43,11 @@ const KIND_ICON: Record<BoxKind, typeof PencilLine> = {
   concept: Lightbulb,
   passage: BookOpen,
 };
+
+/** 1234 → "1.2k". */
+function fmtTok(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
 
 /** 드롭된 항목 중 PDF만 추려낸다. */
 function pdfFilesFromDrop(e: React.DragEvent): File[] {
@@ -108,6 +114,8 @@ export function PdfWorkbenchPage() {
       pageNum: st.pageNum,
       numPages: st.numPages,
       rotation: st.rotation,
+      tokensIn: st.tokensIn,
+      tokensOut: st.tokensOut,
       // 박스
       boxes: st.boxes,
       selectedId: st.selectedId,
@@ -157,12 +165,15 @@ export function PdfWorkbenchPage() {
 
   const pageBoxCount = s.boxes.filter((b) => b.page === s.pageNum).length;
   const savedCount = s.boxes.filter((b) => b.status === 'saved').length;
+  // 탐색기 모델: 홈(folderFilter=null)은 미분류 작업만, 폴더 안이면 그 폴더 작업만.
+  const currentFolder =
+    s.folderFilter && s.folderFilter !== 'unfiled'
+      ? (s.folders.find((f) => f.id === s.folderFilter) ?? null)
+      : null;
   const visibleJobs = s.jobs.filter((j) => {
     if (s.jobSubjectFilter && j.subject !== s.jobSubjectFilter) return false;
-    if (s.folderFilter === 'unfiled' && j.folder_id) return false;
-    if (s.folderFilter && s.folderFilter !== 'unfiled' && j.folder_id !== s.folderFilter)
-      return false;
-    return true;
+    if (currentFolder) return j.folder_id === currentFolder.id;
+    return !j.folder_id; // 홈 = 미분류
   });
 
   // ================= 목록 / 새 작업 =================
@@ -378,92 +389,72 @@ export function PdfWorkbenchPage() {
           </div>
         )}
 
-        {/* 폴더 필터 */}
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          <FolderIcon className="h-3.5 w-3.5 text-zinc-400" />
-          <button
-            type="button"
-            onClick={() => s.setFolderFilter(null)}
-            className={cn(
-              'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
-              s.folderFilter === null
-                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
-            )}
-          >
-            전체
-          </button>
-          <button
-            type="button"
-            onClick={() => s.setFolderFilter('unfiled')}
-            className={cn(
-              'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
-              s.folderFilter === 'unfiled'
-                ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
-            )}
-          >
-            미분류
-          </button>
-          {s.folders.map((f) => {
-            const active = s.folderFilter === f.id;
-            return (
-              <span
+        {/* 폴더 — 홈: 카드(클릭해 들어가기) / 폴더 안: 경로(뒤로) */}
+        {currentFolder ? (
+          <div className="mb-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => s.setFolderFilter(null)}
+              className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs text-zinc-600 hover:bg-zinc-50"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> 폴더 목록
+            </button>
+            <FolderOpen className="h-4 w-4 text-indigo-600" />
+            <h2 className="text-sm font-bold text-zinc-900">{currentFolder.name}</h2>
+            <button
+              type="button"
+              onClick={() => {
+                const name = prompt('폴더 이름', currentFolder.name);
+                if (name?.trim()) void renameFolder(currentFolder.id, name);
+              }}
+              className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
+              title="이름 변경"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`'${currentFolder.name}' 폴더를 삭제할까요? (작업은 미분류로)`))
+                  void deleteFolder(currentFolder.id);
+              }}
+              className="rounded-md p-1 text-zinc-400 hover:bg-rose-50 hover:text-rose-600"
+              title="폴더 삭제"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {s.folders.map((f) => (
+              <button
                 key={f.id}
-                className={cn(
-                  'inline-flex items-center overflow-hidden rounded-full border text-xs font-medium transition',
-                  active
-                    ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                    : 'border-zinc-200 bg-white text-zinc-600',
-                )}
+                type="button"
+                onClick={() => s.setFolderFilter(f.id)}
+                className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-indigo-300 hover:bg-indigo-50/40"
               >
-                <button
-                  type="button"
-                  onClick={() => s.setFolderFilter(f.id)}
-                  className={cn('px-2.5 py-0.5', !active && 'hover:bg-zinc-50')}
-                >
-                  {f.name} {f.jobCount}
-                </button>
-                {active && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const name = prompt('폴더 이름', f.name);
-                        if (name?.trim()) void renameFolder(f.id, name);
-                      }}
-                      className="border-l border-indigo-200 px-1 py-0.5 hover:bg-indigo-100"
-                      title="이름 변경"
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (confirm(`'${f.name}' 폴더를 삭제할까요? (작업은 미분류로)`))
-                          void deleteFolder(f.id);
-                      }}
-                      className="border-l border-indigo-200 px-1 py-0.5 text-rose-500 hover:bg-rose-50"
-                      title="삭제"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </>
-                )}
-              </span>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => {
-              const name = prompt('새 폴더 이름');
-              if (name?.trim()) void createFolder(name);
-            }}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-xs text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
-          >
-            <Plus className="h-3 w-3" /> 새 폴더
-          </button>
-        </div>
+                <FolderIcon className="h-5 w-5 shrink-0 text-indigo-500" />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-800">
+                  {f.name}
+                </span>
+                <span className="shrink-0 rounded-full bg-zinc-100 px-1.5 text-[11px] text-zinc-500">
+                  {f.jobCount}
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300" />
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                const name = prompt('새 폴더 이름');
+                if (name?.trim()) void createFolder(name);
+              }}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 px-3 py-2.5 text-sm text-zinc-500 hover:border-indigo-300 hover:text-indigo-600"
+            >
+              <Plus className="h-4 w-4" /> 새 폴더
+            </button>
+          </div>
+        )}
 
         {/* 과목 필터 */}
         {s.jobs.length > 0 && (
@@ -498,6 +489,10 @@ export function PdfWorkbenchPage() {
           </div>
         )}
 
+        {!currentFolder && s.folders.length > 0 && visibleJobs.length > 0 && (
+          <p className="mb-1 text-xs font-medium text-zinc-400">미분류 작업</p>
+        )}
+
         <section className="space-y-2">
           {s.jobsLoading ? (
             <div className="grid h-28 place-items-center rounded-xl border border-zinc-200 bg-white text-sm text-zinc-400">
@@ -507,7 +502,9 @@ export function PdfWorkbenchPage() {
             <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-8 text-center text-sm text-zinc-500">
               {s.jobs.length === 0
                 ? '아직 작업이 없어요. "새 작업"으로 PDF를 올려 시작하세요.'
-                : '이 과목의 작업이 없어요.'}
+                : currentFolder
+                  ? '이 폴더에 작업이 없어요. 미분류 작업의 폴더를 이 폴더로 바꿔 넣어보세요.'
+                  : '미분류 작업이 없어요. 위 폴더를 열어 확인하세요.'}
             </div>
           ) : (
             visibleJobs.map((j) => (
@@ -590,6 +587,14 @@ export function PdfWorkbenchPage() {
         >
           <RefreshCw className="h-3.5 w-3.5" /> 동기화
         </button>
+        {(s.tokensIn > 0 || s.tokensOut > 0) && (
+          <span
+            className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs font-medium text-amber-700"
+            title="이 작업에서 Opus(OCR)가 쓴 누적 토큰"
+          >
+            🪙 ↑{fmtTok(s.tokensIn)} ↓{fmtTok(s.tokensOut)}
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-1">
           <span className="mr-1 text-xs text-zinc-500">새 박스:</span>

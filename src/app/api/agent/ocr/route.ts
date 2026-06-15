@@ -50,7 +50,10 @@ export async function POST(req: NextRequest) {
       .map((b) => (b as { text: string }).text)
       .join('')
       .trim();
-    return NextResponse.json({ text });
+    return NextResponse.json({
+      text,
+      usage: { input: res.usage.input_tokens, output: res.usage.output_tokens },
+    });
   } catch (e) {
     return NextResponse.json(
       { message: e instanceof Error ? e.message : 'OCR 실패' },

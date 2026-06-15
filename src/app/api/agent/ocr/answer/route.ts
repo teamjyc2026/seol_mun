@@ -27,7 +27,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    let usage = { input: 0, output: 0 };
     const result = await claudeJson<{ answer?: string; explanation?: string }>({
+      onUsage: (u) => {
+        usage = u;
+      },
       system: `너는 시험지 답안·해설 디지털화 전문가다. 이미지 영역에서 정답과 해설을 추출하라.
 - answer: 정답. 객관식이면 번호만 ("①"~"⑤" 형식), 주관식이면 정답 텍스트.
 - explanation: 해설 전체 (보이는 그대로, 요약 금지). 없으면 생략.
@@ -50,7 +54,7 @@ ${body.hint ? `힌트(대상 문제): ${body.hint}` : ''}`,
       },
       maxTokens: 4096,
     });
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, usage });
   } catch (e) {
     return NextResponse.json(
       { message: e instanceof Error ? e.message : '인식 실패' },

@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    let usage = { input: 0, output: 0 };
     const problem = await claudeJson<OcrProblem>({
+      onUsage: (u) => {
+        usage = u;
+      },
       system: `너는 한국 고등학교 시험지 디지털화 전문가다. 이미지 속 문제 1개를 구조화 추출하라.
 - question: 발문(번호 제외). 지문이 있으면 발문만 넣고 지문은 passage에.
 - passage: 지문/제시문 전체. 밑줄 친 어구는 "ⓐ **word**" 형태로, 네모 선택은 "[which / that]", 빈칸은 "______"로 표기 유지.
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
       },
       maxTokens: 8192,
     });
-    return NextResponse.json({ problem });
+    return NextResponse.json({ problem, usage });
   } catch (e) {
     return NextResponse.json(
       { message: e instanceof Error ? e.message : '인식 실패' },

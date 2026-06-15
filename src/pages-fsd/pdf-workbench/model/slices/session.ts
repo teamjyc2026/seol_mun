@@ -14,6 +14,9 @@ export type SessionSlice = {
   numPages: number;
   /** PDF 회전 (0/90/180/270). */
   rotation: number;
+  /** 이 작업 세션에서 Opus(OCR)가 쓴 누적 토큰. */
+  tokensIn: number;
+  tokensOut: number;
 
   openSession: (s: {
     jobId: string;
@@ -27,6 +30,7 @@ export type SessionSlice = {
   setPage: (n: number) => void;
   setOpening: (v: boolean) => void;
   setRotation: (r: number) => void;
+  addTokens: (input: number, output: number) => void;
 };
 
 export const createSessionSlice: StateCreator<
@@ -43,9 +47,11 @@ export const createSessionSlice: StateCreator<
   pageNum: 1,
   numPages: 0,
   rotation: 0,
+  tokensIn: 0,
+  tokensOut: 0,
 
   openSession: ({ jobId, jobTitle, source, doc, numPages, rotation }) =>
-    set({ jobId, jobTitle, source, doc, numPages, rotation, pageNum: 1 }),
+    set({ jobId, jobTitle, source, doc, numPages, rotation, pageNum: 1, tokensIn: 0, tokensOut: 0 }),
   closeSession: () =>
     set({
       jobId: null,
@@ -55,8 +61,12 @@ export const createSessionSlice: StateCreator<
       numPages: 0,
       pageNum: 1,
       rotation: 0,
+      tokensIn: 0,
+      tokensOut: 0,
     }),
   setPage: (pageNum) => set({ pageNum }),
   setOpening: (opening) => set({ opening }),
   setRotation: (rotation) => set({ rotation }),
+  addTokens: (input, output) =>
+    set((st) => ({ tokensIn: st.tokensIn + input, tokensOut: st.tokensOut + output })),
 });

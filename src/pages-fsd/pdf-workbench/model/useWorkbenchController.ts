@@ -43,6 +43,13 @@ function toServerPayload(b: BoxData): BoxPayload {
   return b.answerRef ? { ...base, answerRef: b.answerRef } : base;
 }
 
+type TokenUsage = { input: number; output: number };
+
+/** 1234 → "1.2k". */
+function fmtTok(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+}
+
 function cropToBase64(canvas: HTMLCanvasElement, rect: BoxRect): string {
   const crop = document.createElement('canvas');
   crop.width = Math.max(1, Math.round(rect.w));
@@ -170,6 +177,13 @@ export function useWorkbenchController() {
       const next = useWorkbenchStore.getState().boxes.find((b) => b.id === id);
       if (next) schedulePatch(next);
     }
+  }
+
+  /** OCR 토큰 사용량을 세션 누계에 더하고 토스트로 표시. */
+  function reportUsage(label: string, usage?: TokenUsage) {
+    if (!usage) return;
+    useWorkbenchStore.getState().addTokens(usage.input, usage.output);
+    toast.info(`${label} · 토큰 ↑${fmtTok(usage.input)} ↓${fmtTok(usage.output)}`);
   }
 
   /** PDF 90° 회전 — 박스 좌표도 함께 회전시켜 정합 유지 + 영속. */
@@ -367,7 +381,11 @@ export function useWorkbenchController() {
           body: JSON.stringify({ image, mediaType: 'image/png' }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
-        const { problem } = (await res.json()) as { problem: OcrProblem };
+        const { problem, usage } = (await res.json()) as {
+          problem: OcrProblem;
+          usage?: TokenUsage;
+        };
+        reportUsage('문제 인식', usage);
         const value: WorkbenchProblemValue = {
           ...box.problem,
           problem_type: problem.problem_type,
@@ -387,7 +405,8 @@ export function useWorkbenchController() {
           body: JSON.stringify({ image, mediaType: 'image/png' }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
-        const { text } = (await res.json()) as { text: string };
+        const { text, usage } = (await res.json()) as { text: string; usage?: TokenUsage };
+        reportUsage('내용 인식', usage);
         const value: ChunkValue = { ...box.chunk, text };
         payload = { chunk: value };
         patch = { status: 'ready', chunk: value };
@@ -630,10 +649,12 @@ export function useWorkbenchController() {
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
-      const { answer, explanation } = (await res.json()) as {
+      const { answer, explanation, usage } = (await res.json()) as {
         answer?: string;
         explanation?: string;
+        usage?: TokenUsage;
       };
+      reportUsage('정답·해설', usage);
       if (!answer && !explanation) {
         toast.info('영역에서 정답·해설을 찾지 못했어요.');
         return;
