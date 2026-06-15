@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   listSources,
   type ListSourcesFilters,
-} from '@/entities/source/api/listSources';
+} from '@/entities/source/server';
 import {
   SOURCE_TYPES,
   GRADES,

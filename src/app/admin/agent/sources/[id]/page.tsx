@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
-import { getSource } from '@/entities/source/api/listSources';
-import { getSourceChunks } from '@/entities/source/api/getSourceChunks';
+import { getSource } from '@/entities/source/server';
+import { getSourceChunks } from '@/entities/source/server';
 import { SourceDetailPage } from '@/pages-fsd/source-library';
 import { getUploaderId } from '@/shared/config/auth';
 

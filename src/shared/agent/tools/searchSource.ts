@@ -1,6 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
-import { searchChunks } from '@/entities/source/api/searchChunks';
+import { searchChunks } from '@/entities/source/server';
 import type { AgentContext, ToolResult } from '../types';
 
 export const searchSourceInput = z.object({

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { AgentPage } from '@/pages-fsd/agent';
-import { listSources } from '@/entities/source/api/listSources';
+import { listSources } from '@/entities/source/server';
 import { getUploaderId } from '@/shared/config/auth';
 
 export const runtime = 'nodejs';

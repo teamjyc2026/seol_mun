@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getUploaderId } from '@/shared/config/auth';
-import { listSchools } from '@/entities/school/api/listSchools';
+import { listSchools } from '@/entities/school/server';
 import { ManualSourcePage } from '@/pages-fsd/manual-source';
 
 export const runtime = 'nodejs';

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   searchProblems,
   type ProblemMatch,
-} from '@/entities/problem/api/searchProblems';
+} from '@/entities/problem/server';
 import type { AgentContext, ProblemDraft, ToolResult } from '../types';
 
 export const searchProblemInput = z.object({
@@ -43,6 +43,7 @@ export async function searchProblemTool(
   const matches = await searchProblems(args.query, {
     k: peek?.limit ?? args.k,
     subject: ctx.subject,
+    problemIds: ctx.problemIds,
   });
   // Specialist peek (grammar/vocab/socratic): only surface relevant matches,
   // and at most `limit`, so an off-topic saved problem never tags along.

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { listProblems } from '@/entities/problem/api/listProblems';
+import { listProblems } from '@/entities/problem/server';
 import { ProblemLibraryPage } from '@/pages-fsd/problem-library';
 import { getUploaderId } from '@/shared/config/auth';
 

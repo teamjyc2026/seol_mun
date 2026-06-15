@@ -72,6 +72,8 @@ export type AgentContext = {
   problemPeek?: ProblemPeek;
   /** Set when the conversation is scoped to a school's RAG (학교별 RAG). */
   schoolName?: string | null;
+  /** 시험범위가 문제를 한정할 때의 문제 id 화이트리스트 (없으면 전체 검색). */
+  problemIds?: string[] | null;
 };
 
 export type StreamEvent =

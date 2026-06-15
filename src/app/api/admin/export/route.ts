@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { giftLabel } from '@/entities/response';
-import { listResponses } from '@/entities/response/api/listResponses';
+import { listResponses } from '@/entities/response/server';
 import { formatAnswer, parts, questions } from '@/entities/survey';
 import { isAdmin } from '@/shared/config/auth';
 

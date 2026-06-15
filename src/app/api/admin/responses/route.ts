@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { responsePayloadSchema } from '@/entities/response/model/payloadSchema';
+import { responsePayloadSchema } from '@/entities/response';
 import { isAdmin } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 

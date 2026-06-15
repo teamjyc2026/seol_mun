@@ -25,13 +25,14 @@ export async function GET(_req: NextRequest, ctx: Ctx) {
     .eq('id', scopeId)
     .maybeSingle();
   if (!scope) return NextResponse.json({ message: 'not found' }, { status: 404 });
-  const { data: rows } = await supabase
-    .from('exam_scope_sources')
-    .select('source_id')
-    .eq('scope_id', scopeId);
+  const [{ data: rows }, { data: probRows }] = await Promise.all([
+    supabase.from('exam_scope_sources').select('source_id').eq('scope_id', scopeId),
+    supabase.from('exam_scope_problems').select('problem_id').eq('scope_id', scopeId),
+  ]);
   return NextResponse.json({
     scope,
     sourceIds: (rows ?? []).map((r) => r.source_id as string),
+    problemIds: (probRows ?? []).map((r) => r.problem_id as string),
   });
 }
 
@@ -39,8 +40,10 @@ const patchSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   subject: z.string().max(50).nullable().optional(),
   grade: z.string().max(20).nullable().optional(),
-  /** 범위에 포함할 소스 전체 교체. */
+  /** 범위에 포함할 소스 전체 교체 (본문/개념 청크 대상). */
   sourceIds: z.array(z.string().uuid()).optional(),
+  /** 범위에 포함할 문제 전체 교체 (문제 단위 선택). */
+  problemIds: z.array(z.string().uuid()).optional(),
 });
 
 export async function PATCH(req: NextRequest, ctx: Ctx) {
@@ -81,6 +84,29 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       const { error: insErr } = await supabase
         .from('exam_scope_sources')
         .insert(ids.map((source_id) => ({ scope_id: scopeId, source_id })));
+      if (insErr) return NextResponse.json({ message: insErr.message }, { status: 500 });
+    }
+  }
+
+  if (body.problemIds) {
+    // 실제 존재하는 문제만 — 잘못된 id 하나로 전체 insert가 실패하지 않게 거른다.
+    let valid = body.problemIds;
+    if (valid.length) {
+      const { data: existing } = await supabase
+        .from('problems')
+        .select('id')
+        .in('id', valid);
+      valid = (existing ?? []).map((r) => r.id as string);
+    }
+    const { error: delErr } = await supabase
+      .from('exam_scope_problems')
+      .delete()
+      .eq('scope_id', scopeId);
+    if (delErr) return NextResponse.json({ message: delErr.message }, { status: 500 });
+    if (valid.length > 0) {
+      const { error: insErr } = await supabase
+        .from('exam_scope_problems')
+        .insert(valid.map((problem_id) => ({ scope_id: scopeId, problem_id })));
       if (insErr) return NextResponse.json({ message: insErr.message }, { status: 500 });
     }
   }

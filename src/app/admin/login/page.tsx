@@ -1,41 +1,42 @@
 'use client';
 
-import { Suspense, useState, useTransition } from 'react';
+import { Suspense, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Lock, Upload } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/shared/lib/cn';
+import { useMergeState } from '@/shared/lib/mergeReducer';
 
 type Mode = 'admin' | 'login' | 'signup';
 
 function LoginForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const [mode, setMode] = useState<Mode>(
-    search.get('as') === 'uploader' ? 'login' : 'admin',
-  );
-  const [email, setEmail] = useState('');
-  const [pw, setPw] = useState('');
-  const [pw2, setPw2] = useState('');
-  const [nickname, setNickname] = useState('');
-  const [invite, setInvite] = useState('');
-  const [show, setShow] = useState(false);
-  const [err, setErr] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [f, set] = useMergeState(() => ({
+    mode: (search.get('as') === 'uploader' ? 'login' : 'admin') as Mode,
+    email: '',
+    pw: '',
+    pw2: '',
+    nickname: '',
+    invite: '',
+    show: false,
+    err: '',
+    loading: false,
+  }));
   const [isPending, startTransition] = useTransition();
 
-  const isAdmin = mode === 'admin';
-  const isSignup = mode === 'signup';
+  const isAdmin = f.mode === 'admin';
+  const isSignup = f.mode === 'signup';
   const dest = isAdmin ? '/admin' : '/admin/agent';
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr('');
-    if (isSignup && pw !== pw2) {
-      setErr('비밀번호가 일치하지 않습니다.');
+    set({ err: '' });
+    if (isSignup && f.pw !== f.pw2) {
+      set({ err: '비밀번호가 일치하지 않습니다.' });
       return;
     }
-    setLoading(true);
+    set({ loading: true });
     try {
       const url = isAdmin
         ? '/api/admin/login'
@@ -43,10 +44,10 @@ function LoginForm() {
           ? '/api/uploader/signup'
           : '/api/uploader/login';
       const payload = isAdmin
-        ? { password: pw }
+        ? { password: f.pw }
         : isSignup
-          ? { email, password: pw, nickname, inviteCode: invite }
-          : { email, password: pw };
+          ? { email: f.email, password: f.pw, nickname: f.nickname, inviteCode: f.invite }
+          : { email: f.email, password: f.pw };
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -61,24 +62,20 @@ function LoginForm() {
         router.refresh();
       });
     } catch (e) {
-      setErr(e instanceof Error ? e.message : '오류가 발생했어요.');
-      setLoading(false);
+      set({ err: e instanceof Error ? e.message : '오류가 발생했어요.', loading: false });
     }
   }
 
   function switchMode(next: Mode) {
-    setMode(next);
-    setErr('');
-    setPw('');
-    setPw2('');
+    set({ mode: next, err: '', pw: '', pw2: '' });
   }
 
-  const busy = loading || isPending;
+  const busy = f.loading || isPending;
   const canSubmit = isAdmin
-    ? pw.length > 0
+    ? f.pw.length > 0
     : isSignup
-      ? email && pw && pw2 && nickname.trim() && invite
-      : email && pw;
+      ? f.email && f.pw && f.pw2 && f.nickname.trim() && f.invite
+      : f.email && f.pw;
 
   return (
     <main className="grid min-h-svh place-items-center bg-zinc-50 px-4">
@@ -106,8 +103,8 @@ function LoginForm() {
           {!isAdmin ? (
             <Input
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={f.email}
+              onChange={(e) => set({ email: e.target.value })}
               placeholder="이메일"
               autoFocus
               autoComplete="email"
@@ -116,9 +113,9 @@ function LoginForm() {
 
           <div className="relative">
             <Input
-              type={show ? 'text' : 'password'}
-              value={pw}
-              onChange={(e) => setPw(e.target.value)}
+              type={f.show ? 'text' : 'password'}
+              value={f.pw}
+              onChange={(e) => set({ pw: e.target.value })}
               placeholder={isSignup ? '비밀번호 (6자 이상)' : '비밀번호'}
               autoFocus={isAdmin}
               autoComplete={isAdmin ? 'current-password' : isSignup ? 'new-password' : 'current-password'}
@@ -126,42 +123,42 @@ function LoginForm() {
             />
             <button
               type="button"
-              onClick={() => setShow((v) => !v)}
-              aria-label={show ? '비밀번호 가리기' : '비밀번호 표시'}
+              onClick={() => set({ show: !f.show })}
+              aria-label={f.show ? '비밀번호 가리기' : '비밀번호 표시'}
               tabIndex={-1}
               className={cn(
                 'absolute right-1 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-md',
                 'text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700',
               )}
             >
-              {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              {f.show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
 
           {isSignup ? (
             <>
               <Input
-                type={show ? 'text' : 'password'}
-                value={pw2}
-                onChange={(e) => setPw2(e.target.value)}
+                type={f.show ? 'text' : 'password'}
+                value={f.pw2}
+                onChange={(e) => set({ pw2: e.target.value })}
                 placeholder="비밀번호 다시 입력"
                 autoComplete="new-password"
               />
               <Input
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
+                value={f.nickname}
+                onChange={(e) => set({ nickname: e.target.value })}
                 placeholder="별명 (문제 작성자로 표시돼요)"
                 maxLength={40}
               />
               <Input
-                value={invite}
-                onChange={(e) => setInvite(e.target.value)}
+                value={f.invite}
+                onChange={(e) => set({ invite: e.target.value })}
                 placeholder="초대코드"
               />
             </>
           ) : null}
 
-          {err ? <p className="text-sm text-rose-600">{err}</p> : null}
+          {f.err ? <p className="text-sm text-rose-600">{f.err}</p> : null}
         </div>
 
         <button

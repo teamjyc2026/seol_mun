@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { listResponses } from '@/entities/response/api/listResponses';
+import { listResponses } from '@/entities/response/server';
 import { AdminDashboard } from '@/widgets/admin-dashboard';
 import { isAdmin } from '@/shared/config/auth';
 

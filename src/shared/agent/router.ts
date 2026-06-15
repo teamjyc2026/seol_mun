@@ -16,7 +16,7 @@ import {
 } from './agents/registry';
 import { searchSourceTool } from './tools/searchSource';
 import { searchProblemTool, toProblemDrafts } from './tools/searchProblem';
-import { searchProblems } from '@/entities/problem/api/searchProblems';
+import { searchProblems } from '@/entities/problem/server';
 import { generateProblemTool } from './tools/generateProblem';
 import { evaluateAnswerTool } from './tools/evaluateAnswer';
 import { assessLevelTool } from './tools/assessLevel';
@@ -126,7 +126,7 @@ async function buildAgentSystem(
 async function resolveScope(args: {
   scopeId?: string | null;
   schoolId?: string | null;
-}): Promise<{ schoolName: string | null; sourceIds: string[] }> {
+}): Promise<{ schoolName: string | null; sourceIds: string[]; problemIds: string[] | null }> {
   const supabase = getSupabaseServer();
   if (args.scopeId) {
     const { data: scope } = await supabase
@@ -134,25 +134,30 @@ async function resolveScope(args: {
       .select('id, name, school_id')
       .eq('id', args.scopeId)
       .maybeSingle();
-    if (!scope) return { schoolName: null, sourceIds: [] };
-    const [{ data: school }, { data: rows }] = await Promise.all([
+    if (!scope) return { schoolName: null, sourceIds: [], problemIds: null };
+    const [{ data: school }, { data: rows }, { data: probRows }] = await Promise.all([
       supabase.from('schools').select('name').eq('id', scope.school_id).maybeSingle(),
       supabase.from('exam_scope_sources').select('source_id').eq('scope_id', args.scopeId),
+      supabase.from('exam_scope_problems').select('problem_id').eq('scope_id', args.scopeId),
     ]);
     const label = [school?.name, scope.name].filter(Boolean).join(' ');
+    // 문제 화이트리스트가 있으면 그 문제로만 한정. 없으면(레거시 범위) 문제 미한정(null).
+    const problemIds =
+      probRows && probRows.length ? probRows.map((r) => r.problem_id as string) : null;
     return {
       schoolName: label || (scope.name as string),
       sourceIds: (rows ?? []).map((r) => r.source_id as string),
+      problemIds,
     };
   }
   const schoolId = args.schoolId;
-  if (!schoolId) return { schoolName: null, sourceIds: [] };
+  if (!schoolId) return { schoolName: null, sourceIds: [], problemIds: null };
   const { data: school } = await supabase
     .from('schools')
     .select('id, name')
     .eq('id', schoolId)
     .maybeSingle();
-  if (!school) return { schoolName: null, sourceIds: [] };
+  if (!school) return { schoolName: null, sourceIds: [], problemIds: null };
   const { data: srcs } = await supabase
     .from('sources')
     .select('id')
@@ -161,6 +166,7 @@ async function resolveScope(args: {
   return {
     schoolName: school.name as string,
     sourceIds: (srcs ?? []).map((r) => r.id as string),
+    problemIds: null,
   };
 }
 
@@ -236,6 +242,7 @@ export async function runAgentTools(args: {
     audience,
     problemPeek: profile.problemPeek,
     schoolName: school.schoolName,
+    problemIds: school.problemIds,
   };
   const augmentedMessage = buildAugmentedMessage(args.message, ctx);
   const system = await buildAgentSystem(
@@ -291,6 +298,7 @@ export async function runAgentTools(args: {
       const matches = await searchProblems(args.message, {
         subject: ctx.subject,
         k: 5,
+        problemIds: ctx.problemIds,
       });
       const strong = matches.filter((m) => m.similarity >= AUTO_PROBLEM_THRESHOLD);
       if (strong.length > 0) {

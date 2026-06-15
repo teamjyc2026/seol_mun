@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getUploaderId } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
-import { listSchools } from '@/entities/school/api/listSchools';
+import { listSchools } from '@/entities/school/server';
 import { SchoolRagPage, type SchoolSourceRow } from '@/pages-fsd/school-rag';
 
 export const runtime = 'nodejs';

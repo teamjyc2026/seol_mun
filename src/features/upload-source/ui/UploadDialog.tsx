@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Upload, X } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
@@ -11,6 +11,7 @@ import { SOURCE_TYPES, GRADES, type SourceType, type Grade } from '@/entities/so
 import { SUBJECTS } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
 import { useSubject } from '@/shared/store/subject';
+import { useMergeState } from '@/shared/lib/mergeReducer';
 import { uploadSource } from '../api/uploadSource';
 
 function splitCommas(v: string): string[] {
@@ -23,49 +24,48 @@ function splitCommas(v: string): string[] {
 export function UploadDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState('');
-  const [sourceType, setSourceType] = useState<SourceType>('교과서');
   const { subject, setSubject } = useSubject();
-  const [grade, setGrade] = useState<Grade | ''>('');
-  const [publisher, setPublisher] = useState('');
-  const [year, setYear] = useState('');
-  const [description, setDescription] = useState('');
-  const [author, setAuthor] = useState('');
-  const [edition, setEdition] = useState('');
-  const [isbn, setIsbn] = useState('');
-  const [unitsRaw, setUnitsRaw] = useState('');
-  const [tagsRaw, setTagsRaw] = useState('');
-  const [progress, setProgress] = useState(0);
-  const [phase, setPhase] = useState<'upload' | 'index'>('upload');
+  const [f, set] = useMergeState({
+    file: null as File | null,
+    title: '',
+    sourceType: '교과서' as SourceType,
+    grade: '' as Grade | '',
+    publisher: '',
+    year: '',
+    description: '',
+    author: '',
+    edition: '',
+    isbn: '',
+    unitsRaw: '',
+    tagsRaw: '',
+    progress: 0,
+    phase: 'upload' as 'upload' | 'index',
+  });
 
   const mutation = useMutation({
-    onMutate: () => {
-      setProgress(0);
-      setPhase('upload');
-    },
+    onMutate: () => set({ progress: 0, phase: 'upload' }),
     mutationFn: () => {
-      if (!file) throw new Error('PDF 파일을 선택해 주세요.');
+      if (!f.file) throw new Error('PDF 파일을 선택해 주세요.');
+      const file = f.file;
       return uploadSource(
         {
           file,
-          title: title || file.name.replace(/\.pdf$/i, ''),
-          source_type: sourceType,
+          title: f.title || file.name.replace(/\.pdf$/i, ''),
+          source_type: f.sourceType,
           subjects: [subject],
-          grade: grade || null,
-          publisher: publisher || null,
-          year: year ? Number(year) : null,
-          description: description || null,
-          author: author || null,
-          edition: edition || null,
-          isbn: isbn || null,
-          units: splitCommas(unitsRaw),
-          tags: splitCommas(tagsRaw),
+          grade: f.grade || null,
+          publisher: f.publisher || null,
+          year: f.year ? Number(f.year) : null,
+          description: f.description || null,
+          author: f.author || null,
+          edition: f.edition || null,
+          isbn: f.isbn || null,
+          units: splitCommas(f.unitsRaw),
+          tags: splitCommas(f.tagsRaw),
         },
         (pct) => {
-          setProgress(pct);
           // bytes done → server now chunks + embeds (no byte stream for that)
-          if (pct >= 100) setPhase('index');
+          set(pct >= 100 ? { progress: pct, phase: 'index' } : { progress: pct });
         },
       );
     },
@@ -105,9 +105,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             type="file"
             accept="application/pdf"
             onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              setFile(f);
-              if (f && !title) setTitle(f.name.replace(/\.pdf$/i, ''));
+              const file = e.target.files?.[0] ?? null;
+              set(file && !f.title ? { file, title: file.name.replace(/\.pdf$/i, '') } : { file });
             }}
             className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-white hover:file:bg-zinc-800"
           />
@@ -117,8 +116,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           <Label htmlFor="src-title">제목 (필수)</Label>
           <Input
             id="src-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={f.title}
+            onChange={(e) => set({ title: e.target.value })}
             placeholder="예) 한국사 교과서 미래엔 2024"
           />
         </div>
@@ -126,13 +125,13 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
         <div className="space-y-1.5">
           <Label>과목 (필수)</Label>
           <div className="flex flex-wrap gap-1.5">
-            {SUBJECTS.map((s) => {
-              const active = subject === s;
+            {SUBJECTS.map((sub) => {
+              const active = subject === sub;
               return (
                 <button
-                  key={s}
+                  key={sub}
                   type="button"
-                  onClick={() => setSubject(s)}
+                  onClick={() => setSubject(sub)}
                   className={cn(
                     'rounded-full border px-2.5 py-0.5 text-xs font-medium transition',
                     active
@@ -140,7 +139,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
                       : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50',
                   )}
                 >
-                  {s}
+                  {sub}
                 </button>
               );
             })}
@@ -152,8 +151,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             <Label htmlFor="src-type">유형 (필수)</Label>
             <select
               id="src-type"
-              value={sourceType}
-              onChange={(e) => setSourceType(e.target.value as SourceType)}
+              value={f.sourceType}
+              onChange={(e) => set({ sourceType: e.target.value as SourceType })}
               className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm"
             >
               {SOURCE_TYPES.map((t) => (
@@ -167,8 +166,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             <Label htmlFor="src-grade">학년</Label>
             <select
               id="src-grade"
-              value={grade}
-              onChange={(e) => setGrade(e.target.value as Grade | '')}
+              value={f.grade}
+              onChange={(e) => set({ grade: e.target.value as Grade | '' })}
               className="h-9 w-full rounded-md border border-zinc-200 bg-white px-2 text-sm"
             >
               <option value="">(없음)</option>
@@ -186,8 +185,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             <Label htmlFor="src-publisher">출판사</Label>
             <Input
               id="src-publisher"
-              value={publisher}
-              onChange={(e) => setPublisher(e.target.value)}
+              value={f.publisher}
+              onChange={(e) => set({ publisher: e.target.value })}
               placeholder="예) 미래엔"
             />
           </div>
@@ -196,8 +195,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             <Input
               id="src-year"
               type="number"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
+              value={f.year}
+              onChange={(e) => set({ year: e.target.value })}
               placeholder="2024"
             />
           </div>
@@ -208,8 +207,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             <Label htmlFor="src-author">저자</Label>
             <Input
               id="src-author"
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
+              value={f.author}
+              onChange={(e) => set({ author: e.target.value })}
               placeholder="홍길동"
             />
           </div>
@@ -217,8 +216,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             <Label htmlFor="src-edition">판본</Label>
             <Input
               id="src-edition"
-              value={edition}
-              onChange={(e) => setEdition(e.target.value)}
+              value={f.edition}
+              onChange={(e) => set({ edition: e.target.value })}
               placeholder="2024 개정판"
             />
           </div>
@@ -228,8 +227,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           <Label htmlFor="src-isbn">ISBN</Label>
           <Input
             id="src-isbn"
-            value={isbn}
-            onChange={(e) => setIsbn(e.target.value)}
+            value={f.isbn}
+            onChange={(e) => set({ isbn: e.target.value })}
             placeholder="978-89-..."
           />
         </div>
@@ -238,8 +237,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           <Label htmlFor="src-units">책 단원/키워드 (쉼표 구분)</Label>
           <Input
             id="src-units"
-            value={unitsRaw}
-            onChange={(e) => setUnitsRaw(e.target.value)}
+            value={f.unitsRaw}
+            onChange={(e) => set({ unitsRaw: e.target.value })}
             placeholder="예) 임진왜란, 병자호란, 조선후기"
           />
           <p className="text-[11px] text-zinc-500">
@@ -252,8 +251,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           <Label htmlFor="src-tags">태그 (쉼표 구분)</Label>
           <Input
             id="src-tags"
-            value={tagsRaw}
-            onChange={(e) => setTagsRaw(e.target.value)}
+            value={f.tagsRaw}
+            onChange={(e) => set({ tagsRaw: e.target.value })}
             placeholder="예) 내신, 수능대비, 중요"
           />
         </div>
@@ -262,8 +261,8 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           <Label htmlFor="src-desc">메모</Label>
           <textarea
             id="src-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={f.description}
+            onChange={(e) => set({ description: e.target.value })}
             rows={2}
             placeholder="(선택) 자료 출처/사용 맥락 등"
             className="block w-full resize-y rounded-md border border-zinc-200 px-2 py-1.5 text-sm outline-none"
@@ -273,14 +272,14 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
         {mutation.isPending ? (
           <div className="space-y-1 pt-1">
             <div className="flex items-center justify-between text-[11px] font-medium text-zinc-500">
-              <span>{phase === 'upload' ? '파일 전송 중…' : '인덱싱(임베딩) 중…'}</span>
-              <span>{phase === 'upload' ? `${progress}%` : '거의 다 됐어요'}</span>
+              <span>{f.phase === 'upload' ? '파일 전송 중…' : '인덱싱(임베딩) 중…'}</span>
+              <span>{f.phase === 'upload' ? `${f.progress}%` : '거의 다 됐어요'}</span>
             </div>
             <div className="relative h-2 w-full overflow-hidden rounded-full bg-zinc-100">
-              {phase === 'upload' ? (
+              {f.phase === 'upload' ? (
                 <div
                   className="h-full rounded-full bg-zinc-900 transition-[width] duration-150"
-                  style={{ width: `${progress}%` }}
+                  style={{ width: `${f.progress}%` }}
                 />
               ) : (
                 <span className="progress-indeterminate" />
@@ -301,13 +300,13 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={() => mutation.mutate()}
-            disabled={!file || mutation.isPending}
+            disabled={!f.file || mutation.isPending}
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white shadow-md transition hover:bg-zinc-800 disabled:opacity-50"
           >
             <Upload className="h-3.5 w-3.5" />
             {mutation.isPending
-              ? phase === 'upload'
-                ? `전송 ${progress}%`
+              ? f.phase === 'upload'
+                ? `전송 ${f.progress}%`
                 : '인덱싱 중…'
               : '업로드'}
           </button>

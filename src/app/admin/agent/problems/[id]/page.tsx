@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
-import { getProblem } from '@/entities/problem/api/listProblems';
-import { listSources } from '@/entities/source/api/listSources';
+import { getProblem } from '@/entities/problem/server';
+import { listSources } from '@/entities/source/server';
 import { ProblemEditorPage } from '@/pages-fsd/problem-editor';
 import { getUploaderId } from '@/shared/config/auth';
 

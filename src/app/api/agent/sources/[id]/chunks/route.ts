@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getSourceChunks } from '@/entities/source/api/getSourceChunks';
+import { getSourceChunks } from '@/entities/source/server';
 import { getUploaderId, requireUploader } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 

@@ -2,7 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { claudeJson } from '@/shared/config/anthropic';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
-import { searchChunks } from '@/entities/source/api/searchChunks';
+import { searchChunks } from '@/entities/source/server';
 import { buildProblemSystemPrompt } from '../prompts';
 import type { AgentContext, Citation, ProblemDraft, ToolResult } from '../types';
 

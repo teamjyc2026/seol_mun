@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { responsePayloadSchema } from '@/entities/response/model/payloadSchema';
+import { responsePayloadSchema } from '@/entities/response';
 import { isClosed } from '@/shared/config/cap';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 

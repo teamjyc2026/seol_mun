@@ -7,7 +7,7 @@ import {
 import {
   listProblems,
   type ListProblemsFilters,
-} from '@/entities/problem/api/listProblems';
+} from '@/entities/problem/server';
 import { getUploaderId } from '@/shared/config/auth';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
 

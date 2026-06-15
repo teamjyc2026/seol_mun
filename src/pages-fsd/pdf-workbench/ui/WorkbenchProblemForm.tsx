@@ -100,7 +100,7 @@ export function WorkbenchProblemForm({
         )}
       >
         {activeChild === idx ? <Check className="h-3 w-3" /> : <ScanText className="h-3 w-3" />}
-        {activeChild === idx ? '선택됨' : '이 문제로 받기'}
+        {activeChild === idx ? '선택됨' : '이 문제 선택'}
       </button>
     );
 
