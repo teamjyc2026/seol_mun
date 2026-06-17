@@ -302,7 +302,8 @@ export async function runAgentTools(args: {
       });
       const strong = matches.filter((m) => m.similarity >= AUTO_PROBLEM_THRESHOLD);
       if (strong.length > 0) {
-        toolResults.push({ kind: 'search_problem', problems: toProblemDrafts(strong) });
+        // 한 턴에 문제 1개만 — 가장 강한 매치 하나만 노출.
+        toolResults.push({ kind: 'search_problem', problems: toProblemDrafts(strong.slice(0, 1)) });
       }
     } catch (e) {
       console.error('[agent] auto search_problem failed:', e);

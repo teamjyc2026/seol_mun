@@ -18,7 +18,13 @@ type ScopeRow = {
   sourceCount: number;
 };
 type WbSource = { id: string; title: string; subject: string | null; grade: string | null };
-type ProblemLite = { id: string; question: string; problem_type: string | null };
+type ProblemLite = {
+  id: string;
+  question: string;
+  problem_type: string | null;
+  /** 임베딩 완료 여부 — 임베딩 전엔 채팅 벡터검색에 안 잡힘. */
+  embedded: boolean;
+};
 
 type State = {
   schools: SchoolRow[];
@@ -224,6 +230,15 @@ export function ExamScopePage() {
         ),
       });
       toast.success(`자료 ${s.assignedSources.size}개 · 문제 ${s.assignedProblems.size}개를 담았어요.`);
+      // 담은 문제 중 임베딩 대기가 있으면 안내 (벡터검색은 임베딩된 것만 잡힘).
+      const pending = Object.values(s.problemsBySource)
+        .flat()
+        .filter((p) => s.assignedProblems.has(p.id) && !p.embedded).length;
+      if (pending > 0) {
+        toast.warning(
+          `담은 문제 중 ${pending}개가 임베딩 대기 — 워크벤치 "일괄 임베딩" 후에 채팅 검색에 잡혀요.`,
+        );
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '저장 실패');
     } finally {
@@ -237,11 +252,19 @@ export function ExamScopePage() {
     set({ loadingSource: sourceId });
     try {
       const res = await fetch(`/api/agent/problems?sourceId=${encodeURIComponent(sourceId)}`);
-      const data = (await res.json()) as { problems: ProblemLite[] };
-      const list = (data.problems ?? []).map((p) => ({
+      const data = (await res.json()) as {
+        problems: Array<{
+          id: string;
+          question: string;
+          problem_type: string | null;
+          embedded_at: string | null;
+        }>;
+      };
+      const list: ProblemLite[] = (data.problems ?? []).map((p) => ({
         id: p.id,
         question: p.question,
         problem_type: p.problem_type,
+        embedded: !!p.embedded_at,
       }));
       set({ problemsBySource: { ...s.problemsBySource, [sourceId]: list } });
       return list;
@@ -552,6 +575,14 @@ export function ExamScopePage() {
                                   <span className="min-w-0 flex-1 text-xs text-zinc-600">
                                     <span className="mr-1 text-zinc-400">{i + 1}.</span>
                                     {p.question.slice(0, 80) || '(발문 없음)'}
+                                    {!p.embedded && (
+                                      <span
+                                        className="ml-1.5 whitespace-nowrap rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-700"
+                                        title="임베딩 대기 — 임베딩 전엔 채팅 검색에 안 잡혀요 (워크벤치 '일괄 임베딩')"
+                                      >
+                                        임베딩 대기
+                                      </span>
+                                    )}
                                   </span>
                                 </label>
                               ))

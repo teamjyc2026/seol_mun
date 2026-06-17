@@ -1228,11 +1228,12 @@ export function PdfWorkbenchPage() {
                     ) : (
                       <Save className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    {isSet
-                      ? `세트 저장 ${childCount}`
-                      : selected.status === 'saved'
-                        ? '다시 저장'
-                        : '저장'}
+                    {(() => {
+                      // 저장된 레코드가 있으면 "다시 저장"(재OCR로 status가 ready여도 정확).
+                      const saved = selected.savedRefs.length > 0;
+                      if (isSet) return `세트 ${saved ? '다시 저장' : '저장'} ${childCount}`;
+                      return saved ? '다시 저장' : '저장';
+                    })()}
                   </button>
                 </div>
               </div>

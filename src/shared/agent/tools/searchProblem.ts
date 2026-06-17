@@ -45,10 +45,9 @@ export async function searchProblemTool(
     subject: ctx.subject,
     problemIds: ctx.problemIds,
   });
-  // Specialist peek (grammar/vocab/socratic): only surface relevant matches,
-  // and at most `limit`, so an off-topic saved problem never tags along.
-  const result = peek
-    ? matches.filter((m) => m.similarity >= peek.minSimilarity).slice(0, peek.limit)
-    : matches;
+  // 한 턴에 문제는 1개만 — 여러 카드가 한꺼번에 쏟아지지 않게 항상 캡.
+  // (peek 프로필은 minSimilarity로 무관한 매치도 거른다.)
+  const filtered = peek ? matches.filter((m) => m.similarity >= peek.minSimilarity) : matches;
+  const result = filtered.slice(0, peek?.limit ?? 1);
   return { kind: 'search_problem', problems: toProblemDrafts(result) };
 }
