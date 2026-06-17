@@ -523,7 +523,7 @@ export function useWorkbenchController() {
    * 박스 영역을 인식 — ① 종류(문제/개념/본문) 자동 분류 → ② 종류별 OCR → 채움.
    * 박스의 "인식" 버튼·다시 인식 공용.
    */
-  async function recognizeBox(boxId: string) {
+  async function recognizeBox(boxId: string, opts?: { expectCount?: number }) {
     const st = useWorkbenchStore.getState();
     const box = st.boxes.find((b) => b.id === boxId);
     if (!box || box.id.startsWith('temp-')) return;
@@ -566,7 +566,14 @@ export function useWorkbenchController() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           // 문제 세트면 문항을 가급적 잘게 분리하도록 split 힌트.
-          body: JSON.stringify({ image, mediaType: 'image/png', subject, split: box.kind === 'problemset' }),
+          // expectCount가 오면 정확히 그 개수로 분리(사용자 지정).
+          body: JSON.stringify({
+            image,
+            mediaType: 'image/png',
+            subject,
+            split: box.kind === 'problemset' || !!opts?.expectCount,
+            expectCount: opts?.expectCount,
+          }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
         const { result, usage } = (await res.json()) as {
@@ -705,6 +712,20 @@ export function useWorkbenchController() {
     if (!confirm('이 영역을 다시 인식할까요? 지문·발문·보기가 새로 인식한 내용으로 덮어써집니다. (정답·해설은 유지)'))
       return;
     await recognizeBox(sel.id);
+  }
+
+  /** 선택 박스를 정확히 count개의 문항으로 다시 나눠 인식 (세트가 한 문제로 합쳐졌을 때). */
+  async function resplitSelected(count: number) {
+    const st = useWorkbenchStore.getState();
+    const sel = st.boxes.find((b) => b.id === st.selectedId);
+    if (!sel || sel.id.startsWith('temp-')) return;
+    if (
+      !confirm(
+        `이 영역을 정확히 ${count}개 문항으로 다시 나눠 인식할까요? 발문·보기가 새로 인식한 내용으로 덮어써집니다.`,
+      )
+    )
+      return;
+    await recognizeBox(sel.id, { expectCount: count });
   }
 
   /** 현재 페이지의 미인식(idle) 박스를 모두 인식. */
@@ -1371,6 +1392,7 @@ export function useWorkbenchController() {
     recognizeBox,
     recognizeIdleOnPage,
     reocrSelected,
+    resplitSelected,
     deleteBox,
     saveSelected,
     toggleSameRef,

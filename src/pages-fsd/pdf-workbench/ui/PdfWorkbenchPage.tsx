@@ -96,6 +96,7 @@ export function PdfWorkbenchPage() {
     recognizeBox,
     recognizeIdleOnPage,
     reocrSelected,
+    resplitSelected,
     deleteBox,
     saveSelected,
     toggleSameRef,
@@ -186,6 +187,8 @@ export function PdfWorkbenchPage() {
   const [dropTarget, setDropTarget] = useState<string | 'root' | null>(null);
   /** 세트에서 지금 풀이(정답·해설)를 받는 자식 문제 (0=대표, i+1=extra[i]). */
   const [activeChild, setActiveChild] = useState(0);
+  /** 문제 세트 "문항 수로 다시 인식"의 목표 문항 수. */
+  const [splitN, setSplitN] = useState(2);
   /** 메인 뷰어 표시 배율 (1=컨테이너 맞춤). */
   const [zoom, setZoom] = useState(1);
   const zoomBy = (d: number) =>
@@ -195,6 +198,8 @@ export function PdfWorkbenchPage() {
   if (s.selectedId !== prevSelectedId) {
     setPrevSelectedId(s.selectedId);
     setActiveChild(0);
+    const cur = s.boxes.find((b) => b.id === s.selectedId);
+    setSplitN(Math.max(2, cur ? 1 + cur.problem.extra.length : 2));
   }
 
   const selected = s.boxes.find((b) => b.id === s.selectedId) ?? null;
@@ -1227,6 +1232,43 @@ export function PdfWorkbenchPage() {
                   </button>
                 </div>
               </div>
+
+              {selected.kind === 'problemset' && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-3 py-2 text-xs text-fuchsia-700">
+                  <span className="font-medium">문항 수</span>
+                  <div className="inline-flex items-center overflow-hidden rounded-md border border-fuchsia-200 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setSplitN((n) => Math.max(1, n - 1))}
+                      className="px-2 py-1 font-bold text-fuchsia-700 hover:bg-fuchsia-100"
+                    >
+                      −
+                    </button>
+                    <span className="min-w-[1.75rem] text-center font-semibold tabular-nums">
+                      {splitN}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSplitN((n) => Math.min(20, n + 1))}
+                      className="px-2 py-1 font-bold text-fuchsia-700 hover:bg-fuchsia-100"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={selected.id.startsWith('temp-') || s.saving}
+                    onClick={() => void resplitSelected(splitN)}
+                    className="inline-flex items-center gap-1 rounded-md bg-fuchsia-600 px-2 py-1 font-medium text-white hover:bg-fuchsia-700 disabled:opacity-40"
+                    title="정확히 이 개수의 문항으로 다시 나눠 인식"
+                  >
+                    <Scissors className="h-3.5 w-3.5" /> 이 수로 나눠 인식
+                  </button>
+                  <span className="text-fuchsia-500/80">
+                    세트가 한 문제로 합쳐졌을 때 문항 수를 지정해 다시 나눠요.
+                  </span>
+                </div>
+              )}
 
               {(selected.kind === 'problem' || selected.kind === 'problemset') &&
                 (selected.answerRefs.length > 0 || isSet) && (
