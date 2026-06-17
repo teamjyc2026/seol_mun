@@ -34,6 +34,9 @@ type State = {
   problemsBySource: Record<string, ProblemLite[]>;
   expanded: Set<string>;
   loadingSource: string | null;
+  loadingSchools: boolean;
+  loadingScopes: boolean;
+  loadingSources: boolean;
   saving: boolean;
   // 폼
   newSchool: string;
@@ -54,6 +57,9 @@ const INITIAL: State = {
   problemsBySource: {},
   expanded: new Set(),
   loadingSource: null,
+  loadingSchools: true,
+  loadingScopes: false,
+  loadingSources: false,
   saving: false,
   newSchool: '',
   newSchoolYear: '',
@@ -61,6 +67,20 @@ const INITIAL: State = {
   newScopeSubject: '',
   newScopeGrade: '',
 };
+
+/** 로딩 중 자리를 잡아 레이아웃 시프트를 막는 시머 스켈레톤. */
+function Shimmer({ count, className }: { count: number; className?: string }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className={cn('animate-pulse rounded-lg bg-zinc-100', className ?? 'h-10')}
+        />
+      ))}
+    </>
+  );
+}
 
 export function ExamScopePage() {
   const [s, set] = useMergeState<State>(INITIAL);
@@ -71,12 +91,15 @@ export function ExamScopePage() {
   }, []);
 
   async function loadSchools() {
+    set({ loadingSchools: true });
     try {
       const res = await fetch('/api/agent/schools');
       const data = (await res.json()) as { schools: SchoolRow[] };
       set({ schools: data.schools ?? [] });
     } catch {
       toast.error('학교 목록을 불러오지 못했어요.');
+    } finally {
+      set({ loadingSchools: false });
     }
   }
 
@@ -89,6 +112,7 @@ export function ExamScopePage() {
       wbSources: [],
       expanded: new Set(),
       problemsBySource: {},
+      loadingScopes: true,
     });
     try {
       const res = await fetch(`/api/agent/schools/${id}/scopes`);
@@ -96,6 +120,8 @@ export function ExamScopePage() {
       set({ scopes: data.scopes ?? [] });
     } catch {
       toast.error('시험범위를 불러오지 못했어요.');
+    } finally {
+      set({ loadingScopes: false });
     }
   }
 
@@ -119,7 +145,7 @@ export function ExamScopePage() {
   }
 
   async function pickScope(sc: ScopeRow) {
-    set({ scopeId: sc.id, expanded: new Set(), problemsBySource: {} });
+    set({ scopeId: sc.id, expanded: new Set(), problemsBySource: {}, loadingSources: true });
     try {
       const [detailRes, srcRes] = await Promise.all([
         fetch(`/api/agent/scopes/${sc.id}`),
@@ -136,6 +162,8 @@ export function ExamScopePage() {
       });
     } catch {
       toast.error('범위 상세를 불러오지 못했어요.');
+    } finally {
+      set({ loadingSources: false });
     }
   }
 
@@ -303,12 +331,14 @@ export function ExamScopePage() {
             </div>
           </div>
           <div className="space-y-1">
-            {s.schools.length === 0 && (
+            {s.loadingSchools && <Shimmer count={3} />}
+            {!s.loadingSchools && s.schools.length === 0 && (
               <p className="rounded-lg border border-dashed border-zinc-200 bg-white p-3 text-xs text-zinc-500">
                 먼저 학교를 추가하세요.
               </p>
             )}
-            {s.schools.map((sch) => (
+            {!s.loadingSchools &&
+              s.schools.map((sch) => (
               <button
                 key={sch.id}
                 type="button"
@@ -381,10 +411,12 @@ export function ExamScopePage() {
                 </div>
               </div>
               <div className="space-y-1">
-                {s.scopes.length === 0 && (
+                {s.loadingScopes && <Shimmer count={2} className="h-12" />}
+                {!s.loadingScopes && s.scopes.length === 0 && (
                   <p className="px-1 text-xs text-zinc-400">아직 범위가 없어요.</p>
                 )}
-                {s.scopes.map((sc) => (
+                {!s.loadingScopes &&
+                  s.scopes.map((sc) => (
                   <div
                     key={sc.id}
                     className={cn(
@@ -446,7 +478,11 @@ export function ExamScopePage() {
               <p className="mb-2 text-[11px] text-zinc-400">
                 자료를 펼쳐 개별 문제를 고를 수 있어요. 자료 체크는 본문/개념 + 그 자료의 모든 문제를 담아요.
               </p>
-              {s.wbSources.length === 0 ? (
+              {s.loadingSources ? (
+                <div className="space-y-1.5 p-1">
+                  <Shimmer count={5} />
+                </div>
+              ) : s.wbSources.length === 0 ? (
                 <p className="p-4 text-sm text-zinc-500">
                   {selectedScope.subject
                     ? `'${selectedScope.subject}' 과목의 워크벤치 자료가 없어요.`

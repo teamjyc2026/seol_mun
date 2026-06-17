@@ -45,8 +45,10 @@ export async function listProblems(
     }
   }
   if (filters.sourceId) {
-    // citations is jsonb array — filter rows whose array contains the source id
-    q = q.contains('citations', [{ sourceId: filters.sourceId }]);
+    // citations is a jsonb array — rows whose array contains this source id.
+    // NOTE: pass a JSON STRING, not a JS array — postgrest-js serializes a JS
+    // array as a PG array literal (cs.{[object Object]}) that never matches jsonb.
+    q = q.contains('citations', JSON.stringify([{ sourceId: filters.sourceId }]));
   }
   const { data, error } = await q.limit(500);
   if (error) throw new Error(error.message);
