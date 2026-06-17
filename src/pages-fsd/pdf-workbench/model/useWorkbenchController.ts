@@ -565,7 +565,8 @@ export function useWorkbenchController() {
         const res = await fetch('/api/agent/ocr/problem', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image, mediaType: 'image/png', subject }),
+          // 문제 세트면 문항을 가급적 잘게 분리하도록 split 힌트.
+          body: JSON.stringify({ image, mediaType: 'image/png', subject, split: box.kind === 'problemset' }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
         const { result, usage } = (await res.json()) as {
