@@ -71,8 +71,17 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
     await sendMessage(text);
   }
 
-  /** 입력창 전송과 문제 카드의 "답 제출"이 공용으로 쓰는 전송 함수. */
-  async function sendMessage(text: string) {
+  /** 시작 버튼: 사용자 메시지 없이 에이전트가 먼저 인사하게 하는 킥오프. */
+  function kickoff() {
+    void sendMessage(
+      '(대화 시작) 학생에게 반말로 짧고 친근하게 인사하고, 오늘 뭘 공부하거나 어떤 문제를 풀지 가볍게 물어봐. 지금 바로 문제를 내지는 마.',
+      { hidden: true },
+    );
+  }
+
+  /** 입력창 전송과 문제 카드의 "답 제출"이 공용으로 쓰는 전송 함수.
+   *  hidden=true면 사용자 말풍선 없이 에이전트 응답만(킥오프 등). */
+  async function sendMessage(text: string, opts?: { hidden?: boolean }) {
     if (!text || sending) return;
     setSending(true);
 
@@ -80,7 +89,7 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
     setMessages((prev) => {
       const next: ChatMessage[] = [
         ...prev,
-        { role: 'user', text },
+        ...(opts?.hidden ? [] : [{ role: 'user', text } as ChatMessage]),
         {
           role: 'assistant',
           reply: { text: '', toolResults: [], citations: [] },
@@ -257,10 +266,20 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
 
         <div className="flex-1 space-y-4">
           {messages.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
-              {`"${subject} 단원 객관식 3문제 만들어줘" 같이 입력해 보세요.`}
-              <br />
-              먼저 소스 PDF를 업로드하면 출처 인용까지 함께 나옵니다.
+            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-zinc-200 bg-white p-6 text-center text-sm text-zinc-500">
+              <p>
+                {`"${subject} 단원 객관식 3문제 만들어줘" 같이 입력하거나,`}
+                <br />
+                아래 버튼으로 에이전트가 먼저 말 걸게 시작해 봐.
+              </p>
+              <button
+                type="button"
+                onClick={kickoff}
+                disabled={sending}
+                className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                ▶ 대화 시작
+              </button>
             </div>
           ) : (
             messages.map((m, i) => (
