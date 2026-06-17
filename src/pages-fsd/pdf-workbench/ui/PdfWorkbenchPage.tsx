@@ -111,6 +111,8 @@ export function PdfWorkbenchPage() {
     updateAnswerRefRect,
     clearAnswerRefs,
     rescanAnswerRefs,
+    connectAnswerRef,
+    scanAllAnswerRefs,
     runEmbedPending,
     refreshEmbedPending,
   } = useWorkbenchController();
@@ -1105,6 +1107,8 @@ export function PdfWorkbenchPage() {
               onRotate={(d, p) => void rotateRef(d, p)}
               onReset={() => void resetRotation('ref')}
               linkedRefs={linkedRefs}
+              onConnectOnly={(page, rect) => connectAnswerRef(page, rect, activeChildSafe)}
+              canConnectOnly={refSel?.type === 'attachment'}
               labelChildren={isSet}
               activeChild={activeChildSafe}
               onUpdateLinkedRef={(refId, rect) => {
@@ -1273,6 +1277,26 @@ export function PdfWorkbenchPage() {
               {(selected.kind === 'problem' || selected.kind === 'problemset') &&
                 (selected.answerRefs.length > 0 || isSet) && (
                   <div className="space-y-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                    {/* 연결만 해둔 영역들을 한 번에 스캔 */}
+                    {selected.answerRefs.length > 0 && (
+                      <div className="flex items-center justify-between gap-2 border-b border-emerald-200 pb-1.5">
+                        <span className="font-medium">🔗 전체 연결 {selected.answerRefs.length}곳</span>
+                        <button
+                          type="button"
+                          disabled={s.grabbing}
+                          onClick={() => void scanAllAnswerRefs(selected.id)}
+                          className="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-1 font-medium text-white hover:bg-emerald-700 disabled:opacity-40"
+                          title="연결만 해둔 영역까지 모두 한 번에 OCR — 각 문제에 정답·해설 채움"
+                        >
+                          {s.grabbing ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ScanText className="h-3.5 w-3.5" />
+                          )}
+                          연결 전부 스캔
+                        </button>
+                      </div>
+                    )}
                     {/* 세트: 풀이를 받을 자식 문제 선택 (보조 뷰어 grab 대상) */}
                     {isSet && (
                       <div className="flex flex-wrap items-center gap-1">

@@ -403,7 +403,8 @@ export function useWorkbenchController() {
       const s = useWorkbenchStore.getState();
       s.clearRef();
       s.setAttachments(data.attachments);
-      s.setBoxes(data.boxes.map(fromServerBox));
+      const loadedBoxes = data.boxes.map(fromServerBox);
+      s.setBoxes(loadedBoxes);
       s.setSelectedId(null);
       s.openSession({
         jobId: data.job.id,
@@ -413,6 +414,10 @@ export function useWorkbenchController() {
         numPages: loaded.numPages,
         pageRotations: data.job.pageRotations ?? {},
       });
+      // 파일 전체 누적 토큰 = 박스별 저장된 토큰의 합 (openSession이 0으로 리셋하므로 다시 채움).
+      const sumIn = loadedBoxes.reduce((acc, b) => acc + b.tokensIn, 0);
+      const sumOut = loadedBoxes.reduce((acc, b) => acc + b.tokensOut, 0);
+      if (sumIn > 0 || sumOut > 0) s.addTokens(sumIn, sumOut);
       // 부속(부교재)이 있으면 자동으로 첫 부속을 분할 화면에 띄운다.
       if (data.attachments.length > 0) {
         await openAttachment(data.attachments[0]);
@@ -1025,6 +1030,28 @@ export function useWorkbenchController() {
     }
   }
 
+  /** 보조 뷰어 영역을 스캔 없이 그 문제에 "연결만" 추가 (나중에 일괄 스캔). */
+  function connectAnswerRef(page: number, rect: BoxRect, childIdx = 0) {
+    const st = useWorkbenchStore.getState();
+    const selected = st.boxes.find((b) => b.id === st.selectedId);
+    if (!selected || (selected.kind !== 'problem' && selected.kind !== 'problemset')) {
+      toast.error('먼저 왼쪽에서 문제 박스를 선택하세요.');
+      return;
+    }
+    if (st.refSel?.type !== 'attachment') {
+      toast.info('"연결만"은 부속(해설) PDF에서만 돼요. 같은 PDF는 바로 인식하세요.');
+      return;
+    }
+    patchBox(selected.id, {
+      answerRefs: [
+        ...selected.answerRefs,
+        { id: crypto.randomUUID(), attachmentId: st.refSel.id, page, rect, childIndex: childIdx },
+      ],
+    });
+    const label = childIdx > 0 ? `문제 ${childIdx + 1} ` : '';
+    toast.success(`${label}해설 영역 연결 추가 (스캔 대기) — "연결 전부 스캔"으로 한 번에 인식.`);
+  }
+
   /** 보조 뷰어에서 드래그한 영역 → 선택된 박스의 childIdx 문제 정답·해설로 인식해 채움 + 링크. */
   async function grabAnswer(grab: RefGrab, childIdx = 0) {
     const st = useWorkbenchStore.getState();
@@ -1230,6 +1257,27 @@ export function useWorkbenchController() {
     }
   }
 
+  /** 부속 연결이 있는 모든 자식 문제를 한 번에 스캔(자식별 재스캔 순회). */
+  async function scanAllAnswerRefs(boxId: string) {
+    const st = useWorkbenchStore.getState();
+    const box = st.boxes.find((b) => b.id === boxId);
+    if (!box) return;
+    const childIdxs = Array.from(
+      new Set(
+        box.answerRefs
+          .filter((r) => st.attachments.some((a) => a.id === r.attachmentId))
+          .map((r) => r.childIndex),
+      ),
+    ).sort((a, b) => a - b);
+    if (childIdxs.length === 0) {
+      toast.info('스캔할 부속 해설 연결이 없어요.');
+      return;
+    }
+    for (const ci of childIdxs) {
+      await rescanAnswerRefs(boxId, ci);
+    }
+  }
+
   // ---------- 그림/도표 ----------
   /** base64 이미지를 Storage(problem-figures)에 올리고 public URL을 돌려준다. */
   async function uploadFigure(image: string, mediaType: string): Promise<string | null> {
@@ -1408,6 +1456,8 @@ export function useWorkbenchController() {
     updateAnswerRefRect,
     clearAnswerRefs,
     rescanAnswerRefs,
+    connectAnswerRef,
+    scanAllAnswerRefs,
     refreshEmbedPending,
     runEmbedPending,
   };

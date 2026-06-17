@@ -44,6 +44,8 @@ export function PdfRefViewer({
   linkedRefs = [],
   onUpdateLinkedRef,
   onDeleteLinkedRef,
+  onConnectOnly,
+  canConnectOnly = false,
   labelChildren = false,
   activeChild = 0,
 }: {
@@ -62,6 +64,10 @@ export function PdfRefViewer({
   onUpdateLinkedRef?: (refId: string, rect: Rect) => void;
   /** 연결된 답 영역 삭제(연결 해제). */
   onDeleteLinkedRef?: (refId: string) => void;
+  /** 스캔 없이 "연결만" — 영역(정규화 rect)을 현재 문제에 연결만 추가. */
+  onConnectOnly?: (page: number, rect: Rect) => void;
+  /** "연결만" 버튼 노출 여부 (부속 PDF일 때만). */
+  canConnectOnly?: boolean;
   /** 세트일 때 연결 영역에 "문제 N" 라벨을 달고 활성 자식만 강조. */
   labelChildren?: boolean;
   /** 현재 풀이를 받는 자식 문제 인덱스 (세트). grab은 이 자식으로 들어감. */
@@ -203,6 +209,19 @@ export function PdfRefViewer({
       },
       mode,
     });
+  }
+
+  /** 스캔 없이 영역만 현재 문제에 연결 (나중에 일괄 스캔). */
+  function connectOnly() {
+    const canvas = canvasRef.current;
+    if (!canvas || !rect || rect.w < 8) return;
+    onConnectOnly?.(pageNum, {
+      x: rect.x / canvas.width,
+      y: rect.y / canvas.height,
+      w: rect.w / canvas.width,
+      h: rect.h / canvas.height,
+    });
+    dispatch({ type: 'clear' });
   }
 
   const toDisplay = (r: Rect) => ({
@@ -473,26 +492,43 @@ export function PdfRefViewer({
             >
               <X className="h-2.5 w-2.5" />
             </button>
-            {/* 가운데 인식 버튼 — 메인 뷰어 "인식"과 동일 패턴 */}
-            <button
-              type="button"
-              disabled={grabbing}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation();
-                grab();
-              }}
-              className="absolute left-1/2 top-1/2 inline-flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full bg-zinc-900/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-zinc-900 disabled:opacity-50"
-            >
-              {grabbing ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : mode === 'figure' ? (
-                <ImagePlus className="h-3.5 w-3.5" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
+            {/* 가운데 버튼 — 즉시 인식 + (해설·부속일 때) 연결만 */}
+            <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-1.5">
+              <button
+                type="button"
+                disabled={grabbing}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  grab();
+                }}
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-zinc-900/90 px-3 py-1.5 text-xs font-bold text-white shadow-lg hover:bg-zinc-900 disabled:opacity-50"
+              >
+                {grabbing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : mode === 'figure' ? (
+                  <ImagePlus className="h-3.5 w-3.5" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {mode === 'figure' ? '그림 인식' : '정답·해설 인식'}
+              </button>
+              {mode === 'answer' && canConnectOnly && onConnectOnly && (
+                <button
+                  type="button"
+                  disabled={grabbing}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    connectOnly();
+                  }}
+                  title="스캔 없이 이 문제에 연결만 — 나중에 한 번에 스캔"
+                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border-2 border-emerald-600 bg-white px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-lg hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  + 연결만
+                </button>
               )}
-              {mode === 'figure' ? '그림 인식' : '정답·해설 인식'}
-            </button>
+            </div>
             {HANDLES.map(({ h, cls, cursor }) => (
               <span
                 key={h}
