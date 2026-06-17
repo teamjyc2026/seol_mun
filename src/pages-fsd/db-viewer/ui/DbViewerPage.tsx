@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Fragment, useEffect } from 'react';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Database, Loader2, RefreshCw } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
@@ -74,6 +74,8 @@ export function DbViewerPage() {
 
   const pageStart = s.count === 0 ? 0 : s.offset + 1;
   const pageEnd = Math.min(s.offset + s.limit, s.count);
+  // 컬럼 = 모든 행의 키 합집합(첫 행 기준 순서 유지).
+  const columns = Array.from(new Set(s.rows.flatMap((r) => Object.keys(r))));
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -141,49 +143,76 @@ export function DbViewerPage() {
           행이 없어요.
         </div>
       ) : (
-        <ul className="space-y-2">
-          {s.rows.map((row, i) => {
-            const open = s.expanded.has(i);
-            const id = (row.id ?? row.scope_id ?? '') as string;
-            const preview =
-              (row.title as string) ||
-              (row.question as string) ||
-              (row.name as string) ||
-              (row.content as string) ||
-              id;
-            return (
-              <li key={i} className="rounded-lg border border-zinc-200 bg-white">
-                <button
-                  type="button"
-                  onClick={() => toggle(i)}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left"
-                >
-                  <ChevronRight
-                    className={cn('h-3.5 w-3.5 shrink-0 text-zinc-400 transition', open && 'rotate-90')}
-                  />
-                  <span className="min-w-0 flex-1 truncate text-xs text-zinc-700">
-                    {typeof preview === 'string' ? preview.slice(0, 120) : String(preview)}
-                  </span>
-                  {typeof id === 'string' && id && (
-                    <code className="shrink-0 text-[10px] text-zinc-400">{id.slice(0, 8)}</code>
-                  )}
-                </button>
-                {open && (
-                  <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 border-t border-zinc-100 px-3 py-2 text-xs">
-                    {Object.entries(row).map(([k, v]) => (
-                      <div key={k} className="contents">
-                        <dt className="font-mono font-medium text-zinc-500">{k}</dt>
-                        <dd className="min-w-0 overflow-x-auto whitespace-pre-wrap break-words font-mono text-zinc-800">
-                          {cellValue(v)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+          <table className="min-w-full border-collapse text-left font-mono text-[11px]">
+            <thead className="sticky top-0 z-10 bg-zinc-100 text-zinc-600">
+              <tr>
+                <th className="w-6 border-b border-zinc-200 px-1 py-1.5" />
+                {columns.map((c) => (
+                  <th
+                    key={c}
+                    className="whitespace-nowrap border-b border-l border-zinc-200 px-2 py-1.5 font-semibold"
+                  >
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {s.rows.map((row, i) => {
+                const open = s.expanded.has(i);
+                return (
+                  <Fragment key={i}>
+                    <tr
+                      onClick={() => toggle(i)}
+                      className={cn(
+                        'cursor-pointer border-b border-zinc-100 hover:bg-indigo-50/50',
+                        open && 'bg-indigo-50/60',
+                      )}
+                    >
+                      <td className="px-1 py-1 text-zinc-400">
+                        <ChevronRight
+                          className={cn('h-3 w-3 transition', open && 'rotate-90')}
+                        />
+                      </td>
+                      {columns.map((c) => {
+                        const v = cellValue(row[c]);
+                        return (
+                          <td
+                            key={c}
+                            title={v}
+                            className={cn(
+                              'max-w-[16rem] truncate whitespace-nowrap border-l border-zinc-100 px-2 py-1 align-top',
+                              row[c] == null ? 'text-zinc-300' : 'text-zinc-800',
+                            )}
+                          >
+                            {v.replace(/\s+/g, ' ')}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    {open && (
+                      <tr className="bg-zinc-50">
+                        <td colSpan={columns.length + 1} className="px-3 py-2">
+                          <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-[11px]">
+                            {columns.map((c) => (
+                              <div key={c} className="contents">
+                                <dt className="font-semibold text-zinc-500">{c}</dt>
+                                <dd className="min-w-0 overflow-x-auto whitespace-pre-wrap break-words text-zinc-800">
+                                  {cellValue(row[c])}
+                                </dd>
+                              </div>
+                            ))}
+                          </dl>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </main>
   );
