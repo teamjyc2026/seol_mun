@@ -151,11 +151,16 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
               ),
             );
           },
-          onDone: () => {
+          onDone: (e) => {
             setMessages((prev) =>
               prev.map((m, i) =>
                 i === assistantIndex && m.role === 'assistant'
-                  ? { ...m, streaming: false }
+                  ? {
+                      ...m,
+                      streaming: false,
+                      // 서버가 마커를 떼어낸 최종 텍스트 + 선택지를 준다.
+                      reply: { ...m.reply, text: e.text ?? m.reply.text, choices: e.choices ?? [] },
+                    }
                   : m,
               ),
             );
@@ -286,6 +291,29 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
               <MessageBubble key={i} msg={m} onSubmitAnswer={(t) => void sendMessage(t)} />
             ))
           )}
+          {(() => {
+            // 마지막 에이전트 답변의 선택지를 퀵리플라이 버튼으로 — 누르면 그대로 전송.
+            const last = messages[messages.length - 1];
+            const choices =
+              !sending && last?.role === 'assistant' && !last.streaming
+                ? (last.reply.choices ?? [])
+                : [];
+            if (choices.length === 0) return null;
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {choices.map((c, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => void sendMessage(c)}
+                    className="rounded-full border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100"
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         <div className="sticky bottom-4">

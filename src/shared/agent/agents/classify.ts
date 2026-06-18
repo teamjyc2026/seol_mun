@@ -31,7 +31,9 @@ const KEYWORD_RULES: { id: AgentId; patterns: RegExp[] }[] = [
     // Explicit problem-search intent outranks topic keywords
     // ("관계대명사 문제 찾아줘" → problem_finder, not grammar).
     id: 'problem_finder',
-    patterns: [/문제\s*(찾|보여|만들|내|출제|추천)|기출|비슷한\s*문제|풀\s*문제/i],
+    patterns: [
+      /문제\s*(찾|보여|만들|내|출제|추천|줘|주라|하나|한\s*개|더|풀)|다른\s*문제|새\s*문제|기출|비슷한\s*문제|풀\s*문제|또\s*(줘|풀)/i,
+    ],
   },
   {
     id: 'grammar',

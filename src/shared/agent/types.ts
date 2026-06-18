@@ -80,4 +80,4 @@ export type StreamEvent =
   | { kind: 'meta'; conversationId: string; agent: AgentId; toolResults: ToolResult[]; citations: Citation[] }
   | { kind: 'token'; text: string }
   | { kind: 'error'; message: string }
-  | { kind: 'done'; choices?: string[]; stage?: number | null };
+  | { kind: 'done'; choices?: string[]; stage?: number | null; text?: string };

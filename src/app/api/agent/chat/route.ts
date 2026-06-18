@@ -229,22 +229,22 @@ export async function POST(req: NextRequest) {
           send({ kind: 'token', text: finalText });
         }
 
-        // 학생 모드: {{단계:N}} 마커와 마지막 줄 [[선택지]] 트레일러를 분리해
-        // 저장한다. 히스토리·리로드가 자동으로 깨끗해진다.
-        const staged =
-          audience === 'student'
-            ? parseSolveStage(finalText)
-            : { text: finalText, stage: null };
-        const parsed =
-          audience === 'student'
-            ? parseQuickReplies(staged.text)
-            : { text: finalText, choices: [] as string[] };
+        // {{단계:N}} 마커와 마지막 줄 [[선택지]] 트레일러를 분리한다 — 오디언스 무관.
+        // (교감/grok 페르소나는 teacher 모드에서도 [[선택지]]를 붙이므로 항상 정제해야
+        //  플레이그라운드에 날것으로 새지 않는다.)
+        const staged = parseSolveStage(finalText);
+        const parsed = parseQuickReplies(staged.text);
+        // 모델이 가끔 앞에 [잡담]/[교감] 같은 라벨을 붙인다 — 알려진 라벨이면 제거.
+        const cleanText = parsed.text.replace(
+          /^\s*\[(?:잡담|교감|감정|튜터|문법|어휘|독해|암기|문제|일반)\]\s*/u,
+          '',
+        );
 
         await supabase.from('agent_messages').insert({
           conversation_id: convId,
           role: 'assistant',
           content: {
-            text: parsed.text,
+            text: cleanText,
             ...(parsed.choices.length ? { choices: parsed.choices } : {}),
             ...(staged.stage != null ? { stage: staged.stage } : {}),
             agent,
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
           },
         });
 
-        send({ kind: 'done', choices: parsed.choices, stage: staged.stage });
+        send({ kind: 'done', choices: parsed.choices, stage: staged.stage, text: cleanText });
 
         // Memory extraction after 'done' (UI never waits on it):
         // - companion/emotion: social facts/jokes/feelings
