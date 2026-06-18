@@ -549,22 +549,10 @@ export function useWorkbenchController() {
     const { jobId } = st;
     patchBox(boxId, { status: 'ocr' }, false);
     try {
-      // ① 종류 자동 분류 — 단, '문제 세트'는 사용자가 명시했으니 분류 생략(멀티 문제로).
-      let kind: BoxKind;
-      if (box.kind === 'problemset') {
-        kind = 'problemset';
-      } else {
-        const clsRes = await fetch('/api/agent/ocr/classify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image, mediaType: 'image/png' }),
-        });
-        if (!clsRes.ok)
-          throw new Error((await clsRes.json().catch(() => null))?.message ?? '분류 실패');
-        const cls = (await clsRes.json()) as { kind: BoxKind; usage?: TokenUsage };
-        kind = cls.kind;
-        reportUsage('종류 분류', cls.usage, boxId);
-      }
+      // ① 종류는 사용자가 세그먼트로 고른 box.kind를 그대로 존중(자동 분류 안 함).
+      //    예전엔 /ocr/classify로 재분류해 "본문"을 "문제"로 덮어쓰던 버그가 있었음.
+      //    (단, 문제로 그렸어도 인식 결과가 세트면 아래에서 problemset으로 자동 전환.)
+      let kind: BoxKind = box.kind;
 
       // ② 종류별 OCR
       let patch: Partial<BoxData>;

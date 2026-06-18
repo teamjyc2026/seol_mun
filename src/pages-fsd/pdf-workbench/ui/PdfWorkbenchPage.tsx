@@ -1174,7 +1174,10 @@ export function PdfWorkbenchPage() {
             </div>
           ) : selected.status === 'idle' ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
-              <p>영역만 잡았어요. 인식을 누르면 종류를 자동 분류하고 내용을 채워요.</p>
+              <p>
+                영역만 잡았어요. 인식을 누르면 <b>고른 종류(문제/개념/본문)대로</b> 내용을 채워요.
+                (종류는 위 세그먼트에서 선택)
+              </p>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
