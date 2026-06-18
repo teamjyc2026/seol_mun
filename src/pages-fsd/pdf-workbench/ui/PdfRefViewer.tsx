@@ -311,33 +311,35 @@ export function PdfRefViewer({
           </>
         )}
         <span className="mx-0.5 h-4 w-px bg-zinc-200" />
-        {/* 확대/축소 — 표시 배율만 (좌표 불변) */}
-        <button
-          type="button"
-          disabled={zoom <= 0.5}
-          onClick={() => zoomBy(-0.25)}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
-          title="축소"
-        >
-          <ZoomOut className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setZoom(1)}
-          className="inline-flex h-7 min-w-[3rem] items-center justify-center rounded-md border border-zinc-200 px-1 text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-50"
-          title="배율 초기화 (맞춤)"
-        >
-          {Math.round(zoom * 100)}%
-        </button>
-        <button
-          type="button"
-          disabled={zoom >= 3}
-          onClick={() => zoomBy(0.25)}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
-          title="확대"
-        >
-          <ZoomIn className="h-4 w-4" />
-        </button>
+        {/* 확대/축소 — 한 묶음으로(줄바꿈 시 함께) */}
+        <span className="inline-flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            disabled={zoom <= 0.5}
+            onClick={() => zoomBy(-0.25)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
+            title="축소"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(1)}
+            className="inline-flex h-7 min-w-[3rem] items-center justify-center rounded-md border border-zinc-200 px-1 text-[11px] font-medium tabular-nums text-zinc-600 hover:bg-zinc-50"
+            title="배율 초기화 (맞춤)"
+          >
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            disabled={zoom >= 3}
+            onClick={() => zoomBy(0.25)}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-30"
+            title="확대"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </button>
+        </span>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {/* 가져오기 모드 — 정답·해설 OCR / 그림 추가 */}
           <div className="flex rounded-md border border-zinc-200 p-0.5">
