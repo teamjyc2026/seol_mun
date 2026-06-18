@@ -11,7 +11,7 @@ import {
   createProblemSet,
   type ProblemSetSubProblem,
 } from '@/features/create-problem';
-import { topicCategoriesFor } from '@/shared/config/topics';
+import { topicCategoriesFor, normalizeTopicTags, categoryForTag } from '@/shared/config/topics';
 import type { Subject } from '@/shared/config/subjects';
 import type { BoxKind, BoxRect } from '../ui/PdfBoxViewer';
 import { KIND_LABEL } from '../ui/PdfBoxViewer';
@@ -584,22 +584,21 @@ export function useWorkbenchController() {
           usage?: TokenUsage;
         };
         reportUsage('문제 인식', usage, boxId);
-        // 분류는 반드시 기존 목록에 스냅 — 목록에 없는 OCR 토픽은 버린다(자유입력 금지).
-        const tax = topicCategoriesFor(subject);
+        // 분류는 기존 목록에 스냅 — 쉼표 다중 태그 중 유효한 것만(자유입력 금지).
+        const hasTax = topicCategoriesFor(subject).length > 0;
         const snap = (p: OcrProblem, prev?: WbSubProblem): WbSubProblem => {
-          const matchedCat = p.topic
-            ? tax.find((c) => c.topics.includes(p.topic as string))
-            : undefined;
-          const category =
-            matchedCat?.category ??
-            (p.category && tax.some((c) => c.category === p.category)
-              ? p.category
-              : (prev?.category ?? null));
-          const topic = matchedCat
-            ? (p.topic as string)
-            : tax.length === 0
-              ? (p.topic ?? prev?.topic ?? '')
-              : (prev?.topic ?? '');
+          // 유효 태그만 남긴 정규화 토픽(없으면 prev 유지). 분류 없는 과목은 원문.
+          const normTopic = p.topic
+            ? hasTax
+              ? normalizeTopicTags(subject, p.topic)
+              : p.topic
+            : '';
+          const topic = normTopic || prev?.topic || '';
+          // category(UI 탐색)는 첫 태그 기준.
+          const firstTag = topic.split(',')[0]?.trim() ?? '';
+          const category = firstTag
+            ? (categoryForTag(subject, firstTag) ?? prev?.category ?? null)
+            : (prev?.category ?? null);
           const choices = p.choices?.length
             ? p.choices
             : (prev?.choices ?? emptySubProblem().choices);

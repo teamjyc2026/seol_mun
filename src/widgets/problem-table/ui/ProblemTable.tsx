@@ -83,11 +83,20 @@ export function ProblemTable({ problems }: { problems: Problem[] }) {
               <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
                 {p.subject}
               </span>
-              {p.topic ? (
-                <span className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">
-                  {p.topic}
-                </span>
-              ) : null}
+              {p.topic
+                ? p.topic
+                    .split(',')
+                    .map((t) => t.trim())
+                    .filter(Boolean)
+                    .map((t) => (
+                      <span
+                        key={t}
+                        className="rounded-md bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700"
+                      >
+                        {t}
+                      </span>
+                    ))
+                : null}
               {p.difficulty ? (
                 <span
                   className={cn(

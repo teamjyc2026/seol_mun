@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireUploader } from '@/shared/config/auth';
 import { claudeJson, llmErrorMessage } from '@/shared/config/anthropic';
 import { topicCategoriesFor } from '@/shared/config/topics';
+import { TOPIC_PATH_SEP } from '@/shared/config/topics';
 import { MARKUP_RULES } from '@/shared/config/markup';
 
 export const runtime = 'nodejs';
@@ -59,10 +60,17 @@ export async function POST(req: NextRequest) {
 
   const taxonomy = body.subject ? topicCategoriesFor(body.subject) : [];
   const taxonomyText = taxonomy.length
-    ? `\n[분류 목록 — category/topic은 반드시 아래에서 골라라. 자유 입력 금지. 마땅한 게 없으면 가장 가까운 것]\n${taxonomy
-        .map((c) => `· ${c.category}: ${c.topics.join(', ')}`)
+    ? `\n[분류 목록 — topic은 반드시 아래에서 골라라(자유 입력 금지). 해당되는 분류가 여러 개면 **쉼표(,)로 나열**. 3단계(하위가 있는 항목)는 \`상위${TOPIC_PATH_SEP}하위\` 형식으로(예 "시제${TOPIC_PATH_SEP}현재완료"). 마땅한 게 없으면 가장 가까운 것.]\n${taxonomy
+        .map(
+          (c) =>
+            `· ${c.category}: ${c.topics
+              .map((t) =>
+                typeof t === 'string' ? t : `${t.topic}(${t.sub.join('/')})`,
+              )
+              .join(', ')}`,
+        )
         .join('\n')}`
-    : '\n- category/topic: 단원·유형 추정 (예: "관계대명사").';
+    : '\n- topic: 단원·유형 추정 (예: "관계대명사").';
 
   try {
     let usage = { input: 0, output: 0 };

@@ -33,6 +33,7 @@ import {
 import { api } from '@/shared/api/axios';
 import { SUBJECTS } from '@/shared/config/subjects';
 import { cn } from '@/shared/lib/cn';
+import { RichTextHelp, RichTextPreview } from '@/shared/ui/RichText';
 import { PdfBoxViewer, KIND_LABEL, type BoxKind } from './PdfBoxViewer';
 import { ConnectionLine } from './ConnectionLine';
 import { FiguresEditor } from './FiguresEditor';
@@ -1456,6 +1457,7 @@ export function PdfWorkbenchPage() {
                   />
                 ) : (
                   <div className="space-y-4">
+                    <RichTextHelp />
                     <TopicPicker
                       subject={s.source.subject}
                       category={selected.chunk.category}
@@ -1480,6 +1482,7 @@ export function PdfWorkbenchPage() {
                         rows={14}
                         className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
                       />
+                      <RichTextPreview value={selected.chunk.text} />
                     </div>
                     <FiguresEditor
                       figures={selected.chunk.figures}

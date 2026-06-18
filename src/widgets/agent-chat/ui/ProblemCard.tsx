@@ -80,9 +80,17 @@ export function ProblemCard({
           <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-zinc-500">
             <span className="rounded-sm bg-zinc-100 px-1.5 py-0.5">{problem.problem_type}</span>
             <span className="rounded-sm bg-zinc-100 px-1.5 py-0.5">{problem.difficulty}</span>
-            {problem.topic ? (
-              <span className="rounded-sm bg-zinc-100 px-1.5 py-0.5">{problem.topic}</span>
-            ) : null}
+            {problem.topic
+              ? problem.topic
+                  .split(',')
+                  .map((t) => t.trim())
+                  .filter(Boolean)
+                  .map((t) => (
+                    <span key={t} className="rounded-sm bg-zinc-100 px-1.5 py-0.5">
+                      {t}
+                    </span>
+                  ))
+              : null}
           </div>
         </div>
       </header>
