@@ -8,10 +8,13 @@ type Parsed = { text: string; choices: string[] };
 
 const TRAILER_RE = /\n?[ \t]*\[\[([^[\]\n]+)\]\][ \t]*$/;
 
-/** "A | B | C" 또는 "A / B / C"를 선택지 배열로. */
+/**
+ * "A | B | C" 또는 "A / B / C"를 선택지 배열로.
+ * `/`는 **양쪽 공백이 있을 때만** 구분자 — "문제 줘/풀래"(같은 말)는 한 개로 둔다.
+ */
 function splitChoices(inner: string): string[] {
   return inner
-    .split(/\s*[|/]\s*/)
+    .split(/\s*\|\s*|\s+\/\s+/)
     .map((s) => s.trim())
     .filter(Boolean)
     .slice(0, 4);

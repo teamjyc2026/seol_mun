@@ -1415,6 +1415,36 @@ export function useWorkbenchController() {
     return uploadFigure(base64, mediaType);
   }
 
+  /** 지문을 한국어 해석으로 생성 (해설지에 해석이 없을 때). 토큰은 선택 박스에 집계. */
+  async function translatePassage(passage: string): Promise<string | null> {
+    const text = passage.trim();
+    if (!text) return null;
+    const st = useWorkbenchStore.getState();
+    try {
+      const res = await fetch('/api/agent/ocr/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, subject: st.source?.subject }),
+      });
+      if (!res.ok)
+        throw new Error((await res.json().catch(() => null))?.message ?? '해석 생성 실패');
+      const { translation, usage } = (await res.json()) as {
+        translation: string;
+        usage?: TokenUsage;
+      };
+      reportUsage('지문 해석', usage, st.selectedId ?? undefined);
+      if (!translation.trim()) {
+        toast.info('해석을 생성하지 못했어요.');
+        return null;
+      }
+      toast.success('지문 해석을 생성했어요.');
+      return translation;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '해석 생성 실패');
+      return null;
+    }
+  }
+
   return {
     canvasRef,
     fileRef,
@@ -1452,6 +1482,7 @@ export function useWorkbenchController() {
     grabFromRef,
     captureFigureFromMain,
     uploadFigureFile,
+    translatePassage,
     removeAnswerRef,
     updateAnswerRefRect,
     clearAnswerRefs,

@@ -1,6 +1,7 @@
 'use client';
 
-import { Check, Plus, RefreshCw, ScanText, X } from 'lucide-react';
+import { useState } from 'react';
+import { Check, Loader2, Plus, RefreshCw, ScanText, Sparkles, X } from 'lucide-react';
 import type { ProblemFigure } from '@/entities/problem';
 import { cn } from '@/shared/lib/cn';
 import { RichTextHelp, RichTextPreview } from '@/shared/ui/RichText';
@@ -59,6 +60,7 @@ export function WorkbenchProblemForm({
   onRescanChild,
   childRefCounts,
   grabbing,
+  onTranslatePassage,
 }: {
   subject: string;
   value: WorkbenchProblemValue;
@@ -77,8 +79,21 @@ export function WorkbenchProblemForm({
   childRefCounts?: number[];
   /** 스캔 진행 중(버튼 비활성). */
   grabbing?: boolean;
+  /** 지문으로 한국어 해석 생성 (해설지에 해석이 없을 때). */
+  onTranslatePassage?: (passage: string) => Promise<string | null>;
 }) {
   const isSet = isSetProp ?? value.extra.length > 0;
+  const [translating, setTranslating] = useState(false);
+  async function makeTranslation() {
+    if (!onTranslatePassage || translating || !value.passage.trim()) return;
+    setTranslating(true);
+    try {
+      const t = await onTranslatePassage(value.passage);
+      if (t) onChange({ ...value, passage_translation: t });
+    } finally {
+      setTranslating(false);
+    }
+  }
   const updExtra = (i: number, sub: WbSubProblem) =>
     onChange({ ...value, extra: value.extra.map((e, idx) => (idx === i ? sub : e)) });
   const removeExtra = (i: number) =>
@@ -138,12 +153,30 @@ export function WorkbenchProblemForm({
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-xs font-medium text-zinc-700">지문 해석 (선택)</label>
+        <div className="flex items-center justify-between gap-2">
+          <label className="text-xs font-medium text-zinc-700">지문 해석 (선택)</label>
+          {onTranslatePassage && (
+            <button
+              type="button"
+              onClick={makeTranslation}
+              disabled={translating || !value.passage.trim()}
+              title="해설지에 해석이 없을 때 — 위 지문으로 한국어 해석을 자동 생성"
+              className="inline-flex h-6 items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-1.5 text-[11px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-40"
+            >
+              {translating ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Sparkles className="h-3 w-3" />
+              )}
+              지문으로 해석 생성
+            </button>
+          )}
+        </div>
         <textarea
           value={value.passage_translation}
           onChange={(e) => onChange({ ...value, passage_translation: e.target.value })}
           rows={4}
-          placeholder="지문의 한국어 해석 — 해설지에서 가져오거나 직접 기입"
+          placeholder="지문의 한국어 해석 — 해설지에서 가져오거나 직접 기입 / 위 버튼으로 생성"
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
       </div>

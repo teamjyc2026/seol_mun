@@ -107,6 +107,7 @@ export function PdfWorkbenchPage() {
     grabFromRef,
     captureFigureFromMain,
     uploadFigureFile,
+    translatePassage,
     removeAnswerRef,
     updateAnswerRefRect,
     clearAnswerRefs,
@@ -1390,6 +1391,7 @@ export function PdfWorkbenchPage() {
                     value={selected.problem}
                     onChange={(next) => patchBox(selected.id, { problem: next })}
                     uploadFigure={uploadFigureFile}
+                    onTranslatePassage={translatePassage}
                     isSet={isSet}
                     activeChild={activeChildSafe}
                     onActiveChild={setActiveChild}
