@@ -14,6 +14,7 @@ import {
   Home,
   Layers,
   Lightbulb,
+  Link2,
   Loader2,
   Pencil,
   PencilLine,
@@ -106,6 +107,8 @@ export function PdfWorkbenchPage() {
     deleteAttachment,
     grabFromRef,
     captureFigureFromMain,
+    addPartToSelected,
+    removePart,
     uploadFigureFile,
     translatePassage,
     removeAnswerRef,
@@ -157,6 +160,8 @@ export function PdfWorkbenchPage() {
       saving: st.saving,
       figureCapture: st.figureCapture,
       setFigureCapture: st.setFigureCapture,
+      partCapture: st.partCapture,
+      setPartCapture: st.setPartCapture,
       // 보조 뷰어
       attachments: st.attachments,
       refSel: st.refSel,
@@ -1011,7 +1016,9 @@ export function PdfWorkbenchPage() {
                 const Icon = KIND_ICON[k];
                 // 박스 선택 시 그 박스 종류를 반영, 아니면 새 박스(drawKind).
                 const active =
-                  !s.figureCapture && (selected ? selected.kind === k : s.drawKind === k);
+                  !s.figureCapture &&
+                  !s.partCapture &&
+                  (selected ? selected.kind === k : s.drawKind === k);
                 const activeCls =
                   k === 'problem'
                     ? 'bg-indigo-600 text-white'
@@ -1026,6 +1033,7 @@ export function PdfWorkbenchPage() {
                     type="button"
                     onClick={() => {
                       s.setFigureCapture(false);
+                      s.setPartCapture(false);
                       s.setDrawKind(k);
                       // 선택 박스 종류 변경 — 저장 후엔 payload가 같은 family
                       // (문제↔문제 세트, 개념↔본문)끼리만 안전하게 전환.
@@ -1048,7 +1056,10 @@ export function PdfWorkbenchPage() {
               })}
               <button
                 type="button"
-                onClick={() => s.setFigureCapture(true)}
+                onClick={() => {
+                  s.setFigureCapture(true);
+                  s.setPartCapture(false);
+                }}
                 title="본문 영역을 드래그해 선택한 문제의 그림으로 캡처"
                 className={cn(
                   'inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-[11px] font-medium transition',
@@ -1056,6 +1067,20 @@ export function PdfWorkbenchPage() {
                 )}
               >
                 <Scissors className="h-3.5 w-3.5 shrink-0" /> 그림
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  s.setPartCapture(true);
+                  s.setFigureCapture(false);
+                }}
+                title="한 문제가 페이지/단으로 나뉜 경우 — 선택한 문제에 영역을 이어붙임"
+                className={cn(
+                  'inline-flex items-center gap-1 whitespace-nowrap rounded px-1.5 py-1 text-[11px] font-medium transition',
+                  s.partCapture ? 'bg-indigo-600 text-white' : 'text-zinc-500 hover:bg-zinc-50',
+                )}
+              >
+                <Link2 className="h-3.5 w-3.5 shrink-0" /> 영역 잇기
               </button>
             </div>
             {pageIdleCount > 0 && (
@@ -1080,6 +1105,12 @@ export function PdfWorkbenchPage() {
               (박스 그리기는 잠시 멈춤)
             </p>
           )}
+          {s.partCapture && (
+            <p className="rounded-md border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-medium text-indigo-700">
+              🔗 영역 잇기 모드 — 선택한 문제 박스에 이어붙일 영역을 드래그하세요(다른 페이지도 OK).
+              인식하면 한 문제로 합쳐져요. {!selected && '(먼저 문제 박스를 선택!)'}
+            </p>
+          )}
           <PdfBoxViewer
             doc={s.doc}
             pageNum={s.pageNum}
@@ -1093,8 +1124,14 @@ export function PdfWorkbenchPage() {
             onRecognize={(id) => void recognizeBox(id)}
             onUpdateRect={(id, rect) => patchBox(id, { rect })}
             canvasRef={canvasRef}
-            captureMode={s.figureCapture}
-            onCaptureFigure={(r) => void captureFigureFromMain(r)}
+            captureMode={s.figureCapture || s.partCapture}
+            onCaptureFigure={(r) =>
+              s.partCapture ? addPartToSelected(r) : void captureFigureFromMain(r)
+            }
+            parts={selected?.parts ?? []}
+            onRemovePart={(id) => {
+              if (selected) removePart(selected.id, id);
+            }}
           />
         </section>
 
@@ -1240,6 +1277,16 @@ export function PdfWorkbenchPage() {
                   </button>
                 </div>
               </div>
+
+              {selected.kind === 'problem' && selected.parts.length > 0 && (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-700">
+                  🔗 이어붙인 영역 {selected.parts.length}곳 (p.
+                  {[...new Set(selected.parts.map((p) => p.page))]
+                    .sort((a, b) => a - b)
+                    .join(', ')}
+                  ) — 인식하면 한 문제로 합쳐져요. 삭제는 본문의 점선 영역 X.
+                </div>
+              )}
 
               {selected.kind === 'problemset' && (
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-fuchsia-200 bg-fuchsia-50 px-3 py-2 text-xs text-fuchsia-700">

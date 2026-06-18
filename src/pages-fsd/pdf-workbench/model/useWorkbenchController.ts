@@ -36,6 +36,7 @@ import type {
   OcrProblem,
   OcrProblemResult,
   PageRotations,
+  PartRegion,
 } from './types';
 
 function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
@@ -62,6 +63,7 @@ function fromServerBox(b: JobDetail['boxes'][number]): BoxData {
     actor: b.actor ?? null,
     savedRefs: b.payload.savedRefs ?? (b.saved_ref ? [b.saved_ref] : []),
     passageSetId: b.payload.passageSetId ?? null,
+    parts: b.payload.parts ?? [],
   };
 }
 
@@ -76,6 +78,7 @@ function toServerPayload(b: BoxData): BoxPayload {
     base.tokens = { in: b.tokensIn, out: b.tokensOut };
   if (b.savedRefs.length) base.savedRefs = b.savedRefs;
   if (b.passageSetId) base.passageSetId = b.passageSetId;
+  if (b.parts.length) base.parts = b.parts;
   return base;
 }
 
@@ -567,17 +570,24 @@ export function useWorkbenchController() {
       let patch: Partial<BoxData>;
       if (kind === 'problem' || kind === 'problemset') {
         const subject = st.source?.subject ?? '';
+        // 이어붙일 영역(parts)이 있으면 본영역+영역들을 멀티 이미지로 — 한 문제로 병합.
+        const partImages =
+          box.parts.length > 0
+            ? await Promise.all(box.parts.map((p) => renderMainRegion(p.page, p.rect)))
+            : [];
+        const merged = partImages.length > 0;
         const res = await fetch('/api/agent/ocr/problem', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           // 문제 세트면 문항을 가급적 잘게 분리하도록 split 힌트.
           // expectCount가 오면 정확히 그 개수로 분리(사용자 지정).
+          // parts가 있으면 images로 보내 한 문제로 병합(split 무시).
           body: JSON.stringify({
-            image,
+            ...(merged ? { images: [image, ...partImages] } : { image }),
             mediaType: 'image/png',
             subject,
-            split: box.kind === 'problemset' || !!opts?.expectCount,
-            expectCount: opts?.expectCount,
+            split: !merged && (box.kind === 'problemset' || !!opts?.expectCount),
+            expectCount: merged ? undefined : opts?.expectCount,
           }),
         });
         if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
@@ -691,6 +701,7 @@ export function useWorkbenchController() {
       actor: null,
       savedRefs: [],
       passageSetId: null,
+      parts: [],
     };
     st.addBox(base);
     st.setSelectedId(tempId);
@@ -1183,6 +1194,59 @@ export function useWorkbenchController() {
     });
   }
 
+  /** 메인 PDF의 한 페이지 영역(정규화 rect)을 오프스크린 렌더해 base64 PNG로 크롭. */
+  async function renderMainRegion(page: number, normRect: BoxRect): Promise<string> {
+    const st = useWorkbenchStore.getState();
+    const doc = st.doc;
+    if (!doc) throw new Error('PDF를 읽을 수 없어요.');
+    const p = await doc.getPage(page);
+    const vp = p.getViewport({ scale: 1.5, rotation: st.pageRotations[page] ?? 0 });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width;
+    canvas.height = vp.height;
+    await p.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport: vp }).promise;
+    return cropToBase64(canvas, {
+      x: normRect.x * canvas.width,
+      y: normRect.y * canvas.height,
+      w: normRect.w * canvas.width,
+      h: normRect.h * canvas.height,
+    });
+  }
+
+  /** 선택 문제 박스에 "이어붙일 영역" 추가 (메인 뷰어 드래그 px → 정규화). */
+  function addPartToSelected(rect: BoxRect) {
+    const st = useWorkbenchStore.getState();
+    const selected = st.boxes.find((b) => b.id === st.selectedId);
+    if (!selected) {
+      toast.error('먼저 이어붙일 문제 박스를 선택하세요.');
+      return;
+    }
+    if (selected.kind !== 'problem') {
+      toast.info('"영역 잇기"는 단일 문제 박스에만 — 세트는 문제 추가를 쓰세요.');
+      return;
+    }
+    const canvas = canvasRef.current;
+    if (!canvas || canvas.width === 0) return;
+    const part: PartRegion = {
+      id: crypto.randomUUID(),
+      page: st.pageNum,
+      rect: {
+        x: rect.x / canvas.width,
+        y: rect.y / canvas.height,
+        w: rect.w / canvas.width,
+        h: rect.h / canvas.height,
+      },
+    };
+    patchBox(selected.id, { parts: [...selected.parts, part] });
+    toast.success(`이어붙일 영역 추가 (p.${part.page}). 인식하면 한 문제로 합쳐져요.`);
+  }
+
+  function removePart(boxId: string, partId: string) {
+    const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+    if (!box) return;
+    patchBox(boxId, { parts: box.parts.filter((p) => p.id !== partId) });
+  }
+
   /** childIdx 자식의 연결된 해설 영역을 다시 스캔(재OCR)해 그 자식 정답·해설을 덮어쓴다. */
   async function rescanAnswerRefs(boxId: string, childIdx = 0) {
     const st = useWorkbenchStore.getState();
@@ -1481,6 +1545,8 @@ export function useWorkbenchController() {
     grabAnswer,
     grabFromRef,
     captureFigureFromMain,
+    addPartToSelected,
+    removePart,
     uploadFigureFile,
     translatePassage,
     removeAnswerRef,

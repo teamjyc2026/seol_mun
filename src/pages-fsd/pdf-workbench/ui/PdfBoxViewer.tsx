@@ -57,6 +57,8 @@ export function PdfBoxViewer({
   canvasRef,
   captureMode = false,
   onCaptureFigure,
+  parts = [],
+  onRemovePart,
 }: {
   doc: PDFDocumentProxy;
   pageNum: number;
@@ -80,6 +82,10 @@ export function PdfBoxViewer({
   captureMode?: boolean;
   /** 캡처 모드에서 드래그 영역(캔버스 내부 px)을 부모에 넘김. */
   onCaptureFigure?: (rect: BoxRect) => void;
+  /** 선택 문제 박스에 이어붙인 영역들(정규화 rect). 현재 페이지 것만 표시. */
+  parts?: { id: string; page: number; rect: BoxRect }[];
+  /** 이어붙인 영역 삭제. */
+  onRemovePart?: (id: string) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -87,6 +93,8 @@ export function PdfBoxViewer({
   const [drag, dispatch] = useReducer(boxDragReducer, null);
   // display(px) = internal(px) / ratio
   const [ratio, setRatio] = useState(1);
+  // 정규화 part rect를 표시 px로 바꿀 때 쓸 캔버스 내부 크기.
+  const [pageSize, setPageSize] = useState<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +126,7 @@ export function PdfBoxViewer({
     const canvas = canvasRef.current;
     if (!canvas || canvas.clientWidth === 0) return;
     setRatio(canvas.width / canvas.clientWidth);
+    setPageSize({ w: canvas.width, h: canvas.height });
   }
 
   // 캔버스 표시 폭이 바뀔 때마다(윈도우 리사이즈 + 보조 뷰어 열림/닫힘 같은
@@ -182,7 +191,16 @@ export function PdfBoxViewer({
     height: r.h / ratio,
   });
 
+  /** 정규화(0–1) part rect → 표시 px. */
+  const normToDisplay = (r: BoxRect) => {
+    if (!pageSize) return { left: 0, top: 0, width: 0, height: 0 };
+    const w = pageSize.w / ratio;
+    const h = pageSize.h / ratio;
+    return { left: r.x * w, top: r.y * h, width: r.w * w, height: r.h * h };
+  };
+
   const pageBoxes = boxes.filter((b) => b.page === pageNum);
+  const pageParts = parts.filter((p) => p.page === pageNum);
 
   return (
     <div className="max-w-full overflow-auto">
@@ -285,6 +303,36 @@ export function PdfBoxViewer({
                   }}
                 />
               ))}
+          </div>
+        );
+      })}
+
+      {/* 선택 문제에 이어붙인 영역(이 페이지) — 점선 + X 삭제 */}
+      {pageParts.map((p, i) => {
+        const d = normToDisplay(p.rect);
+        return (
+          <div
+            key={p.id}
+            className="absolute border-2 border-dashed border-indigo-500 bg-indigo-500/5"
+            style={d}
+            title="이어붙인 영역"
+          >
+            <span className="absolute -left-px -top-5 inline-flex items-center rounded-t bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+              이어짐 {i + 1}
+            </span>
+            {onRemovePart && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  onRemovePart(p.id);
+                }}
+                className="absolute -right-2 -top-2 grid h-4 w-4 place-items-center rounded-full bg-zinc-700 text-white hover:bg-rose-600"
+                title="이어붙인 영역 삭제"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            )}
           </div>
         );
       })}

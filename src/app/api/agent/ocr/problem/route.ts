@@ -10,7 +10,9 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 const schema = z.object({
-  image: z.string().min(1).max(8_000_000),
+  image: z.string().min(1).max(8_000_000).optional(),
+  /** 한 문제가 여러 영역/페이지로 나뉜 경우 — 순서대로 이어붙여 한 문제로. */
+  images: z.array(z.string().min(1).max(8_000_000)).min(1).max(8).optional(),
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
   /** 분류 목록을 좁히기 위한 과목 (없으면 자유 추정). */
   subject: z.string().max(50).optional(),
@@ -49,6 +51,11 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ message: 'invalid body' }, { status: 400 });
   }
+  const imgs = body.images?.length ? body.images : body.image ? [body.image] : [];
+  if (imgs.length === 0) {
+    return NextResponse.json({ message: 'image 또는 images 필요' }, { status: 400 });
+  }
+  const merged = imgs.length > 1;
 
   const taxonomy = body.subject ? topicCategoriesFor(body.subject) : [];
   const taxonomyText = taxonomy.length
@@ -74,16 +81,25 @@ export async function POST(req: NextRequest) {
     : body.split
       ? '\n- [문제 세트] 이 영역의 문항을 **가능한 한 잘게 나눠라**: 번호가 다른 문항(예 5번·6번)은 반드시 각각 별도 problems 항목으로 — 절대 한 문제로 묶지 마라. (단, 위 어법/어휘 선택형처럼 한 문항 내부의 네모/밑줄 다중 선택은 그 한 문제로 유지.)'
       : ''
+}${
+  merged
+    ? '\n- [한 문제 이어붙이기] 주어진 이미지 여러 장은 **한 문제가 페이지/단으로 나뉜 것**이다. 순서대로 이어붙여 problems에 **1개만** 만들어라(절대 나누지 마라).'
+    : ''
 }
 - category와 topic은 [분류 목록]에서 정확히 골라라.${taxonomyText}
 - 글자는 보이는 그대로, 요약·번역 금지.
 ${MARKUP_RULES}`,
       content: [
+        ...imgs.map((data) => ({
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: body.mediaType, data },
+        })),
         {
-          type: 'image',
-          source: { type: 'base64', media_type: body.mediaType, data: body.image },
+          type: 'text' as const,
+          text: merged
+            ? '위 이미지들은 한 문제의 이어지는 부분이다. 이어붙여 한 문제로 추출하라.'
+            : '이 영역의 지문과 문제 전부를 구조화 추출하라.',
         },
-        { type: 'text', text: '이 영역의 지문과 문제 전부를 구조화 추출하라.' },
       ],
       schema: {
         type: 'object',

@@ -40,11 +40,20 @@ export type AnswerRef = {
   childIndex: number;
 };
 
+/** 한 문제를 이루는 추가 영역(같은 메인 PDF, 페이지 분할 대응). rect는 0–1 정규화. */
+export type PartRegion = {
+  id: string;
+  page: number;
+  rect: BoxRect;
+};
+
 export type BoxPayload = {
   problem?: WorkbenchProblemValue;
   chunk?: ChunkValue;
   /** 여러 영역(다대일) 답 연결. */
   answerRefs?: AnswerRef[];
+  /** 한 문제를 이루는 추가 영역(페이지 분할). */
+  parts?: PartRegion[];
   /** 이 박스 인식에 쓴 누적 토큰 (분류+OCR+정답·해설). */
   tokens?: { in: number; out: number };
   /** 저장된 문제 id들 (세트면 여러 개). */
@@ -59,6 +68,8 @@ export type BoxData = WorkBox & {
   problem: WorkbenchProblemValue;
   chunk: ChunkValue;
   answerRefs: AnswerRef[];
+  /** 한 문제를 이루는 추가 영역(페이지 분할). */
+  parts: PartRegion[];
   /** 이 박스에 쓴 누적 토큰. */
   tokensIn: number;
   tokensOut: number;
