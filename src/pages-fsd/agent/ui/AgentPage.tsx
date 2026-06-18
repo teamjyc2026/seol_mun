@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { Source } from '@/entities/source';
 import { SUBJECTS, type Subject } from '@/shared/config/subjects';
@@ -29,8 +29,15 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
   const [studentId, setStudentId] = useState('');
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [scopes, setScopes] = useState<Scope[]>([]);
+  const [scopesLoading, setScopesLoading] = useState(true);
   const [scopeId, setScopeId] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 메시지가 바뀌면(전송·스트리밍) 맨 아래로 스크롤.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages]);
 
   useEffect(() => {
     void (async () => {
@@ -41,6 +48,8 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
         setScopes(data.scopes ?? []);
       } catch {
         // non-fatal
+      } finally {
+        setScopesLoading(false);
       }
     })();
   }, []);
@@ -217,7 +226,16 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
           </div>
         </div>
 
-        {scopes.length > 0 && (
+        {scopesLoading ? (
+          // 시험범위 칩 영역 — 로딩 중 자리를 잡아 레이아웃 시프트 방지.
+          <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">
+            <div className="mb-1.5 h-3 w-56 animate-pulse rounded bg-zinc-100" />
+            <div className="flex gap-1.5">
+              <div className="h-6 w-14 animate-pulse rounded-full bg-zinc-100" />
+              <div className="h-6 w-40 animate-pulse rounded-full bg-zinc-100" />
+            </div>
+          </div>
+        ) : scopes.length > 0 ? (
           <div className="rounded-lg border border-zinc-200 bg-white px-3 py-2 shadow-sm">
             <p className="mb-1.5 text-[11px] font-medium text-zinc-500">
               학교 시험범위 (선택 시 그 범위 자료 기반으로 답변)
@@ -257,7 +275,7 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
               })}
             </div>
           </div>
-        )}
+        ) : null}
 
         <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm shadow-sm">
           <span className="text-xs font-medium text-zinc-500">학생ID</span>
@@ -314,6 +332,7 @@ export function AgentPage({ initialSources }: { initialSources: Source[] }) {
               </div>
             );
           })()}
+          <div ref={bottomRef} />
         </div>
 
         <div className="sticky bottom-4">
