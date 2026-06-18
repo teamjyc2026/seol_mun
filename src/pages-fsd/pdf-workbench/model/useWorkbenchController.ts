@@ -1234,6 +1234,15 @@ export function useWorkbenchController() {
     patchBox(boxId, { parts: box.parts.filter((p) => p.id !== partId) });
   }
 
+  /** 이어붙인 영역 1개의 rect 갱신 (이동·리사이즈, 정규화 0–1). */
+  function updatePartRect(boxId: string, partId: string, rect: BoxRect) {
+    const box = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
+    if (!box) return;
+    patchBox(boxId, {
+      parts: box.parts.map((p) => (p.id === partId ? { ...p, rect } : p)),
+    });
+  }
+
   /** childIdx 자식의 연결된 해설 영역을 다시 스캔(재OCR)해 그 자식 정답·해설을 덮어쓴다. */
   async function rescanAnswerRefs(boxId: string, childIdx = 0) {
     const st = useWorkbenchStore.getState();
@@ -1534,6 +1543,7 @@ export function useWorkbenchController() {
     captureFigureFromMain,
     addPartToSelected,
     removePart,
+    updatePartRect,
     uploadFigureFile,
     translatePassage,
     removeAnswerRef,

@@ -110,6 +110,7 @@ export function PdfWorkbenchPage() {
     captureFigureFromMain,
     addPartToSelected,
     removePart,
+    updatePartRect,
     uploadFigureFile,
     translatePassage,
     removeAnswerRef,
@@ -1132,6 +1133,9 @@ export function PdfWorkbenchPage() {
             parts={selected?.parts ?? []}
             onRemovePart={(id) => {
               if (selected) removePart(selected.id, id);
+            }}
+            onUpdatePart={(id, rect) => {
+              if (selected) updatePartRect(selected.id, id, rect);
             }}
           />
         </section>

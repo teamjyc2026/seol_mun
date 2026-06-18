@@ -59,6 +59,7 @@ export function PdfBoxViewer({
   onCaptureFigure,
   parts = [],
   onRemovePart,
+  onUpdatePart,
 }: {
   doc: PDFDocumentProxy;
   pageNum: number;
@@ -86,6 +87,8 @@ export function PdfBoxViewer({
   parts?: { id: string; page: number; rect: BoxRect }[];
   /** 이어붙인 영역 삭제. */
   onRemovePart?: (id: string) => void;
+  /** 이어붙인 영역 이동·리사이즈 커밋 (정규화 rect). */
+  onUpdatePart?: (id: string, rect: BoxRect) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -95,6 +98,9 @@ export function PdfBoxViewer({
   const [ratio, setRatio] = useState(1);
   // 정규화 part rect를 표시 px로 바꿀 때 쓸 캔버스 내부 크기.
   const [pageSize, setPageSize] = useState<{ w: number; h: number } | null>(null);
+  // 이어붙인 영역(parts) 이동·리사이즈 — 별도 드래그 상태(id 기반, 캔버스 px).
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [partDrag, partDispatch] = useReducer(boxDragReducer, null);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,34 +160,60 @@ export function PdfBoxViewer({
     };
   }
 
-  // 빈 캔버스에서 시작 → 새 박스 그리기
+  /** 정규화(0–1) ↔ 캔버스 내부 px (파트 이동·리사이즈용). */
+  const normToPx = (r: BoxRect): BoxRect => {
+    const b = bound();
+    return { x: r.x * b.w, y: r.y * b.h, w: r.w * b.w, h: r.h * b.h };
+  };
+  const pxToNorm = (r: BoxRect): BoxRect => {
+    const b = bound();
+    return { x: r.x / (b.w || 1), y: r.y / (b.h || 1), w: r.w / (b.w || 1), h: r.h / (b.h || 1) };
+  };
+
+  // 빈 캔버스에서 시작 → 새 박스 그리기 (파트 선택 해제)
   function onWrapMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
+    setSelectedPartId(null);
+    partDispatch({ type: 'clear' });
     dispatch({ type: 'createStart', p: pos(e) });
   }
 
   function onMouseMove(e: React.MouseEvent) {
     if (drag) dispatch({ type: 'drag', p: pos(e), bound: bound() });
+    else if (partDrag) partDispatch({ type: 'drag', p: pos(e), bound: bound() });
   }
 
   function onMouseUp() {
-    if (!drag) return;
-    const d = drag;
-    dispatch({ type: 'clear' });
-    if (d.kind === 'create') {
-      if (d.rect.w >= MIN_W && d.rect.h >= MIN_H) {
-        if (captureMode) onCaptureFigure?.(d.rect);
-        else onCreate(d.rect);
+    if (drag) {
+      const d = drag;
+      dispatch({ type: 'clear' });
+      if (d.kind === 'create') {
+        if (d.rect.w >= MIN_W && d.rect.h >= MIN_H) {
+          if (captureMode) onCaptureFigure?.(d.rect);
+          else onCreate(d.rect);
+        }
+        return;
       }
+      const moved =
+        Math.abs(d.rect.x - d.orig.x) > 1 ||
+        Math.abs(d.rect.y - d.orig.y) > 1 ||
+        Math.abs(d.rect.w - d.orig.w) > 1 ||
+        Math.abs(d.rect.h - d.orig.h) > 1;
+      if (moved && d.id) onUpdateRect(d.id, d.rect);
       return;
     }
-    // move/resize: 의미 있는 변화가 있으면 커밋
-    const moved =
-      Math.abs(d.rect.x - d.orig.x) > 1 ||
-      Math.abs(d.rect.y - d.orig.y) > 1 ||
-      Math.abs(d.rect.w - d.orig.w) > 1 ||
-      Math.abs(d.rect.h - d.orig.h) > 1;
-    if (moved && d.id) onUpdateRect(d.id, d.rect);
+    if (partDrag) {
+      const d = partDrag;
+      partDispatch({ type: 'clear' });
+      if (d.kind !== 'create' && d.id) {
+        const moved =
+          Math.abs(d.rect.x - d.orig.x) > 1 ||
+          Math.abs(d.rect.y - d.orig.y) > 1 ||
+          Math.abs(d.rect.w - d.orig.w) > 1 ||
+          Math.abs(d.rect.h - d.orig.h) > 1;
+        if (moved) onUpdatePart?.(d.id, pxToNorm(d.rect));
+      }
+    }
   }
 
   const toDisplay = (r: BoxRect) => ({
@@ -307,15 +339,54 @@ export function PdfBoxViewer({
         );
       })}
 
-      {/* 선택 문제에 이어붙인 영역(이 페이지) — 점선 + X 삭제 */}
+      {/* 선택 박스 ↔ 이 페이지 파트 연결선 (한 문제임을 시각화) */}
+      {!captureMode &&
+        pageSize &&
+        (() => {
+          const box = pageBoxes.find((b) => b.id === selectedId);
+          if (!box || pageParts.length === 0) return null;
+          const bd = toDisplay(box.rect);
+          const bc = { x: bd.left + bd.width / 2, y: bd.top + bd.height / 2 };
+          return (
+            <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
+              {pageParts.map((p) => {
+                const pd = normToDisplay(p.rect);
+                return (
+                  <line
+                    key={p.id}
+                    x1={bc.x}
+                    y1={bc.y}
+                    x2={pd.left + pd.width / 2}
+                    y2={pd.top + pd.height / 2}
+                    stroke="#6366f1"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                  />
+                );
+              })}
+            </svg>
+          );
+        })()}
+
+      {/* 선택 문제에 이어붙인 영역(이 페이지) — 이동·리사이즈 + X 삭제 */}
       {pageParts.map((p, i) => {
-        const d = normToDisplay(p.rect);
+        const sel = selectedPartId === p.id;
+        const dragging = partDrag !== null && partDrag.kind !== 'create' && partDrag.id === p.id;
+        const d = dragging ? toDisplay(partDrag.rect) : normToDisplay(p.rect);
         return (
           <div
             key={p.id}
-            className="absolute border-2 border-dashed border-indigo-500 bg-indigo-500/5"
+            className={cn(
+              'absolute cursor-move border-2 border-dashed border-indigo-500 bg-indigo-500/5',
+              sel && 'ring-2 ring-indigo-700/50',
+            )}
             style={d}
-            title="이어붙인 영역"
+            title="끌어 옮기거나 모서리로 크기 조절"
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              setSelectedPartId(p.id);
+              partDispatch({ type: 'moveStart', id: p.id, p: pos(e), rect: normToPx(p.rect) });
+            }}
           >
             <span className="absolute -left-px -top-5 inline-flex items-center rounded-t bg-indigo-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
               이어짐 {i + 1}
@@ -333,6 +404,27 @@ export function PdfBoxViewer({
                 <X className="h-2.5 w-2.5" />
               </button>
             )}
+            {sel &&
+              HANDLES.map(({ h, cls, cursor }) => (
+                <span
+                  key={h}
+                  className={cn(
+                    'absolute h-2.5 w-2.5 rounded-full border border-white bg-indigo-600',
+                    cls,
+                  )}
+                  style={{ cursor }}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    partDispatch({
+                      type: 'resizeStart',
+                      id: p.id,
+                      handle: h,
+                      p: pos(e),
+                      rect: normToPx(p.rect),
+                    });
+                  }}
+                />
+              ))}
           </div>
         );
       })}
