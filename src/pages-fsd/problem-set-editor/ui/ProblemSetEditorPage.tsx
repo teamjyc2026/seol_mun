@@ -81,7 +81,7 @@ export function ProblemSetEditorPage() {
     );
   }
   function addChoice(i: number) {
-    const labels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
+    const labels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
     setBlocks((prev) =>
       prev.map((b, idx) => {
         if (idx !== i) return b;

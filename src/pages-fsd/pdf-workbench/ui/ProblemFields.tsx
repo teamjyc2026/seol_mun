@@ -69,7 +69,7 @@ export function ProblemFields({
     onChange({ ...value, [k]: v });
 
   function addChoice() {
-    const labels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
+    const labels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
     set('choices', [
       ...value.choices,
       { label: labels[value.choices.length] ?? `${value.choices.length + 1}.`, text: '' },

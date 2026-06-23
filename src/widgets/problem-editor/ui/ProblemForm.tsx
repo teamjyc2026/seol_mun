@@ -95,7 +95,7 @@ export function ProblemForm({
 
   function addChoice() {
     const next = value.choices.slice();
-    const labels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧'];
+    const labels = ['①', '②', '③', '④', '⑤', '⑥', '⑦', '⑧', '⑨', '⑩'];
     next.push({ label: labels[next.length] ?? `${next.length + 1}.`, text: '' });
     set('choices', next);
   }
