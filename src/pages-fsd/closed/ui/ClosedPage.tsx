@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CheckCircle2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export function ClosedPage() {
   return (
@@ -21,6 +21,19 @@ export function ClosedPage() {
         <p className="text-xs text-zinc-400">
           상품권은 응답하신 분들께 입력해 주신 연락처로 순차 발송됩니다.
         </p>
+
+        <div className="mt-4 w-full max-w-sm space-y-2">
+          <Link
+            href="/student"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-800"
+          >
+            학생 로그인 · 공부 시작하기
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+          <p className="text-xs text-zinc-400">
+            AI 학습 튜터를 이용하려면 학생 계정으로 로그인하세요.
+          </p>
+        </div>
 
         <footer className="mt-8 border-t border-zinc-200/60 pt-4">
           <Link
