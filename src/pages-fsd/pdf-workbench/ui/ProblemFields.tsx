@@ -17,6 +17,10 @@ export type WbSubProblem = {
   /** 정답. 단답형은 줄바꿈으로 여러 답(빈칸 순서대로)을 구분한다. */
   answer: string;
   explanation: string;
+  /** 글의 핵심내용(요지) — 옵셔널. */
+  coreContent: string;
+  /** 선지(보기) 해석 — 옵셔널. */
+  choiceExplanation: string;
 };
 
 export function emptySubProblem(): WbSubProblem {
@@ -35,6 +39,8 @@ export function emptySubProblem(): WbSubProblem {
     ],
     answer: '',
     explanation: '',
+    coreContent: '',
+    choiceExplanation: '',
   };
 }
 
@@ -78,6 +84,23 @@ export function ProblemFields({
   // 단답형 정답은 줄바꿈으로 여러 답(빈칸 순서대로)을 구분해 저장한다.
   const shortAnswers = value.answer.length ? value.answer.split('\n') : [''];
   const setShortAnswers = (list: string[]) => set('answer', list.join('\n'));
+
+  // 객관식 정답은 보기 라벨을 보기 순서대로 ", "로 이어 저장 — 복수 정답 가능.
+  const objectiveLabels = value.choices.length
+    ? value.choices.map((c) => c.label).filter((l) => l.trim())
+    : ['①', '②', '③', '④', '⑤'];
+  const selectedAnswers = new Set(
+    value.answer
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+  const toggleObjectiveAnswer = (label: string) => {
+    const next = new Set(selectedAnswers);
+    if (next.has(label)) next.delete(label);
+    else next.add(label);
+    set('answer', objectiveLabels.filter((l) => next.has(l)).join(', '));
+  };
 
   return (
     <div className="space-y-4">
@@ -185,7 +208,7 @@ export function ProblemFields({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-zinc-700">
-            정답 (필수{value.problem_type === 'objective' ? ' — 번호만' : ''}
+            정답 (필수{value.problem_type === 'objective' ? ' — 번호, 복수 가능' : ''}
             {value.problem_type === 'short' ? ' — 빈칸 순서대로' : ''})
           </label>
           {value.problem_type === 'short' && (
@@ -199,18 +222,15 @@ export function ProblemFields({
           )}
         </div>
         {value.problem_type === 'objective' ? (
-          <div className="flex flex-wrap gap-1">
-            {(value.choices.length
-              ? value.choices.map((c) => c.label).filter((l) => l.trim())
-              : ['①', '②', '③', '④', '⑤']
-            ).map((label) => (
+          <div className="flex flex-wrap items-center gap-1">
+            {objectiveLabels.map((label) => (
               <button
                 key={label}
                 type="button"
-                onClick={() => set('answer', value.answer === label ? '' : label)}
+                onClick={() => toggleObjectiveAnswer(label)}
                 className={cn(
                   'h-9 w-9 rounded-full border text-sm font-bold transition',
-                  value.answer === label
+                  selectedAnswers.has(label)
                     ? 'border-emerald-600 bg-emerald-600 text-white'
                     : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
                 )}
@@ -218,6 +238,11 @@ export function ProblemFields({
                 {label}
               </button>
             ))}
+            {selectedAnswers.size > 1 && (
+              <span className="ml-1 text-[11px] font-medium text-emerald-700">
+                복수 정답 {selectedAnswers.size}개
+              </span>
+            )}
           </div>
         ) : value.problem_type === 'short' ? (
           <ul className="space-y-1">
@@ -268,6 +293,28 @@ export function ProblemFields({
           className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
         />
         <RichTextPreview value={value.explanation} />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-zinc-700">글의 핵심내용 (선택)</label>
+        <textarea
+          value={value.coreContent}
+          onChange={(e) => set('coreContent', e.target.value)}
+          rows={2}
+          placeholder="지문/글의 요지·핵심 (스캔 시 자동, 없으면 비워둠)"
+          className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-zinc-700">선지 해석 (선택)</label>
+        <textarea
+          value={value.choiceExplanation}
+          onChange={(e) => set('choiceExplanation', e.target.value)}
+          rows={3}
+          placeholder="각 보기(선지)의 해석·뜻 (스캔 시 자동, 없으면 비워둠)"
+          className="block w-full resize-y rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none"
+        />
       </div>
     </div>
   );

@@ -91,8 +91,9 @@ const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
 function normalizeObjectiveAnswer(choices: ProblemChoice[], raw: string): string | null {
   const labels = choices.map((c) => c.label.trim()).filter(Boolean);
   if (!labels.length || !raw) return null;
-  // 1) 보기 라벨(원문자)이 raw에 직접 있으면 그 라벨.
-  for (const lab of labels) if (raw.includes(lab)) return lab;
+  // 1) 보기 라벨(원문자)이 raw에 직접 있으면 그 라벨들 — 복수 정답이면 보기 순서대로 ", "로.
+  const present = labels.filter((lab) => raw.includes(lab));
+  if (present.length) return present.join(', ');
   // 2) 보기 텍스트 매칭 (소문자·기호 제거 정규화) — "specify" → ②.
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9가-힣]/gi, '');
   const rawN = norm(raw);
@@ -154,7 +155,7 @@ function subProblemAt(p: WorkbenchProblemValue, idx: number): WbSubProblem {
 function applyAnswerToSub(
   p: WorkbenchProblemValue,
   idx: number,
-  fields: { answer?: string; explanation?: string },
+  fields: { answer?: string; explanation?: string; coreContent?: string; choiceExplanation?: string },
   passageTranslation?: string,
 ): WorkbenchProblemValue {
   const pt = passageTranslation !== undefined ? passageTranslation : p.passage_translation;
@@ -617,6 +618,8 @@ export function useWorkbenchController() {
             // 재인식 시 따로 가져온 정답·해설은 보존(비었을 때만 채움).
             answer: prev?.answer || ocrAnswer,
             explanation: prev?.explanation || (p.explanation ?? ''),
+            coreContent: prev?.coreContent || (p.coreContent ?? ''),
+            choiceExplanation: prev?.choiceExplanation || (p.choiceExplanation ?? ''),
           };
         };
         const ocrProblems = result.problems ?? [];
@@ -789,6 +792,8 @@ export function useWorkbenchController() {
           choices: f.choices,
           answer: f.answer,
           explanation: f.explanation,
+          coreContent: f.coreContent,
+          choiceExplanation: f.choiceExplanation,
         };
         const allSubs = [primary, ...f.extra];
         for (let i = 0; i < allSubs.length; i++) {
@@ -812,6 +817,8 @@ export function useWorkbenchController() {
           choices: sub.problem_type === 'objective' ? sub.choices.filter((c) => c.text.trim()) : null,
           answer: sub.answer.trim(),
           explanation: sub.explanation || null,
+          core_content: sub.coreContent?.trim() || null,
+          choice_explanation: sub.choiceExplanation?.trim() || null,
           figures: withFigures ? sharedFigures : undefined,
           notes: f.extra.length > 0 ? 'PDF 워크벤치 세트' : 'PDF 워크벤치 등록',
           citations: cite(f.passage || sub.question),
@@ -1088,14 +1095,17 @@ export function useWorkbenchController() {
         }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.message ?? '인식 실패');
-      const { answer, explanation, passage_translation, usage } = (await res.json()) as {
-        answer?: string;
-        explanation?: string;
-        passage_translation?: string;
-        usage?: TokenUsage;
-      };
+      const { answer, explanation, passage_translation, coreContent, choiceExplanation, usage } =
+        (await res.json()) as {
+          answer?: string;
+          explanation?: string;
+          passage_translation?: string;
+          coreContent?: string;
+          choiceExplanation?: string;
+          usage?: TokenUsage;
+        };
       reportUsage('정답·해설', usage, selected.id);
-      if (!answer && !explanation && !passage_translation) {
+      if (!answer && !explanation && !passage_translation && !coreContent && !choiceExplanation) {
         toast.info('영역에서 정답·해설을 찾지 못했어요.');
         return;
       }
@@ -1113,13 +1123,15 @@ export function useWorkbenchController() {
           {
             answer: mappedAnswer || sub.answer || '',
             explanation: explanation ?? sub.explanation,
+            coreContent: coreContent ?? sub.coreContent,
+            choiceExplanation: choiceExplanation ?? sub.choiceExplanation,
           },
           passage_translation ?? cur.problem.passage_translation,
         ),
       });
       const label = childIdx > 0 ? `문제 ${childIdx + 1} ` : '';
       toast.success(
-        `${label}가져옴 — ${[mappedAnswer ? `정답 ${mappedAnswer}` : '', explanation ? '해설' : '', passage_translation ? '지문해석' : ''].filter(Boolean).join(' + ')}`,
+        `${label}가져옴 — ${[mappedAnswer ? `정답 ${mappedAnswer}` : '', explanation ? '해설' : '', passage_translation ? '지문해석' : '', coreContent ? '핵심내용' : '', choiceExplanation ? '선지해석' : ''].filter(Boolean).join(' + ')}`,
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '인식 실패');
@@ -1260,6 +1272,8 @@ export function useWorkbenchController() {
       const answers: string[] = [];
       const explanations: string[] = [];
       const translations: string[] = [];
+      const coreContents: string[] = [];
+      const choiceExplanations: string[] = [];
       for (const ref of refs) {
         const att = useWorkbenchStore.getState().attachments.find((a) => a.id === ref.attachmentId);
         if (!att) continue;
@@ -1278,22 +1292,33 @@ export function useWorkbenchController() {
         });
         if (!res.ok)
           throw new Error((await res.json().catch(() => null))?.message ?? '재스캔 실패');
-        const { answer, explanation, passage_translation, usage } = (await res.json()) as {
-          answer?: string;
-          explanation?: string;
-          passage_translation?: string;
-          usage?: TokenUsage;
-        };
+        const { answer, explanation, passage_translation, coreContent, choiceExplanation, usage } =
+          (await res.json()) as {
+            answer?: string;
+            explanation?: string;
+            passage_translation?: string;
+            coreContent?: string;
+            choiceExplanation?: string;
+            usage?: TokenUsage;
+          };
         reportUsage('정답·해설 재스캔', usage, boxId);
         if (answer) answers.push(answer);
         if (explanation) explanations.push(explanation);
         if (passage_translation) translations.push(passage_translation);
+        if (coreContent) coreContents.push(coreContent);
+        if (choiceExplanation) choiceExplanations.push(choiceExplanation);
       }
       const cur = useWorkbenchStore.getState().boxes.find((b) => b.id === boxId);
       if (!cur) return;
       const rescanRaw = answers.find((a) => a.trim()) ?? '';
       // 빈 결과로 기존 정답·해설을 지우지 않는다 — 찾은 항목만 덮어쓴다.
-      if (!rescanRaw && explanations.length === 0 && translations.length === 0) {
+      if (
+        !rescanRaw &&
+        explanations.length === 0 &&
+        translations.length === 0 &&
+        coreContents.length === 0 &&
+        choiceExplanations.length === 0
+      ) {
         toast.info('재스캔했지만 정답·해설을 못 찾았어요. 연결 영역을 조정해 보세요.');
         return;
       }
@@ -1305,6 +1330,10 @@ export function useWorkbenchController() {
           {
             answer: rescanRaw ? mapAnswer(targetSub, rescanRaw) : targetSub.answer,
             explanation: explanations.length ? explanations.join('\n\n') : targetSub.explanation,
+            coreContent: coreContents.length ? coreContents.join('\n\n') : targetSub.coreContent,
+            choiceExplanation: choiceExplanations.length
+              ? choiceExplanations.join('\n\n')
+              : targetSub.choiceExplanation,
           },
           translations.length ? translations.join('\n\n') : cur.problem.passage_translation,
         ),

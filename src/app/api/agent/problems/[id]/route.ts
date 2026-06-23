@@ -41,6 +41,8 @@ const patchSchema = z
     choices: z.array(choiceSchema).max(10).nullable(),
     answer: z.string().min(1).max(2000),
     explanation: z.string().max(4000).nullable(),
+    core_content: z.string().max(4000).nullable(),
+    choice_explanation: z.string().max(8000).nullable(),
     figures: z.array(figureSchema).max(10),
     notes: z.string().max(2000).nullable(),
     citations: z.array(citationSchema).max(20),

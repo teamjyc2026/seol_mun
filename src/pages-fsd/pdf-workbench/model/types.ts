@@ -13,6 +13,10 @@ export type OcrProblem = {
   problem_type: 'objective' | 'short' | 'long';
   category?: string;
   topic?: string;
+  /** 글의 핵심내용(요지) — 옵셔널. */
+  coreContent?: string;
+  /** 선지(보기) 해석 — 옵셔널. */
+  choiceExplanation?: string;
 };
 
 /** /ocr/problem 응답 — 공유 지문 + 그 영역 문제들. */

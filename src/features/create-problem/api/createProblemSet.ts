@@ -10,6 +10,8 @@ export type ProblemSetSubProblem = {
   choices?: ProblemChoice[] | null;
   answer: string;
   explanation?: string | null;
+  core_content?: string | null;
+  choice_explanation?: string | null;
   figures?: ProblemFigure[];
   notes?: string | null;
   citations?: ProblemCitation[];

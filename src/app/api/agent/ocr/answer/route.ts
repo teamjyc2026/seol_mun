@@ -40,14 +40,18 @@ export async function POST(req: NextRequest) {
       answer?: string;
       explanation?: string;
       passage_translation?: string;
+      coreContent?: string;
+      choiceExplanation?: string;
     }>({
       onUsage: (u) => {
         usage = u;
       },
       system: `너는 시험지 답안·해설 디지털화 전문가다. 이미지 영역에서 정답·해설·지문 해석을 추출하라.
-- answer: 정답. 객관식이면 번호만 ("①"~"⑤" 형식), 주관식이면 정답 텍스트.
+- answer: 정답. 객관식이면 번호만 ("①"~"⑤" 형식), 주관식이면 정답 텍스트. 정답이 여러 개(복수 정답)면 모두 쉼표로("②, ④").
 - explanation: 해설 전체 (보이는 그대로, 요약 금지). 없으면 생략.
 - passage_translation: 지문(영어 본문 등)의 한국어 해석/번역이 보이면 그 전체. 해설과 별개. 없으면 생략.
+- coreContent(글의 핵심내용): 지문/글의 한국어 요지·핵심을 1~2문장으로. 해설지에 있으면 추출, 없으면 생략(옵셔널).
+- choiceExplanation(선지 해석): 각 보기(선지)의 한국어 해석·뜻. 해설지에 있으면 "① … / ② …"처럼. 없으면 생략(옵셔널).
 - 영역에 여러 문제의 답이 있으면${body.hint ? ' 힌트에 해당하는 문제의 것만' : ' 가장 위(첫 번째) 문제의 것만'} 추출하라.
 ${body.hint ? `힌트(대상 문제): ${body.hint}` : ''}
 ${
@@ -75,6 +79,8 @@ ${MARKUP_RULES}`,
           answer: { type: 'string' },
           explanation: { type: 'string' },
           passage_translation: { type: 'string' },
+          coreContent: { type: 'string' },
+          choiceExplanation: { type: 'string' },
         },
         additionalProperties: false,
       },

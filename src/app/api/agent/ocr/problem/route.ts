@@ -32,6 +32,10 @@ export type OcrProblem = {
   /** 분류(대분류) — 과목 분류 목록에서 고름. */
   category?: string;
   topic?: string;
+  /** 글의 핵심내용(요지) — 옵셔널. */
+  coreContent?: string;
+  /** 선지(보기) 해석 — 옵셔널. */
+  choiceExplanation?: string;
 };
 
 /** 한 영역 인식 결과 — 공유 지문 + 그 아래 문제 여러 개. */
@@ -82,7 +86,9 @@ export async function POST(req: NextRequest) {
 - passage: 여러 문제가 공유하는 지문/제시문 전체 (예 "[5~6] 다음 글을 읽고…"의 지문). 지문이 없으면 생략.
 - passage_translation: 지문의 한국어 해석이 보이면 그 전체. 없으면 생략.
 - problems: 이 영역의 문제를 **각각** 배열로. 문제가 1개면 1개, [5~6]처럼 여러 개면 그 수만큼.
-  각 문제: question(발문, 번호 제외), choices(객관식이면 보기 전부 label "①"~), answer/explanation(보일 때만), problem_type(objective|short|long), category/topic(아래 목록에서).
+  각 문제: question(발문, 번호 제외), choices(객관식이면 보기 전부 label "①"~), answer/explanation(보일 때만), problem_type(objective|short|long), category/topic(아래 목록에서). 객관식 정답이 여러 개(복수 정답)면 answer에 모두 쉼표로("②, ④").
+- coreContent(글의 핵심내용): 지문/글이 있으면 한국어 요지 1~2문장. 없으면 생략(옵셔널).
+- choiceExplanation(선지 해석): 객관식 보기가 있으면 각 보기의 한국어 해석/뜻을 "① … / ② …"처럼. 없으면 생략(옵셔널).
 - 어법/어휘 선택형(한 발문 안에 네모나 번호 밑줄 택1이 **여러 번** 나오는 형태, 예 "다음 네모 안에서 어법상 알맞은 것을 고르시오"): choices로 쪼개지 말고 **problem_type='short'(다중 빈칸)** 으로 두고, answer에 각 자리의 정답을 **등장 순서대로 줄바꿈(\\n)** 으로 모두 넣어라(보일 때만). 발문엔 그 네모를 <box>…</box>, 번호 밑줄을 <u n="1">…</u>로 그대로 표시.${
   body.expectCount
     ? `\n- [문항 수 지정] 이 영역엔 문항이 **정확히 ${body.expectCount}개** 있다. problems 배열을 반드시 ${body.expectCount}개로 만들어라 — 합치지도 빠뜨리지도 말 것. 번호 구분이 애매하면 발문 단위로 ${body.expectCount}등분하라.`
@@ -134,6 +140,8 @@ ${MARKUP_RULES}`,
                 problem_type: { type: 'string', enum: ['objective', 'short', 'long'] },
                 category: { type: 'string' },
                 topic: { type: 'string' },
+                coreContent: { type: 'string' },
+                choiceExplanation: { type: 'string' },
               },
               required: ['question', 'problem_type'],
               additionalProperties: false,
