@@ -126,6 +126,11 @@ function mapAnswer(sub: WbSubProblem, raw: string): string {
   return normalizeObjectiveAnswer(sub.choices, raw) ?? raw;
 }
 
+/** 객관식 정답 문자열이 복수 정답(", "로 2개 이상)인지. */
+function isMultiAnswer(answer: string): boolean {
+  return answer.split(',').filter((s) => s.trim()).length > 1;
+}
+
 /** /ocr/answer에 넘길 보기 목록 (객관식·내용 있는 보기만). 없으면 undefined. */
 function answerChoicesPayload(sub: WbSubProblem): { label: string; text: string }[] | undefined {
   if (sub.problem_type !== 'objective') return undefined;
@@ -155,7 +160,13 @@ function subProblemAt(p: WorkbenchProblemValue, idx: number): WbSubProblem {
 function applyAnswerToSub(
   p: WorkbenchProblemValue,
   idx: number,
-  fields: { answer?: string; explanation?: string; coreContent?: string; choiceExplanation?: string },
+  fields: {
+    answer?: string;
+    explanation?: string;
+    multiAnswer?: boolean;
+    coreContent?: string;
+    choiceExplanation?: string;
+  },
   passageTranslation?: string,
 ): WorkbenchProblemValue {
   const pt = passageTranslation !== undefined ? passageTranslation : p.passage_translation;
@@ -608,6 +619,8 @@ export function useWorkbenchController() {
             p.problem_type === 'objective' && p.answer
               ? (normalizeObjectiveAnswer(choices, p.answer) ?? p.answer)
               : (p.answer ?? '');
+          // 재인식 시 따로 가져온 정답·해설은 보존(비었을 때만 채움).
+          const answer = prev?.answer || ocrAnswer;
           return {
             problem_type: p.problem_type,
             difficulty: prev?.difficulty ?? 'medium',
@@ -615,9 +628,12 @@ export function useWorkbenchController() {
             topic,
             question: p.question,
             choices,
-            // 재인식 시 따로 가져온 정답·해설은 보존(비었을 때만 채움).
-            answer: prev?.answer || ocrAnswer,
+            answer,
             explanation: prev?.explanation || (p.explanation ?? ''),
+            // OCR이 복수 정답으로 인식하면 복수정답 토글도 자동 ON(이미 켠 건 유지).
+            multiAnswer:
+              (prev?.multiAnswer ?? false) ||
+              (p.problem_type === 'objective' && isMultiAnswer(answer)),
             coreContent: prev?.coreContent || (p.coreContent ?? ''),
             choiceExplanation: prev?.choiceExplanation || (p.choiceExplanation ?? ''),
           };
@@ -792,6 +808,7 @@ export function useWorkbenchController() {
           choices: f.choices,
           answer: f.answer,
           explanation: f.explanation,
+          multiAnswer: f.multiAnswer,
           coreContent: f.coreContent,
           choiceExplanation: f.choiceExplanation,
         };
@@ -1114,6 +1131,7 @@ export function useWorkbenchController() {
       const sub = subProblemAt(cur.problem, childIdx);
       // 객관식이면 "specify" 같은 단어 정답을 보기 번호(②)로 매핑.
       const mappedAnswer = mapAnswer(sub, answer ?? '');
+      const newAnswer = mappedAnswer || sub.answer || '';
       // grab = "이 영역이 이 문제의 풀이" — 새로 잡은 값으로 덮어쓴다(있을 때만).
       // 그래야 영역을 다시 잡으면 정답·해설이 갱신된다(이어붙이거나 무시하지 않음).
       patchBox(selected.id, {
@@ -1121,8 +1139,11 @@ export function useWorkbenchController() {
           cur.problem,
           childIdx,
           {
-            answer: mappedAnswer || sub.answer || '',
+            answer: newAnswer,
             explanation: explanation ?? sub.explanation,
+            // 해설 스캔 정답이 복수면 복수정답 토글 자동 ON.
+            multiAnswer:
+              sub.multiAnswer || (sub.problem_type === 'objective' && isMultiAnswer(newAnswer)),
             coreContent: coreContent ?? sub.coreContent,
             choiceExplanation: choiceExplanation ?? sub.choiceExplanation,
           },
@@ -1323,13 +1344,17 @@ export function useWorkbenchController() {
         return;
       }
       const targetSub = subProblemAt(cur.problem, childIdx);
+      const rescanAnswer = rescanRaw ? mapAnswer(targetSub, rescanRaw) : targetSub.answer;
       patchBox(boxId, {
         problem: applyAnswerToSub(
           cur.problem,
           childIdx,
           {
-            answer: rescanRaw ? mapAnswer(targetSub, rescanRaw) : targetSub.answer,
+            answer: rescanAnswer,
             explanation: explanations.length ? explanations.join('\n\n') : targetSub.explanation,
+            multiAnswer:
+              targetSub.multiAnswer ||
+              (targetSub.problem_type === 'objective' && isMultiAnswer(rescanAnswer)),
             coreContent: coreContents.length ? coreContents.join('\n\n') : targetSub.coreContent,
             choiceExplanation: choiceExplanations.length
               ? choiceExplanations.join('\n\n')

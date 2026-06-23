@@ -45,6 +45,7 @@ function primaryOf(v: WorkbenchProblemValue): WbSubProblem {
     choices: v.choices,
     answer: v.answer,
     explanation: v.explanation,
+    multiAnswer: v.multiAnswer,
     coreContent: v.coreContent,
     choiceExplanation: v.choiceExplanation,
   };

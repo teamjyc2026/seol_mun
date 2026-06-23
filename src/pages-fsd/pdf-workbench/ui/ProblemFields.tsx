@@ -17,6 +17,8 @@ export type WbSubProblem = {
   /** 정답. 단답형은 줄바꿈으로 여러 답(빈칸 순서대로)을 구분한다. */
   answer: string;
   explanation: string;
+  /** 객관식 복수 정답 허용 — 켜면 보기 여러 개 선택 가능. OCR이 복수 인식 시 자동 ON. */
+  multiAnswer: boolean;
   /** 글의 핵심내용(요지) — 옵셔널. */
   coreContent: string;
   /** 선지(보기) 해석 — 옵셔널. */
@@ -39,6 +41,7 @@ export function emptySubProblem(): WbSubProblem {
     ],
     answer: '',
     explanation: '',
+    multiAnswer: false,
     coreContent: '',
     choiceExplanation: '',
   };
@@ -95,11 +98,27 @@ export function ProblemFields({
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  const toggleObjectiveAnswer = (label: string) => {
-    const next = new Set(selectedAnswers);
-    if (next.has(label)) next.delete(label);
-    else next.add(label);
-    set('answer', objectiveLabels.filter((l) => next.has(l)).join(', '));
+  // 복수정답 토글 ON이거나, (레거시/OCR로) 이미 2개 이상 선택돼 있으면 복수 모드.
+  const isMulti = value.multiAnswer || selectedAnswers.size > 1;
+  // ON: 보기 토글(복수). OFF: 라디오(하나만 — 누르면 교체, 같은 걸 다시 누르면 해제).
+  const pickObjectiveAnswer = (label: string) => {
+    if (isMulti) {
+      const next = new Set(selectedAnswers);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      set('answer', objectiveLabels.filter((l) => next.has(l)).join(', '));
+    } else {
+      set('answer', selectedAnswers.has(label) && selectedAnswers.size === 1 ? '' : label);
+    }
+  };
+  const toggleMultiAnswer = () => {
+    if (isMulti && selectedAnswers.size > 1) {
+      // 복수 끄면 첫 정답만 남긴다(라디오 일관성).
+      const first = objectiveLabels.find((l) => selectedAnswers.has(l)) ?? '';
+      onChange({ ...value, multiAnswer: false, answer: first });
+    } else {
+      set('multiAnswer', !isMulti);
+    }
   };
 
   return (
@@ -208,9 +227,24 @@ export function ProblemFields({
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
           <label className="text-xs font-medium text-zinc-700">
-            정답 (필수{value.problem_type === 'objective' ? ' — 번호, 복수 가능' : ''}
+            정답 (필수{value.problem_type === 'objective' ? ' — 번호' : ''}
             {value.problem_type === 'short' ? ' — 빈칸 순서대로' : ''})
           </label>
+          {value.problem_type === 'objective' && (
+            <button
+              type="button"
+              onClick={toggleMultiAnswer}
+              title="켜면 정답 보기를 여러 개 선택할 수 있어요. (문제 스캔 시 복수 정답이면 자동으로 켜짐)"
+              className={cn(
+                'inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium transition',
+                isMulti
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
+              )}
+            >
+              복수정답 {isMulti ? 'ON' : 'OFF'}
+            </button>
+          )}
           {value.problem_type === 'short' && (
             <button
               type="button"
@@ -227,9 +261,11 @@ export function ProblemFields({
               <button
                 key={label}
                 type="button"
-                onClick={() => toggleObjectiveAnswer(label)}
+                onClick={() => pickObjectiveAnswer(label)}
                 className={cn(
-                  'h-9 w-9 rounded-full border text-sm font-bold transition',
+                  'h-9 w-9 border text-sm font-bold transition',
+                  // 복수는 사각(체크 느낌), 단일은 원형(라디오 느낌)으로 구분.
+                  isMulti ? 'rounded-md' : 'rounded-full',
                   selectedAnswers.has(label)
                     ? 'border-emerald-600 bg-emerald-600 text-white'
                     : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50',
@@ -238,9 +274,9 @@ export function ProblemFields({
                 {label}
               </button>
             ))}
-            {selectedAnswers.size > 1 && (
+            {isMulti && (
               <span className="ml-1 text-[11px] font-medium text-emerald-700">
-                복수 정답 {selectedAnswers.size}개
+                복수 정답{selectedAnswers.size > 1 ? ` ${selectedAnswers.size}개` : ''}
               </span>
             )}
           </div>
