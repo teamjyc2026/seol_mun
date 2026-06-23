@@ -88,14 +88,14 @@ function LoginForm() {
             {isAdmin ? <Lock className="h-4 w-4" /> : <Upload className="h-4 w-4" />}
           </div>
           <h1 className="text-lg font-bold text-zinc-900">
-            {isAdmin ? '관리자 로그인' : isSignup ? '문제 업로더 회원가입' : '문제 업로더 로그인'}
+            {isAdmin ? '관리자 로그인' : isSignup ? '선생님 회원가입' : '선생님 로그인'}
           </h1>
           <p className="text-xs text-zinc-500">
             {isAdmin
               ? '대시보드 접근에는 비밀번호가 필요해요.'
               : isSignup
-                ? '가입하면 올린 문제에 내 별명이 표시돼요.'
-                : '문제를 올리려면 이메일로 로그인하세요.'}
+                ? '가입하면 문제를 올리고 학생 기록을 볼 수 있어요.'
+                : '선생님 계정(이메일)으로 로그인하세요.'}
           </p>
         </div>
 
@@ -172,7 +172,7 @@ function LoginForm() {
         <div className="space-y-1 text-center text-xs text-zinc-500">
           {isAdmin ? (
             <p>
-              문제를 올리는 분인가요?{' '}
+              선생님이신가요?{' '}
               <button
                 type="button"
                 onClick={() => switchMode('login')}

@@ -27,7 +27,7 @@ export function StudentChatInput({
             onSend();
           }
         }}
-        placeholder="설문이한테 말 걸어봐! ✏️"
+        placeholder="모디한테 말 걸어봐! ✏️"
         className="min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-zinc-400"
       />
       <button

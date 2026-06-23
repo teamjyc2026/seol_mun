@@ -2,21 +2,40 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/cn';
 import { MASCOT_NAME, MascotAvatar } from '@/widgets/student-chat';
+
+const GRADE_GROUPS: { label: string; grades: string[] }[] = [
+  { label: '초등', grades: ['초1', '초2', '초3', '초4', '초5', '초6'] },
+  { label: '중등', grades: ['중1', '중2', '중3'] },
+  { label: '고등', grades: ['고1', '고2', '고3'] },
+];
 
 export function StudentAuthPage() {
   const router = useRouter();
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPw, setShowPw] = useState(false);
   const [name, setName] = useState('');
   const [grade, setGrade] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submit() {
     if (busy) return;
+    if (mode === 'signup') {
+      if (password.length < 6) {
+        toast.error('비밀번호는 6자 이상이어야 해요.');
+        return;
+      }
+      if (password !== confirm) {
+        toast.error('비밀번호가 일치하지 않아요.');
+        return;
+      }
+    }
     setBusy(true);
     try {
       const res = await fetch(`/api/student/${mode}`, {
@@ -40,6 +59,9 @@ export function StudentAuthPage() {
     }
   }
 
+  const inputCls =
+    'w-full rounded-2xl border-2 border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-orange-400';
+
   return (
     <main className="grid min-h-svh place-items-center bg-gradient-to-b from-orange-50/70 via-white to-white px-4">
       <div className="w-full max-w-sm space-y-4 rounded-3xl border-2 border-zinc-100 bg-white p-6 shadow-lg">
@@ -49,7 +71,9 @@ export function StudentAuthPage() {
             {MASCOT_NAME}랑 공부 시작! 🦊
           </h1>
           <p className="text-xs text-zinc-500">
-            {mode === 'login' ? '다시 왔구나! 반가워 👋' : '가입하고 같이 놀자!'}
+            {mode === 'login'
+              ? '다시 왔구나! 반가워 👋'
+              : `AI 학습 친구 ${MASCOT_NAME}랑 같이 공부하자!`}
           </p>
         </div>
         <div className="grid grid-cols-2 gap-1 rounded-full bg-zinc-100 p-1 text-sm">
@@ -74,14 +98,24 @@ export function StudentAuthPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="이름"
-                className="w-full rounded-2xl border-2 border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-orange-400"
+                className={inputCls}
               />
-              <input
+              <select
                 value={grade}
                 onChange={(e) => setGrade(e.target.value)}
-                placeholder="학년 (예: 고1, 선택)"
-                className="w-full rounded-2xl border-2 border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-orange-400"
-              />
+                className={cn(inputCls, 'bg-white', grade ? 'text-zinc-900' : 'text-zinc-400')}
+              >
+                <option value="">학년 선택 (선택)</option>
+                {GRADE_GROUPS.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.grades.map((gr) => (
+                      <option key={gr} value={gr}>
+                        {gr}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
             </>
           )}
           <input
@@ -89,21 +123,46 @@ export function StudentAuthPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="이메일"
             type="email"
-            className="w-full rounded-2xl border-2 border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-orange-400"
+            className={inputCls}
           />
-          <input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && submit()}
-            placeholder="비밀번호 (6자 이상)"
-            type="password"
-            className="w-full rounded-2xl border-2 border-zinc-200 px-4 py-2.5 text-sm outline-none focus:border-orange-400"
-          />
+          <div className="relative">
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && mode === 'login' && submit()}
+              placeholder="비밀번호 (6자 이상)"
+              type={showPw ? 'text' : 'password'}
+              className={cn(inputCls, 'pr-11')}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPw((v) => !v)}
+              aria-label={showPw ? '비밀번호 숨기기' : '비밀번호 보기'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+            >
+              {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {mode === 'signup' && (
+            <input
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              placeholder="비밀번호 확인"
+              type={showPw ? 'text' : 'password'}
+              className={cn(
+                inputCls,
+                confirm && confirm !== password && 'border-rose-300 focus:border-rose-400',
+              )}
+            />
+          )}
         </div>
         <button
           type="button"
           onClick={submit}
-          disabled={busy || !email || !password || (mode === 'signup' && !name)}
+          disabled={
+            busy || !email || !password || (mode === 'signup' && (!name || !confirm))
+          }
           className="w-full rounded-full bg-orange-500 py-2.5 text-sm font-extrabold text-white shadow-md transition hover:bg-orange-600 active:scale-[0.98] disabled:opacity-40"
         >
           {mode === 'login' ? '로그인 🚀' : '가입하고 시작하기 🚀'}

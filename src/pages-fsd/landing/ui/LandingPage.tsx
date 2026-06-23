@@ -128,10 +128,10 @@ export function LandingPage() {
 
         <footer className="mt-12 w-full border-t border-zinc-200/60 pt-4">
           <Link
-            href="/admin"
+            href="/admin/login?as=uploader"
             className="text-xs text-zinc-400 underline-offset-2 hover:text-zinc-600 hover:underline"
           >
-            관리자
+            선생님 로그인
           </Link>
         </footer>
       </div>

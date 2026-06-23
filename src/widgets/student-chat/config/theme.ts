@@ -1,7 +1,7 @@
 import type { Subject } from '@/shared/config/subjects';
 
 export const MASCOT = '🦊';
-export const MASCOT_NAME = '설문이';
+export const MASCOT_NAME = '모디';
 
 export const SUBJECT_EMOJI: Record<Subject, string> = {
   국사: '🏯',
