@@ -116,6 +116,10 @@ export type JobSummary = {
   attachmentTitles: string[];
   boxCount: number;
   savedCount: number;
+  /** 이 작업에서 만들어진(저장된) 문제 수. */
+  createdCount: number;
+  /** 그중 임베딩된 문제 수. */
+  embeddedCount: number;
   updated_at: string;
 };
 

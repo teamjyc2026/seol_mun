@@ -241,6 +241,10 @@ export function PdfWorkbenchPage() {
     void refreshJobs();
     void refreshFolders();
     void refreshEmbedPending();
+    // 마지막에 작업하던 판(persist된 lastJobId)이 있으면 자동으로 다시 연다 —
+    // 워크벤치를 나갔다 돌아와도 이어서 작업.
+    const last = useWorkbenchStore.getState().lastJobId;
+    if (last) void openJob(last);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -740,8 +744,21 @@ export function PdfWorkbenchPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-zinc-900">{j.title}</p>
                   <p className="truncate text-xs text-zinc-500">
-                    {[j.subject, j.grade].filter(Boolean).join(' · ')} · 박스 {j.boxCount}개 (저장{' '}
-                    {j.savedCount}) · {new Date(j.updated_at).toLocaleString('ko-KR')}
+                    {[j.subject, j.grade].filter(Boolean).join(' · ')} · 박스 {j.boxCount}개 · 문제{' '}
+                    {j.createdCount}개 · 임베딩{' '}
+                    <span
+                      className={cn(
+                        'font-semibold',
+                        j.createdCount === 0
+                          ? 'text-zinc-400'
+                          : j.embeddedCount >= j.createdCount
+                            ? 'text-emerald-600'
+                            : 'text-amber-600',
+                      )}
+                    >
+                      {j.embeddedCount}/{j.createdCount}
+                    </span>{' '}
+                    · {new Date(j.updated_at).toLocaleString('ko-KR')}
                   </p>
                   {j.attachmentTitles.length > 0 && (
                     <p className="truncate text-[11px] text-zinc-400" title={j.attachmentTitles.join(', ')}>

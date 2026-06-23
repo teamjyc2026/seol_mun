@@ -21,21 +21,26 @@ export async function GET() {
 
   const jobIds = (jobs ?? []).map((j) => j.id);
   const sourceIds = (jobs ?? []).map((j) => j.source_id);
-  const [{ data: boxRows }, { data: srcRows }, { data: attRows }] = await Promise.all([
-    jobIds.length
-      ? supabase.from('workbench_boxes').select('job_id, status').in('job_id', jobIds)
-      : Promise.resolve({ data: [] as { job_id: string; status: string }[] }),
-    sourceIds.length
-      ? supabase.from('sources').select('id, subject, grade, total_pages').in('id', sourceIds)
-      : Promise.resolve({ data: [] as { id: string; subject: string; grade: string | null }[] }),
-    jobIds.length
-      ? supabase
-          .from('workbench_attachments')
-          .select('job_id, title')
-          .in('job_id', jobIds)
-          .order('created_at', { ascending: true })
-      : Promise.resolve({ data: [] as { job_id: string; title: string }[] }),
-  ]);
+  const [{ data: boxRows }, { data: srcRows }, { data: attRows }, { data: statRows }] =
+    await Promise.all([
+      jobIds.length
+        ? supabase.from('workbench_boxes').select('job_id, status').in('job_id', jobIds)
+        : Promise.resolve({ data: [] as { job_id: string; status: string }[] }),
+      sourceIds.length
+        ? supabase.from('sources').select('id, subject, grade, total_pages').in('id', sourceIds)
+        : Promise.resolve({ data: [] as { id: string; subject: string; grade: string | null }[] }),
+      jobIds.length
+        ? supabase
+            .from('workbench_attachments')
+            .select('job_id, title')
+            .in('job_id', jobIds)
+            .order('created_at', { ascending: true })
+        : Promise.resolve({ data: [] as { job_id: string; title: string }[] }),
+      // 작업별 생성 문제 수 / 임베딩된 수 (박스 savedRefs ⋈ problems).
+      jobIds.length
+        ? supabase.rpc('workbench_job_problem_stats', { job_ids: jobIds })
+        : Promise.resolve({ data: [] as { job_id: string; created: number; embedded: number }[] }),
+    ]);
   const counts = new Map<string, { total: number; saved: number }>();
   for (const b of boxRows ?? []) {
     const c = counts.get(b.job_id) ?? { total: 0, saved: 0 };
@@ -50,6 +55,12 @@ export async function GET() {
     attTitles.set(a.job_id, list);
   }
   const srcById = new Map((srcRows ?? []).map((s) => [s.id, s]));
+  const statById = new Map(
+    ((statRows ?? []) as { job_id: string; created: number; embedded: number }[]).map((r) => [
+      r.job_id,
+      { created: Number(r.created) || 0, embedded: Number(r.embedded) || 0 },
+    ]),
+  );
 
   return NextResponse.json({
     jobs: (jobs ?? []).map((j) => ({
@@ -60,6 +71,8 @@ export async function GET() {
       grade: srcById.get(j.source_id)?.grade ?? null,
       boxCount: counts.get(j.id)?.total ?? 0,
       savedCount: counts.get(j.id)?.saved ?? 0,
+      createdCount: statById.get(j.id)?.created ?? 0,
+      embeddedCount: statById.get(j.id)?.embedded ?? 0,
     })),
   });
 }

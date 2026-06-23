@@ -438,7 +438,11 @@ export function useWorkbenchController() {
         await openAttachment(data.attachments[0]);
       }
       void refreshEmbedPending();
+      // 재진입 시 자동 복원할 수 있게 마지막 연 작업으로 기억(persist).
+      s.setLastJobId(data.job.id);
     } catch (e) {
+      // 삭제됐거나 못 여는 작업이면 기억에서 지워 재진입마다 실패 토스트가 뜨지 않게.
+      useWorkbenchStore.getState().setLastJobId(null);
       toast.error(e instanceof Error ? e.message : '작업을 열지 못했어요.');
     } finally {
       useWorkbenchStore.getState().setOpening(false);
@@ -452,6 +456,8 @@ export function useWorkbenchController() {
     st.setAttachments([]);
     st.setBoxes([]);
     st.setSelectedId(null);
+    // 사용자가 명시적으로 목록으로 나갔으니 자동 복원 대상에서 제외.
+    st.setLastJobId(null);
     refDocCache.current.clear();
     void refreshJobs();
   }
