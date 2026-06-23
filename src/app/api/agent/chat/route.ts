@@ -6,11 +6,13 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { llmErrorMessage } from '@/shared/config/anthropic';
 import { runAgentTools, streamWrapup } from '@/shared/agent/router';
 import { extractAndSaveMemories } from '@/shared/agent/memory';
+import { gradeStudentAttempt } from '@/shared/agent/gradeAttempt';
+import { summarizeAndEmbedConversation } from '@/shared/agent/roomMemory';
 import { maskProblemAnswers } from '@/shared/agent/maskAnswers';
 import { parseQuickReplies } from '@/shared/agent/quickReplies';
 import { parseSolveStage } from '@/shared/agent/solveStage';
 import type { AgentId } from '@/shared/agent/agents/types';
-import type { ToolResult } from '@/shared/agent/types';
+import type { ProblemDraft, ToolResult } from '@/shared/agent/types';
 import { DEFAULT_SUBJECT } from '@/shared/config/subjects';
 import type { StreamEvent } from '@/shared/agent/types';
 
@@ -42,7 +44,12 @@ const HISTORY_TURN_CHARS = 3000;
 async function loadHistory(
   supabase: ReturnType<typeof getSupabaseServer>,
   conversationId: string,
-): Promise<{ history: Anthropic.MessageParam[]; lastAgent: AgentId | null }> {
+): Promise<{
+  history: Anthropic.MessageParam[];
+  lastAgent: AgentId | null;
+  /** 가장 최근 어시스턴트 턴에 출제된 (저장된) 문제 — 학생이 이번 턴에 답하는 대상. */
+  servedProblems: ProblemDraft[];
+}> {
   const { data } = await supabase
     .from('agent_messages')
     .select('role, content')
@@ -53,6 +60,7 @@ async function loadHistory(
 
   const history: Anthropic.MessageParam[] = [];
   let lastAgent: AgentId | null = null;
+  let servedProblems: ProblemDraft[] = [];
   for (const r of rows) {
     const content = r.content as {
       text?: string;
@@ -73,6 +81,9 @@ async function loadHistory(
           ? tr.problems
           : [],
       );
+      // 학생은 "직전 어시스턴트 턴"에 나온 문제에 답한다 — 매 어시스턴트 턴마다
+      // 갱신(문제 없는 턴이면 []로 리셋)해 가장 최근 턴의 출제만 채점 대상으로 둔다.
+      servedProblems = problems;
       const notes = problems
         .filter((p) => p.answer)
         .slice(0, 5)
@@ -93,7 +104,7 @@ async function loadHistory(
     }
     history.push({ role: r.role, content: text });
   }
-  return { history, lastAgent };
+  return { history, lastAgent, servedProblems };
 }
 
 export async function POST(req: NextRequest) {
@@ -135,9 +146,13 @@ export async function POST(req: NextRequest) {
     }
   }
   // Load prior turns BEFORE inserting the current user message.
-  const { history, lastAgent } = conversationId
+  const { history, lastAgent, servedProblems } = conversationId
     ? await loadHistory(supabase, conversationId)
-    : { history: [] as Anthropic.MessageParam[], lastAgent: null };
+    : {
+        history: [] as Anthropic.MessageParam[],
+        lastAgent: null,
+        servedProblems: [] as ProblemDraft[],
+      };
   if (!conversationId) {
     const title = body.message.slice(0, 30);
     const { data: conv, error } = await supabase
@@ -183,6 +198,7 @@ export async function POST(req: NextRequest) {
           profile,
           agent,
           schoolName,
+          recalledRooms,
         } = await runAgentTools({
           conversationId: convId,
           message: body.message,
@@ -220,6 +236,7 @@ export async function POST(req: NextRequest) {
           schoolName,
           history,
           studentGrade: sessionStudent?.grade ?? null,
+          recalledRooms,
         })) {
           finalText += piece;
           send({ kind: 'token', text: piece });
@@ -276,6 +293,23 @@ export async function POST(req: NextRequest) {
             assistantText: parsed.text,
             mode: 'learning',
           });
+        }
+
+        // 로그인 학생: 직전 턴에 출제된 문제에 대한 답이면 조용히 채점해
+        // student_attempts에 기록(채팅엔 정답 노출 없음). 답이 아니면 기록 안 됨.
+        if (sessionStudentId && servedProblems.length > 0) {
+          const target = servedProblems.find((p) => p.id) ?? servedProblems[0];
+          await gradeStudentAttempt({
+            servedProblem: target,
+            studentMessage: body.message,
+            studentId: sessionStudentId,
+            conversationId: convId,
+            subject,
+          });
+        }
+        // 로그인 학생 방: 요약·임베딩 갱신 → 다음 턴/방에서 관련 과거 방 회상.
+        if (sessionStudentId) {
+          await summarizeAndEmbedConversation({ conversationId: convId });
         }
       } catch (e) {
         const msg = llmErrorMessage(e);

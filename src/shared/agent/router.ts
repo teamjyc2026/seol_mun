@@ -9,6 +9,7 @@ import { buildStudentStyleOverlay } from './agents/studentStyle';
 import { buildGrokPersona } from './agents/grokPersona';
 import { streamGrokText } from '@/shared/config/xai';
 import { formatLearningMemories, formatMemories, loadMemories } from './memory';
+import { recallRooms } from './roomMemory';
 import {
   buildToolDeclarations,
   getProfile,
@@ -95,11 +96,13 @@ async function buildAgentSystem(
   studentId: string | null,
   schoolName?: string | null,
   studentGrade?: string | null,
+  recalledRooms?: string,
 ): Promise<string> {
   let system = profile.systemPrompt(subject, audience);
   if (schoolName) {
     system += `\n\n[학교 컨텍스트] 이 대화는 '${schoolName}'의 시험대비 자료를 기반으로 합니다. 답변할 때 search_source로 찾은 이 학교 자료와 저장된 문제를 최우선 근거로 사용하고, 자료에 없는 내용은 일반 지식임을 밝히세요.`;
   }
+  if (recalledRooms) system += recalledRooms;
   if (profile.useMemories) {
     // companion/emotion: 교감용 기억 전부 주입
     const memories = await loadMemories(studentId);
@@ -215,6 +218,8 @@ export async function runAgentTools(args: {
   agent: AgentId;
   /** Resolved school name when schoolId was given (for the wrap-up call). */
   schoolName: string | null;
+  /** 학생 모드에서 회상한 과거 방 블록(시스템 프롬프트 주입용). 없으면 ''. */
+  recalledRooms: string;
 }> {
   const audience: Audience = args.audience ?? 'teacher';
   const client = getAnthropic();
@@ -245,6 +250,15 @@ export async function runAgentTools(args: {
     problemIds: school.problemIds,
   };
   const augmentedMessage = buildAugmentedMessage(args.message, ctx);
+  // 학생 모드: 이 학생의 관련된 과거 방을 의미검색으로 회상해 시스템에 주입(장기기억).
+  const recalledRooms =
+    audience === 'student' && args.studentId
+      ? await recallRooms({
+          studentId: args.studentId,
+          message: args.message,
+          excludeConvId: args.conversationId,
+        })
+      : '';
   const system = await buildAgentSystem(
     profile,
     args.subject,
@@ -252,6 +266,7 @@ export async function runAgentTools(args: {
     args.studentId,
     school.schoolName,
     args.studentGrade,
+    recalledRooms,
   );
 
   // 교감(grok) 에이전트는 툴이 없으므로 Claude 호출 자체를 건너뛰고
@@ -322,6 +337,7 @@ export async function runAgentTools(args: {
     profile,
     agent,
     schoolName: school.schoolName,
+    recalledRooms,
   };
 }
 
@@ -356,6 +372,8 @@ export async function* streamWrapup(args: {
   history?: Anthropic.MessageParam[];
   /** 학생 학년 — 학생 모드 말투 오버레이에 주입. */
   studentGrade?: string | null;
+  /** runAgentTools가 회상한 과거 방 블록(중복 임베딩 방지: 재계산 안 함). */
+  recalledRooms?: string;
 }): AsyncGenerator<string, void, void> {
   const audience: Audience = args.audience ?? 'teacher';
   const subject = args.subject ?? '학습';
@@ -367,6 +385,7 @@ export async function* streamWrapup(args: {
     args.studentId ?? null,
     args.schoolName ?? null,
     args.studentGrade,
+    args.recalledRooms,
   );
 
   // 교감(grok) 에이전트 — 툴 없음. 곧장 Grok으로 스트리밍.
@@ -424,7 +443,7 @@ export async function runAgent(args: {
   lastAgent?: AgentId | null;
   studentGrade?: string | null;
 }): Promise<AgentReply> {
-  const { augmentedMessage, toolResults, citations, directText, profile, agent } =
+  const { augmentedMessage, toolResults, citations, directText, profile, agent, recalledRooms } =
     await runAgentTools(args);
   let text = '';
   for await (const chunk of streamWrapup({
@@ -437,6 +456,7 @@ export async function runAgent(args: {
     studentId: args.studentId,
     history: args.history,
     studentGrade: args.studentGrade,
+    recalledRooms,
   })) {
     text += chunk;
   }
