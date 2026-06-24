@@ -16,7 +16,7 @@ import {
   MASCOT_NAME,
   MascotAvatar,
   QuickReplies,
-  SolveStepper,
+  // SolveStepper, // 단계 스텝퍼 숨김(주석) — 재활성화 시 import·렌더 복구
   StudentAssistantMessage,
   StudentBubble,
   StudentChatInput,
@@ -385,12 +385,12 @@ export function StudentAgentPage({
           })}
         </div>
 
-        {/* 문제 풀이 코칭 스테퍼 — 풀이 시작하면 채팅 위에 떠 있는다 */}
+        {/* 문제 풀이 코칭 스테퍼 — 단계가 1↔5로 튀어서 일단 숨김(주석). 재활성화하면 됨.
         {solveStage != null && (
           <div className="sticky top-2 z-10 rounded-2xl border-2 border-orange-100 bg-white/90 px-4 py-3 shadow-sm backdrop-blur">
             <SolveStepper stage={solveStage} />
           </div>
-        )}
+        )} */}
 
         <div className="flex-1 space-y-4 py-2">
           {messages.length === 0 ? (
