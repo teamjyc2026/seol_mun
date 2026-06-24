@@ -11,7 +11,8 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 export const runtime = 'nodejs';
 
 const schema = z.object({
-  email: z.string().email(),
+  // 모바일 키보드가 넣는 공백·대문자를 검증 전에 정규화 — 안 그러면 email()이 실패.
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(6),
   name: z.string().trim().min(1).max(40),
   grade: z.string().trim().max(10).optional(),
@@ -22,14 +23,21 @@ export async function POST(req: NextRequest) {
   let parsed;
   try {
     parsed = schema.parse(await req.json());
-  } catch {
-    return NextResponse.json(
-      { message: '입력값을 확인해 주세요. (비밀번호는 6자 이상)' },
-      { status: 400 },
-    );
+  } catch (e) {
+    // 어느 칸이 문제인지 정확히 알려준다 (예전엔 항상 "비밀번호 6자"라 오해를 샀음).
+    const field = e instanceof z.ZodError ? e.issues[0]?.path[0] : null;
+    const message =
+      field === 'email'
+        ? '이메일 형식이 올바르지 않아요. (예: name@example.com)'
+        : field === 'password'
+          ? '비밀번호는 6자 이상이어야 해요.'
+          : field === 'name'
+            ? '이름을 입력해 주세요.'
+            : '입력값을 확인해 주세요.';
+    return NextResponse.json({ message }, { status: 400 });
   }
 
-  const email = parsed.email.trim().toLowerCase();
+  const email = parsed.email; // 이미 trim·소문자 처리됨
   const supabase = getSupabaseServer();
 
   const { data: existing } = await supabase

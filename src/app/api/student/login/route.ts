@@ -11,7 +11,8 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 export const runtime = 'nodejs';
 
 const schema = z.object({
-  email: z.string().email(),
+  // 공백·대문자 정규화 후 검증 (가입과 동일).
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
 });
 
@@ -20,10 +21,13 @@ export async function POST(req: NextRequest) {
   try {
     parsed = schema.parse(await req.json());
   } catch {
-    return NextResponse.json({ message: '잘못된 요청입니다.' }, { status: 400 });
+    return NextResponse.json(
+      { message: '이메일 형식이 올바르지 않아요.' },
+      { status: 400 },
+    );
   }
 
-  const email = parsed.email.trim().toLowerCase();
+  const email = parsed.email; // 이미 trim·소문자 처리됨
   const supabase = getSupabaseServer();
   const { data: student } = await supabase
     .from('students')

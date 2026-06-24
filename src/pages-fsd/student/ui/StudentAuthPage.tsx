@@ -44,9 +44,9 @@ export function StudentAuthPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           mode === 'login'
-            ? { email, password }
+            ? { email: email.trim(), password }
             : {
-                email,
+                email: email.trim(),
                 password,
                 name,
                 grade: grade || undefined,
@@ -143,6 +143,10 @@ export function StudentAuthPage() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="이메일"
             type="email"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             className={inputCls}
           />
           <div className="relative">
