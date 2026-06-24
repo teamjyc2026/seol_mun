@@ -120,7 +120,10 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   return NextResponse.json({ ok: true });
 }
 
-/** 작업 삭제 — 저장된 문제·청크·소스는 유지되고 작업판(박스)만 사라진다. */
+/**
+ * 작업 삭제 — 작업판(박스)이 사라지고, 그 작업으로 만든 문제는 언임베딩(보존).
+ * (문제 행·소스·청크는 유지. 박스가 cascade로 지워지기 전에 savedRefs로 먼저 언임베딩.)
+ */
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
   if (!(await requireUploader())) {
     return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
@@ -130,6 +133,8 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ message: 'invalid id' }, { status: 400 });
   }
   const supabase = getSupabaseServer();
+  // 박스(savedRefs)가 지워지기 전에 그 작업 문제들 언임베딩.
+  await supabase.rpc('unembed_workbench_jobs', { job_ids: [id] });
   const { error } = await supabase.from('workbench_jobs').delete().eq('id', id);
   if (error) return NextResponse.json({ message: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

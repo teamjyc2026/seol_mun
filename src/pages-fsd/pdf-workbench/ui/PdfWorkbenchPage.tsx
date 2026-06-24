@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns2,
+  Eraser,
   FileUp,
   Folder as FolderIcon,
   Home,
@@ -120,6 +121,7 @@ export function PdfWorkbenchPage() {
     connectAnswerRef,
     scanAllAnswerRefs,
     runEmbedPending,
+    runUnembedAll,
     refreshEmbedPending,
   } = useWorkbenchController();
 
@@ -336,11 +338,27 @@ export function PdfWorkbenchPage() {
           })()}
           <button
             type="button"
-            onClick={() => s.setCreating(!s.creating)}
+            disabled={s.embedRunning}
+            onClick={() => {
+              if (
+                confirm(
+                  '임베딩된 모든 문제·청크를 언임베딩할까요?\n검색에서 빠지지만 데이터는 보존돼요 (다시 “일괄 임베딩”으로 복구).',
+                )
+              )
+                void runUnembedAll();
+            }}
+            title="임베딩된 전체를 비웁니다(행은 보존). 다시 검색되게 하려면 일괄 임베딩."
             className={cn(
-              'inline-flex h-8 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white',
+              'inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-500 hover:bg-zinc-50 disabled:opacity-60',
               s.embedPending.problems + s.embedPending.chunks === 0 && !s.embedRunning && 'ml-auto',
             )}
+          >
+            <Eraser className="h-3.5 w-3.5" /> 일괄 언임베딩
+          </button>
+          <button
+            type="button"
+            onClick={() => s.setCreating(!s.creating)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white"
           >
             <Plus className="h-3.5 w-3.5" /> 새 작업
           </button>
@@ -688,7 +706,11 @@ export function PdfWorkbenchPage() {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (confirm(`'${f.name}' 폴더를 삭제할까요? (하위 폴더 포함, 작업은 미분류로)`))
+                  if (
+                    confirm(
+                      `'${f.name}' 폴더를 삭제할까요?\n하위 폴더·작업·교재(PDF)까지 통째로 삭제돼요. 거기서 만든 문제는 언임베딩되고 보존됩니다.`,
+                    )
+                  )
                     void deleteFolder(f.id);
                 }}
                 className="rounded p-1 text-zinc-300 hover:bg-rose-50 hover:text-rose-600 group-hover:text-zinc-400"
@@ -780,7 +802,7 @@ export function PdfWorkbenchPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (confirm(`'${j.title}' 작업판을 삭제할까요? (저장된 문제·교재는 유지)`))
+                    if (confirm(`'${j.title}' 작업판을 삭제할까요? (만든 문제는 언임베딩·보존, 교재는 유지)`))
                       void api
                         .delete(`/agent/workbench/${j.id}`)
                         .then(() => refreshJobs())

@@ -1522,6 +1522,28 @@ export function useWorkbenchController() {
     }
   }
 
+  /** 일괄 언임베딩 — 임베딩된 문제·청크 전부 비운다(행은 보존). */
+  async function runUnembedAll() {
+    const st = useWorkbenchStore.getState();
+    if (st.embedRunning) return;
+    st.setEmbedRunning(true);
+    const tid = toast.loading('언임베딩 중…');
+    try {
+      const { data } = await api.delete<{ problemsUnembedded: number; chunksUnembedded: number }>(
+        '/agent/embeddings',
+      );
+      toast.success(
+        `언임베딩 완료 — 문제 ${data.problemsUnembedded}, 청크 ${data.chunksUnembedded}`,
+        { id: tid },
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : '언임베딩 실패', { id: tid });
+    } finally {
+      useWorkbenchStore.getState().setEmbedRunning(false);
+      void refreshEmbedPending();
+    }
+  }
+
   /** 폼에서 파일을 직접 그림으로 업로드 → URL 반환. */
   async function uploadFigureFile(file: File): Promise<string | null> {
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -1614,5 +1636,6 @@ export function useWorkbenchController() {
     scanAllAnswerRefs,
     refreshEmbedPending,
     runEmbedPending,
+    runUnembedAll,
   };
 }

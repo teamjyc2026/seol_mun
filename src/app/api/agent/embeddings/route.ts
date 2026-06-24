@@ -32,6 +32,36 @@ export async function GET() {
   return NextResponse.json({ problems: problems ?? 0, chunks: chunks ?? 0 });
 }
 
+/** 일괄 언임베딩 — 임베딩된 문제·청크 전부 비운다(embedding/embedded_at = null). 행은 보존. */
+export async function DELETE() {
+  if (!(await requireUploader())) {
+    return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
+  }
+  const supabase = getSupabaseServer();
+  // 비울 개수 먼저 집계(응답용).
+  const [{ count: problems }, { count: chunks }] = await Promise.all([
+    supabase
+      .from('problems')
+      .select('id', { count: 'exact', head: true })
+      .not('embedding', 'is', null),
+    supabase
+      .from('source_chunks')
+      .select('id', { count: 'exact', head: true })
+      .not('embedding', 'is', null),
+  ]);
+  const [{ error: pErr }, { error: cErr }] = await Promise.all([
+    supabase
+      .from('problems')
+      .update({ embedding: null, embedded_at: null })
+      .not('embedding', 'is', null),
+    supabase.from('source_chunks').update({ embedding: null }).not('embedding', 'is', null),
+  ]);
+  if (pErr || cErr) {
+    return NextResponse.json({ message: pErr?.message ?? cErr?.message ?? 'failed' }, { status: 500 });
+  }
+  return NextResponse.json({ problemsUnembedded: problems ?? 0, chunksUnembedded: chunks ?? 0 });
+}
+
 const runSchema = z.object({ limit: z.number().int().min(1).max(100).default(30) });
 
 async function pendingCounts(supabase: ReturnType<typeof getSupabaseServer>) {
