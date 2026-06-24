@@ -193,6 +193,7 @@ export function StudentAgentPage({
           conversationId,
           message: text,
           pinnedSourceIds: [],
+          as: 'student',
           subject,
           scopeId,
         },

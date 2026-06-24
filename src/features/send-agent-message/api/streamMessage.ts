@@ -5,6 +5,8 @@ export type StreamMessageInput = {
   message: string;
   pinnedSourceIds: string[];
   studentId?: string;
+  /** 학생 앱에서 보내는 표식 — 같은 브라우저에 선생님 쿠키가 있어도 학생 세션으로 확정. */
+  as?: 'student';
   subject?: string;
   /** 학교별 RAG: scope retrieval to this school's sources. */
   schoolId?: string | null;

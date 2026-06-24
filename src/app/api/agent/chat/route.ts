@@ -25,6 +25,8 @@ const schema = z.object({
   message: z.string().min(1).max(4000),
   pinnedSourceIds: z.array(z.string().uuid()).default([]),
   studentId: z.string().min(1).optional(),
+  /** 학생 앱 표식 — 있으면 학생 쿠키를 업로더 쿠키보다 우선해 학생 세션으로 확정. */
+  as: z.enum(['student', 'teacher']).optional(),
   subject: z.string().min(1).max(50).optional(),
   schoolId: z.string().uuid().nullable().optional(),
   scopeId: z.string().uuid().nullable().optional(),
@@ -108,14 +110,6 @@ async function loadHistory(
 }
 
 export async function POST(req: NextRequest) {
-  // Two caller realms: uploader(교사/관리) or logged-in student(학습자).
-  const isUploader = await requireUploader();
-  const sessionStudent = isUploader ? null : await getStudent();
-  const sessionStudentId = sessionStudent?.id ?? null;
-  if (!isUploader && !sessionStudentId) {
-    return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
-  }
-
   let body;
   try {
     body = schema.parse(await req.json());
@@ -124,6 +118,20 @@ export async function POST(req: NextRequest) {
       { message: 'invalid body', details: String(e) },
       { status: 400 },
     );
+  }
+
+  // 두 호출 주체: 업로더(교사/관리) 또는 로그인 학생(학습자).
+  // 학생 앱은 as:'student'를 보내 — 같은 브라우저에 업로더 쿠키가 있어도 학생으로
+  // 확정한다. (그래야 학생 대화·정오답이 그 학생에게 귀속된다.)
+  const studentSession = await getStudent();
+  const uploader = await requireUploader();
+  const isStudentSession =
+    body.as === 'student' ? !!studentSession : !uploader && !!studentSession;
+  const sessionStudent = isStudentSession ? studentSession : null;
+  const sessionStudentId = sessionStudent?.id ?? null;
+  const isUploader = isStudentSession ? false : uploader;
+  if (!isUploader && !sessionStudentId) {
+    return NextResponse.json({ message: 'unauthorized' }, { status: 401 });
   }
 
   const supabase = getSupabaseServer();
