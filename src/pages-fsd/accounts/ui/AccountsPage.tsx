@@ -23,7 +23,7 @@ function AccountList({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-zinc-800">{r.email}</p>
             <p className="truncate text-[11px] text-zinc-400">
-              {[r.label || '(이름 없음)', r.grade].filter(Boolean).join(' · ')} · 가입{' '}
+              {[r.label || '(이름 없음)', r.school, r.grade].filter(Boolean).join(' · ')} · 가입{' '}
               {formatDate(r.created_at)}
             </p>
           </div>

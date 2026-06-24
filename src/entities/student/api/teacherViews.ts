@@ -10,6 +10,7 @@ export type AccountRow = {
   /** 학생=이름, 선생님=별명. */
   label: string;
   grade?: string | null;
+  school?: string | null;
   created_at: string;
   /** 같은 이메일이 선생님·학생 양쪽에 등록돼 있으면 true. */
   bothRoles: boolean;
@@ -32,7 +33,7 @@ export async function listAccounts(): Promise<AccountsData> {
       .order('created_at', { ascending: false }),
     supabase
       .from('students')
-      .select('id, email, name, grade, created_at')
+      .select('id, email, name, grade, school, created_at')
       .order('created_at', { ascending: false }),
   ]);
   const norm = (e: unknown) => String(e ?? '').toLowerCase();
@@ -50,6 +51,7 @@ export async function listAccounts(): Promise<AccountsData> {
     email: r.email as string,
     label: r.name as string,
     grade: (r.grade as string | null) ?? null,
+    school: (r.school as string | null) ?? null,
     created_at: r.created_at as string,
     bothRoles: teacherEmails.has(norm(r.email)),
   }));
@@ -62,6 +64,7 @@ export type StudentStat = {
   name: string;
   email: string;
   grade: string | null;
+  school: string | null;
   created_at: string;
   attempts: number;
   correct: number;
@@ -77,7 +80,7 @@ export async function listStudentsWithStats(): Promise<StudentStat[]> {
   const [studentsRes, attemptsRes, convRes] = await Promise.all([
     supabase
       .from('students')
-      .select('id, name, email, grade, created_at')
+      .select('id, name, email, grade, school, created_at')
       .order('created_at', { ascending: false }),
     supabase.from('student_attempts').select('student_id, is_correct, created_at'),
     supabase.from('agent_conversations').select('student_id').not('student_id', 'is', null),
@@ -106,6 +109,7 @@ export async function listStudentsWithStats(): Promise<StudentStat[]> {
       name: s.name as string,
       email: s.email as string,
       grade: (s.grade as string | null) ?? null,
+      school: (s.school as string | null) ?? null,
       created_at: s.created_at as string,
       attempts: a.n,
       correct: a.correct,
@@ -159,6 +163,7 @@ export type StudentRecord = {
     name: string;
     email: string;
     grade: string | null;
+    school: string | null;
     created_at: string;
   } | null;
   attempts: StudentAttemptRow[];
@@ -173,7 +178,7 @@ export async function getStudentRecord(id: string): Promise<StudentRecord> {
   const [studentRes, attemptsRes, levelsRes, memRes, roomsRes] = await Promise.all([
     supabase
       .from('students')
-      .select('id, name, email, grade, created_at')
+      .select('id, name, email, grade, school, created_at')
       .eq('id', id)
       .maybeSingle(),
     supabase
@@ -251,6 +256,7 @@ export async function getStudentRecord(id: string): Promise<StudentRecord> {
           name: studentRes.data.name as string,
           email: studentRes.data.email as string,
           grade: (studentRes.data.grade as string | null) ?? null,
+          school: (studentRes.data.school as string | null) ?? null,
           created_at: studentRes.data.created_at as string,
         }
       : null,

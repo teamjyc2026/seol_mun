@@ -108,6 +108,11 @@ export function StudentDetailPage({ record }: { record: StudentRecord }) {
                 {student.grade}
               </span>
             ) : null}
+            {student.school ? (
+              <span className="rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                {student.school}
+              </span>
+            ) : null}
           </div>
           <p className="text-xs text-zinc-500">
             {student.email} · 가입 {formatDate(student.created_at)}

@@ -15,6 +15,7 @@ const schema = z.object({
   password: z.string().min(6),
   name: z.string().trim().min(1).max(40),
   grade: z.string().trim().max(10).optional(),
+  school: z.string().trim().max(60).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
       password_hash: hashPassword(parsed.password),
       name: parsed.name.trim(),
       grade: parsed.grade?.trim() || null,
+      school: parsed.school?.trim() || null,
     })
     .select('id')
     .single();

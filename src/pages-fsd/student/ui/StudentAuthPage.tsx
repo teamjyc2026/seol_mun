@@ -21,6 +21,7 @@ export function StudentAuthPage() {
   const [confirm, setConfirm] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [name, setName] = useState('');
+  const [school, setSchool] = useState('');
   const [grade, setGrade] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -44,7 +45,13 @@ export function StudentAuthPage() {
         body: JSON.stringify(
           mode === 'login'
             ? { email, password }
-            : { email, password, name, grade: grade || undefined },
+            : {
+                email,
+                password,
+                name,
+                grade: grade || undefined,
+                school: school || undefined,
+              },
         ),
       });
       if (!res.ok) {
@@ -98,6 +105,12 @@ export function StudentAuthPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="이름"
+                className={inputCls}
+              />
+              <input
+                value={school}
+                onChange={(e) => setSchool(e.target.value)}
+                placeholder="학교 (예: OO중학교)"
                 className={inputCls}
               />
               <div className="relative">

@@ -50,6 +50,11 @@ export function StudentsPage({ initialStudents }: { initialStudents: StudentStat
                         {s.grade}
                       </span>
                     ) : null}
+                    {s.school ? (
+                      <span className="truncate rounded-md bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                        {s.school}
+                      </span>
+                    ) : null}
                     <span className="truncate text-[11px] text-zinc-400">{s.email}</span>
                   </div>
                   <div className="mt-0.5 text-[11px] text-zinc-500">
