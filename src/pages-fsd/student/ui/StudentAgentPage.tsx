@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LogOut, Plus } from 'lucide-react';
+import { ProblemCard } from '@/widgets/agent-chat';
 import type { Student } from '@/shared/config/auth';
 import type { AgentReply, ToolResult, Citation } from '@/shared/agent/types';
 import type { AgentId } from '@/shared/agent/agents/types';
@@ -271,9 +272,31 @@ export function StudentAgentPage({
     -1,
   );
 
+  // 넓은 화면 오른쪽 패널용: 가장 최근에 출제된 문제와 모디의 최신 해설 텍스트.
+  // currentProblem은 새 문제가 나올 때만 바뀌므로 채점·지문해석 턴에도 문제는 고정된다.
+  const currentProblem = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== 'assistant') continue;
+      const probs = (m.reply.toolResults ?? []).flatMap((tr) =>
+        tr.kind === 'search_problem' || tr.kind === 'generate_problem' ? tr.problems : [],
+      );
+      if (probs.length > 0) return probs[probs.length - 1];
+    }
+    return null;
+  }, [messages]);
+
+  const lastAssistantText = (() => {
+    if (lastAssistantIndex < 0) return '';
+    const m = messages[lastAssistantIndex];
+    if (m.role !== 'assistant') return '';
+    return parseQuickReplies(parseSolveStage(m.reply.text).text).text.trim();
+  })();
+
   return (
     <main className="min-h-svh bg-gradient-to-b from-orange-50/70 via-white to-white">
-      <div className="mx-auto flex min-h-svh max-w-3xl flex-col gap-3 px-4 py-5 sm:px-6">
+      <div className="mx-auto flex min-h-svh w-full max-w-3xl gap-4 px-4 py-5 sm:px-6 lg:max-w-6xl">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
         <header className="flex items-center gap-3">
           <MascotAvatar size="lg" />
           <div className="min-w-0 flex-1">
@@ -460,6 +483,36 @@ export function StudentAgentPage({
             isSending={sending}
           />
         </div>
+        </div>
+
+        {/* 넓은 화면 학습 패널 — 현재 문제(위) + 해설(아래) 고정 */}
+        <aside className="hidden shrink-0 lg:block lg:w-[380px]">
+          <div className="space-y-3 lg:sticky lg:top-5 lg:max-h-[calc(100svh-2.5rem)] lg:overflow-y-auto lg:pb-2">
+            {currentProblem ? (
+              <>
+                <div className="rounded-2xl ring-2 ring-orange-200">
+                  <ProblemCard
+                    problem={currentProblem}
+                    index={0}
+                    onSubmitAnswer={(t) => void sendMessage(t)}
+                  />
+                </div>
+                {lastAssistantText ? (
+                  <div className="rounded-2xl border-2 border-zinc-100 bg-white p-4 shadow-sm">
+                    <p className="mb-1.5 text-xs font-extrabold text-orange-600">📖 해설 · 풀이</p>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700">
+                      {lastAssistantText}
+                    </p>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="rounded-3xl border-2 border-dashed border-orange-200 bg-white/70 p-8 text-center text-sm font-medium text-zinc-500">
+                문제를 풀면 여기에 떠요 📝
+              </div>
+            )}
+          </div>
+        </aside>
       </div>
     </main>
   );

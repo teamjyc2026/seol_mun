@@ -117,7 +117,8 @@ function ToolCards({
           r.problems.length > 0
         ) {
           return (
-            <div key={i} className="space-y-3">
+            // 넓은 화면(lg+)에선 문제를 오른쪽 고정 패널에서 보여주므로 인라인은 숨김.
+            <div key={i} className="space-y-3 lg:hidden">
               {r.problems.map((p, idx) => (
                 <ProblemCard
                   key={p.id ?? idx}
