@@ -102,7 +102,7 @@ async function loadHistory(
       const passages = problems
         .filter((p) => p.passage)
         .slice(0, 3)
-        .map((p, i) => `문제${i + 1} 지문: ${String(p.passage).slice(0, 1000)}`);
+        .map((p, i) => `문제${i + 1} 지문: ${String(p.passage).slice(0, 2500)}`);
       if (passages.length > 0) {
         text += `\n\n[참고용 지문 원문 — 학생이 "지문 해석"을 고르면 한국어 해석·핵심 설명에 사용]\n${passages.join('\n')}`;
       }
