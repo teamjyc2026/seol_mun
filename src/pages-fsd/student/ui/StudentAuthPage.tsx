@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/shared/lib/cn';
 import { MASCOT_NAME, MascotAvatar } from '@/widgets/student-chat';
@@ -100,22 +100,29 @@ export function StudentAuthPage() {
                 placeholder="이름"
                 className={inputCls}
               />
-              <select
-                value={grade}
-                onChange={(e) => setGrade(e.target.value)}
-                className={cn(inputCls, 'bg-white', grade ? 'text-zinc-900' : 'text-zinc-400')}
-              >
-                <option value="">학년 선택 (선택)</option>
-                {GRADE_GROUPS.map((g) => (
-                  <optgroup key={g.label} label={g.label}>
-                    {g.grades.map((gr) => (
-                      <option key={gr} value={gr}>
-                        {gr}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  value={grade}
+                  onChange={(e) => setGrade(e.target.value)}
+                  className={cn(
+                    inputCls,
+                    'appearance-none bg-white pr-10',
+                    grade ? 'text-zinc-900' : 'text-zinc-400',
+                  )}
+                >
+                  <option value="">학년 선택 (선택)</option>
+                  {GRADE_GROUPS.map((g) => (
+                    <optgroup key={g.label} label={g.label}>
+                      {g.grades.map((gr) => (
+                        <option key={gr} value={gr} className="text-zinc-900">
+                          {gr}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+              </div>
             </>
           )}
           <input
