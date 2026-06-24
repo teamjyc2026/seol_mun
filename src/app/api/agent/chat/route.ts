@@ -98,6 +98,14 @@ async function loadHistory(
       if (notes.length > 0) {
         text += `\n\n[비공개 채점 메모 — 학생 메시지에 답이 오기 전까지 절대 노출 금지]\n${notes.join('\n')}`;
       }
+      // 지문 원문은 이미 카드로 보여준 공개 정보 — 채점 후 "지문 해석"에 쓰도록 참고로 싣는다.
+      const passages = problems
+        .filter((p) => p.passage)
+        .slice(0, 3)
+        .map((p, i) => `문제${i + 1} 지문: ${String(p.passage).slice(0, 1000)}`);
+      if (passages.length > 0) {
+        text += `\n\n[참고용 지문 원문 — 학생이 "지문 해석"을 고르면 한국어 해석·핵심 설명에 사용]\n${passages.join('\n')}`;
+      }
       // 단계 마커는 저장 전에 제거되므로, 풀이 코칭 연속성을 위해 메모로 복원.
       if (content?.stage != null) {
         text += `\n\n[비공개: 이 턴의 풀이 단계 = ${content.stage}]`;
