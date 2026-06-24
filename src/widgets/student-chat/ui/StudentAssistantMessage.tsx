@@ -59,7 +59,25 @@ export function StudentAssistantMessage({
 
   const pending = !!streaming || revealed < completed;
   const shown = segments.slice(0, Math.min(revealed, completed));
-  const choices = reply.choices ?? [];
+
+  // 이 턴에 객관식 문제가 출제됐으면 퀵리플라이를 "①번 ②번 …" 답 번호로 만든다.
+  // (모델이 "다 풀었어!"처럼 번호 없는 선택지를 주면 답이 안 담겨 채점이 안 되므로.)
+  const servedObjective = useMemo(() => {
+    const probs = (reply.toolResults ?? []).flatMap((tr) =>
+      tr.kind === 'search_problem' || tr.kind === 'generate_problem' ? tr.problems : [],
+    );
+    return (
+      probs.find(
+        (p) =>
+          (p.problem_type ?? 'objective') === 'objective' &&
+          !!p.choices?.length &&
+          !p.answer,
+      ) ?? null
+    );
+  }, [reply.toolResults]);
+  const choices = servedObjective?.choices?.length
+    ? servedObjective.choices.map((c) => `${c.label}번`)
+    : (reply.choices ?? []);
 
   const endRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {

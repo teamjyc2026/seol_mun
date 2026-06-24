@@ -308,7 +308,8 @@ export async function runAgentTools(args: {
   // refuse), auto-search saved problems and surface a strong match so users
   // don't have to explicitly say "문제에서 찾아줘". Skipped for profiles that
   // withhold answers (socratic) or aren't problem-oriented (grammar/vocab).
-  if (toolResults.length === 0 && profile.autoProblemFallback) {
+  // 학생 모드에선 끈다 — 개념만 물어도 문제가 갑툭튀하면 안 됨(명시 요청 시에만 출제).
+  if (toolResults.length === 0 && profile.autoProblemFallback && audience !== 'student') {
     try {
       const matches = await searchProblems(args.message, {
         subject: ctx.subject,
