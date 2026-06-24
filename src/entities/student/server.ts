@@ -2,9 +2,12 @@
 export {
   listStudentsWithStats,
   getStudentRecord,
+  listAccounts,
   type StudentStat,
   type StudentRecord,
   type StudentAttemptRow,
   type StudentLevelRow,
   type StudentRoomRow,
+  type AccountRow,
+  type AccountsData,
 } from './api/teacherViews';

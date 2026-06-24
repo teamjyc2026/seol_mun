@@ -3,6 +3,59 @@ import { getSupabaseServer } from '@/shared/config/supabase-server';
 
 /** 선생님(uploader) 화면용 — 학생 목록 + 학습 집계, 학생 상세(정오답·약점·방). */
 
+export type AccountRow = {
+  id: string;
+  email: string;
+  /** 학생=이름, 선생님=별명. */
+  label: string;
+  grade?: string | null;
+  created_at: string;
+  /** 같은 이메일이 선생님·학생 양쪽에 등록돼 있으면 true. */
+  bothRoles: boolean;
+};
+
+export type AccountsData = {
+  teachers: AccountRow[];
+  students: AccountRow[];
+  /** 선생님·학생 양쪽에 걸친 이메일 수. */
+  overlapCount: number;
+};
+
+/** 등록된 계정 이메일 목록 — 선생님(admin_users) + 학생(students), 겹침 표시. */
+export async function listAccounts(): Promise<AccountsData> {
+  const supabase = getSupabaseServer();
+  const [teacherRes, studentRes] = await Promise.all([
+    supabase
+      .from('admin_users')
+      .select('id, email, nickname, created_at')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('students')
+      .select('id, email, name, grade, created_at')
+      .order('created_at', { ascending: false }),
+  ]);
+  const norm = (e: unknown) => String(e ?? '').toLowerCase();
+  const teacherEmails = new Set((teacherRes.data ?? []).map((r) => norm(r.email)));
+  const studentEmails = new Set((studentRes.data ?? []).map((r) => norm(r.email)));
+  const teachers: AccountRow[] = (teacherRes.data ?? []).map((r) => ({
+    id: r.id as string,
+    email: r.email as string,
+    label: (r.nickname as string | null) ?? '',
+    created_at: r.created_at as string,
+    bothRoles: studentEmails.has(norm(r.email)),
+  }));
+  const students: AccountRow[] = (studentRes.data ?? []).map((r) => ({
+    id: r.id as string,
+    email: r.email as string,
+    label: r.name as string,
+    grade: (r.grade as string | null) ?? null,
+    created_at: r.created_at as string,
+    bothRoles: teacherEmails.has(norm(r.email)),
+  }));
+  const overlapCount = [...teacherEmails].filter((e) => studentEmails.has(e)).length;
+  return { teachers, students, overlapCount };
+}
+
 export type StudentStat = {
   id: string;
   name: string;

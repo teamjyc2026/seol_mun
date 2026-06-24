@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Bot, ClipboardList, Database, Menu, Scissors, Users, X } from 'lucide-react';
+import { ArrowLeft, AtSign, Bot, ClipboardList, Database, Menu, Scissors, Users, X } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import { AdminAccountMenu } from '@/widgets/admin-account-menu';
 
@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { href: '/admin/agent/workbench', label: 'PDF 워크벤치', icon: Scissors },
   { href: '/admin/agent/scopes', label: '학교 시험범위', icon: ClipboardList },
   { href: '/admin/agent/students', label: '학생 기록', icon: Users },
+  { href: '/admin/agent/accounts', label: '계정 이메일', icon: AtSign },
   { href: '/admin/agent/db', label: 'DB 뷰어', icon: Database },
   // 일단 숨김 (라우트는 유지 — URL로 접근 가능):
   // { href: '/admin/agent/sources', label: '교재 업로드', icon: BookOpen },
