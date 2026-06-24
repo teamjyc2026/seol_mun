@@ -22,11 +22,29 @@ type Msg = { id: string; role: string; content: { text?: string } | null; create
 
 const DIFF_LABEL: Record<string, string> = { easy: '쉬움', medium: '보통', hard: '어려움' };
 
+/** 정답/학생답 문자열을 보기 라벨 집합으로(복수정답 "②, ④" 대응). */
+function labelSet(s: string | null | undefined): Set<string> {
+  return new Set(
+    (s ?? '')
+      .split(/[,\s]+/)
+      .map((x) => x.trim())
+      .filter(Boolean),
+  );
+}
+
 export function StudentDetailPage({ record }: { record: StudentRecord }) {
   const { student, attempts, levels, weaknesses, rooms } = record;
   const [openRoom, setOpenRoom] = useState<string | null>(null);
   const [msgsByRoom, setMsgsByRoom] = useState<Record<string, Msg[]>>({});
   const [loadingRoom, setLoadingRoom] = useState<string | null>(null);
+  const [openAttempts, setOpenAttempts] = useState<Set<string>>(new Set());
+  const toggleAttempt = (id: string) =>
+    setOpenAttempts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   const total = attempts.length;
   const correct = attempts.filter((a) => a.is_correct).length;
@@ -166,55 +184,129 @@ export function StudentDetailPage({ record }: { record: StudentRecord }) {
           </div>
         ) : (
           <ul className="space-y-2">
-            {attempts.map((a) => (
-              <li
-                key={a.id}
-                className="rounded-xl border border-zinc-200 bg-white p-3 shadow-sm"
-              >
-                <div className="flex items-start gap-2">
-                  <span
-                    className={cn(
-                      'mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-white',
-                      a.is_correct ? 'bg-emerald-500' : 'bg-rose-500',
-                    )}
+            {attempts.map((a) => {
+              const open = openAttempts.has(a.id);
+              const correctSet = labelSet(a.problem?.answer);
+              const studentSet = labelSet(a.student_answer);
+              return (
+                <li key={a.id} className="rounded-xl border border-zinc-200 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => toggleAttempt(a.id)}
+                    className="flex w-full items-start gap-2 p-3 text-left"
                   >
-                    {a.is_correct ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 text-[13px] text-zinc-800">
-                      {a.problem ? stripRichText(a.problem.question) : '(삭제된 문제)'}
-                    </p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
-                      {a.problem?.subject ? (
-                        <span className="rounded bg-violet-50 px-1.5 py-0.5 font-medium text-violet-700">
-                          {a.problem.subject}
-                        </span>
-                      ) : null}
-                      {a.problem?.topic ? (
-                        <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700">
-                          {a.problem.topic}
-                        </span>
-                      ) : null}
-                      {a.problem?.difficulty ? (
-                        <span className="rounded bg-zinc-100 px-1.5 py-0.5">
-                          {DIFF_LABEL[a.problem.difficulty] ?? a.problem.difficulty}
-                        </span>
-                      ) : null}
-                      {a.score !== null ? <span>점수 {Math.round(a.score * 100)}</span> : null}
-                      <span className="ml-auto">{formatDate(a.created_at)}</span>
-                    </div>
-                    {a.student_answer ? (
-                      <p className="mt-1 text-[11px] text-zinc-500">
-                        학생 답: <span className="text-zinc-700">{a.student_answer}</span>
+                    <span
+                      className={cn(
+                        'mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full text-white',
+                        a.is_correct ? 'bg-emerald-500' : 'bg-rose-500',
+                      )}
+                    >
+                      {a.is_correct ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={cn('text-[13px] text-zinc-800', !open && 'line-clamp-2')}>
+                        {a.problem ? stripRichText(a.problem.question) : '(삭제된 문제)'}
                       </p>
-                    ) : null}
-                    {a.feedback ? (
-                      <p className="mt-0.5 text-[11px] text-zinc-500">{a.feedback}</p>
-                    ) : null}
-                  </div>
-                </div>
-              </li>
-            ))}
+                      <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px] text-zinc-400">
+                        {a.problem?.subject ? (
+                          <span className="rounded bg-violet-50 px-1.5 py-0.5 font-medium text-violet-700">
+                            {a.problem.subject}
+                          </span>
+                        ) : null}
+                        {a.problem?.topic ? (
+                          <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700">
+                            {a.problem.topic}
+                          </span>
+                        ) : null}
+                        {a.problem?.difficulty ? (
+                          <span className="rounded bg-zinc-100 px-1.5 py-0.5">
+                            {DIFF_LABEL[a.problem.difficulty] ?? a.problem.difficulty}
+                          </span>
+                        ) : null}
+                        {a.score !== null ? <span>점수 {Math.round(a.score * 100)}</span> : null}
+                        <span className="ml-auto">{formatDate(a.created_at)}</span>
+                      </div>
+                      {a.student_answer ? (
+                        <p className="mt-1 text-[11px] text-zinc-500">
+                          학생 답: <span className="text-zinc-700">{a.student_answer}</span>
+                        </p>
+                      ) : null}
+                      {a.feedback ? (
+                        <p className="mt-0.5 text-[11px] text-zinc-500">{a.feedback}</p>
+                      ) : null}
+                    </div>
+                    <ChevronRight
+                      className={cn(
+                        'mt-0.5 h-4 w-4 shrink-0 text-zinc-400 transition',
+                        open && 'rotate-90',
+                      )}
+                    />
+                  </button>
+
+                  {open && a.problem ? (
+                    <div className="space-y-2.5 border-t border-zinc-100 px-3 py-2.5">
+                      {a.problem.passage ? (
+                        <div>
+                          <p className="mb-0.5 text-[10px] font-semibold text-zinc-400">지문</p>
+                          <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-zinc-600">
+                            {stripRichText(a.problem.passage)}
+                          </p>
+                        </div>
+                      ) : null}
+
+                      {a.problem.choices && a.problem.choices.length > 0 ? (
+                        <ul className="space-y-1">
+                          {a.problem.choices.map((c, i) => {
+                            const isCorrect = correctSet.has(c.label.trim());
+                            const isPicked = studentSet.has(c.label.trim());
+                            return (
+                              <li
+                                key={i}
+                                className={cn(
+                                  'flex items-start gap-1.5 rounded-md px-2 py-1 text-[12px]',
+                                  isCorrect
+                                    ? 'bg-emerald-50 text-emerald-800'
+                                    : isPicked
+                                      ? 'bg-rose-50 text-rose-700'
+                                      : 'text-zinc-700',
+                                )}
+                              >
+                                <span className="font-bold">{c.label}</span>
+                                <span className="min-w-0 flex-1">{stripRichText(c.text)}</span>
+                                {isCorrect ? (
+                                  <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                                ) : isPicked ? (
+                                  <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
+                                ) : null}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+
+                      <p className="text-[12px] text-zinc-600">
+                        <span className="font-semibold text-emerald-700">정답:</span>{' '}
+                        {a.problem.answer || '—'}
+                      </p>
+
+                      {a.problem.citations.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {a.problem.citations.map((c, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700"
+                            >
+                              📖 {c.sourceTitle ?? '출처'}
+                              {c.page ? ` p.${c.page}` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -1,5 +1,6 @@
 import 'server-only';
 import { getSupabaseServer } from '@/shared/config/supabase-server';
+import type { ProblemChoice, ProblemCitation } from '@/entities/problem';
 
 /** 선생님(uploader) 화면용 — 학생 목록 + 학습 집계, 학생 상세(정오답·약점·방). */
 
@@ -129,6 +130,11 @@ export type StudentAttemptRow = {
     topic: string | null;
     difficulty: string | null;
     subject: string;
+    choices: ProblemChoice[] | null;
+    answer: string;
+    explanation: string | null;
+    passage: string | null;
+    citations: ProblemCitation[];
   } | null;
 };
 
@@ -205,7 +211,7 @@ export async function getStudentRecord(id: string): Promise<StudentRecord> {
   if (problemIds.length) {
     const { data: probs } = await supabase
       .from('problems')
-      .select('id, question, topic, difficulty, subject')
+      .select('id, question, topic, difficulty, subject, choices, answer, passage, explanation, citations')
       .in('id', problemIds);
     for (const p of probs ?? []) {
       problemsBy.set(p.id as string, {
@@ -214,6 +220,11 @@ export async function getStudentRecord(id: string): Promise<StudentRecord> {
         topic: (p.topic as string | null) ?? null,
         difficulty: (p.difficulty as string | null) ?? null,
         subject: p.subject as string,
+        choices: (p.choices as ProblemChoice[] | null) ?? null,
+        answer: (p.answer as string | null) ?? '',
+        explanation: (p.explanation as string | null) ?? null,
+        passage: (p.passage as string | null) ?? null,
+        citations: (p.citations as ProblemCitation[] | null) ?? [],
       });
     }
   }
