@@ -58,7 +58,7 @@ export function AdminNewPage() {
       api.post<{ id: string }>('/admin/responses', payload).then((r) => r.data),
     onSuccess: () => {
       toast.success('응답을 추가했어요.');
-      startTransition(() => router.push('/admin'));
+      startTransition(() => router.push('/admin/tutor'));
     },
     onError: (err: unknown) => {
       const msg =
@@ -90,7 +90,7 @@ export function AdminNewPage() {
           <header className="mb-6 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Link
-                href="/admin"
+                href="/admin/tutor"
                 className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-sm text-zinc-600 transition hover:bg-zinc-100"
               >
                 <ArrowLeft className="h-4 w-4" /> 대시보드
@@ -173,7 +173,7 @@ export function AdminNewPage() {
 
           <div className="sticky bottom-4 mt-8 flex items-center justify-end gap-2">
             <Link
-              href="/admin"
+              href="/admin/tutor"
               className="inline-flex h-10 items-center justify-center rounded-lg border border-zinc-200 bg-white px-4 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
             >
               취소

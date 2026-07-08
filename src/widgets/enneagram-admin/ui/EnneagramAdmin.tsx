@@ -3,13 +3,42 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ClipboardList, Download, LogOut, RefreshCw, Trash2 } from 'lucide-react';
+import {
+  ChevronLeft,
+  ChevronDown,
+  ClipboardList,
+  Download,
+  LogOut,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import {
+  AREA,
+  QUESTIONS,
+  SCALE,
   SHEETS,
   TYPES,
   type EnneagramResponseRow as Row,
 } from '@/entities/enneagram';
+import {
+  EnneaFilterBar,
+  type EnneaDateRange,
+  type EnneaSortKey,
+  type TopTypeFilter,
+} from './EnneaFilterBar';
+import { EnneaSummary } from './EnneaSummary';
+
+const RANGE_MS: Record<Exclude<EnneaDateRange, 'all'>, number> = {
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+};
+
+function totalScore(r: Row): number {
+  if (typeof r.total === 'number' && r.total > 0) return r.total;
+  return Object.values(r.scores ?? {}).reduce((a, b) => a + b, 0);
+}
 
 const TYPE_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 const MAX_SCORE = 75;
@@ -23,21 +52,46 @@ function fmtTs(iso: string) {
 export function EnneagramAdmin({ rows }: { rows: Row[] }) {
   const router = useRouter();
   const [query, setQuery] = useState('');
+  const [range, setRange] = useState<EnneaDateRange>('all');
+  const [sort, setSort] = useState<EnneaSortKey>('created_desc');
+  const [topType, setTopType] = useState<TopTypeFilter>('all');
+  const [tab, setTab] = useState<'list' | 'summary'>('list');
   const [loggingOut, setLoggingOut] = useState(false);
   const [localRows, setLocalRows] = useState<Row[]>(rows);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    const arr = localRows
-      .slice()
-      .sort((a, b) => b.created_at.localeCompare(a.created_at));
-    if (!needle) return arr;
-    return arr.filter((r) =>
-      [r.name, r.school, r.phone]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(needle)),
-    );
-  }, [localRows, query]);
+    const now = Date.now();
+    let arr = localRows.slice();
+
+    if (range !== 'all') {
+      const cutoff = now - RANGE_MS[range];
+      arr = arr.filter((r) => new Date(r.created_at).getTime() >= cutoff);
+    }
+    if (topType !== 'all') {
+      arr = arr.filter((r) => r.top_type === topType);
+    }
+    if (needle) {
+      arr = arr.filter((r) =>
+        [r.name, r.school, r.phone]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(needle)),
+      );
+    }
+
+    arr.sort((a, b) => {
+      switch (sort) {
+        case 'name_asc':
+          return (a.name ?? '').localeCompare(b.name ?? '', 'ko');
+        case 'total_desc':
+          return totalScore(b) - totalScore(a);
+        case 'created_desc':
+        default:
+          return b.created_at.localeCompare(a.created_at);
+      }
+    });
+    return arr;
+  }, [localRows, query, range, sort, topType]);
 
   const stats = useMemo(() => {
     const total = localRows.length;
@@ -96,6 +150,14 @@ export function EnneagramAdmin({ rows }: { rows: Row[] }) {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/admin"
+              title="설문 선택"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">설문 선택</span>
+            </Link>
+            <Link
+              href="/admin/tutor"
               title="학습 튜터 설문"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
             >
@@ -143,26 +205,56 @@ export function EnneagramAdmin({ rows }: { rows: Row[] }) {
           <Stat label="검사한 학생 수" value={String(stats.distinctNames)} highlight />
         </section>
 
-        <div className="mb-4">
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="이름 · 학교 · 전화번호 검색"
-            className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400"
-          />
+        <div className="mb-4 inline-flex items-center gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm">
+          {(
+            [
+              ['list', '결과 목록'],
+              ['summary', '유형별 집계'],
+            ] as const
+          ).map(([value, label]) => {
+            const active = tab === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTab(value)}
+                aria-pressed={active}
+                className={cn(
+                  'h-8 rounded-md px-3 text-sm font-medium transition',
+                  active
+                    ? 'bg-zinc-900 text-white shadow-sm'
+                    : 'text-zinc-600 hover:bg-zinc-100',
+                )}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
+
+        <EnneaFilterBar
+          query={query}
+          onQueryChange={setQuery}
+          range={range}
+          onRangeChange={setRange}
+          sort={sort}
+          onSortChange={setSort}
+          topType={topType}
+          onTopTypeChange={setTopType}
+        />
 
         <p className="mb-3 text-xs text-zinc-500">
           표시:{' '}
           <span className="font-semibold text-zinc-700">{filtered.length}</span>건
         </p>
 
-        {filtered.length === 0 ? (
+        {tab === 'summary' ? (
+          <EnneaSummary rows={filtered} />
+        ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-zinc-200 bg-white px-6 py-16 text-center text-sm text-zinc-500">
             {localRows.length === 0
               ? '아직 접수된 검사 결과가 없어요.'
-              : '검색 조건에 맞는 결과가 없어요.'}
+              : '검색·필터 조건에 맞는 결과가 없어요.'}
           </div>
         ) : (
           <ul className="space-y-2">
@@ -316,6 +408,8 @@ function ResultCard({
                 ))}
           </div>
 
+          <AnswerDetail row={row} />
+
           <div className="mt-4 flex justify-end">
             <button
               type="button"
@@ -328,6 +422,88 @@ function ResultCard({
         </div>
       )}
     </li>
+  );
+}
+
+/** "문항별 응답" 접이식 — 영역 A~I 순서로 학생이 고른 값과 라벨을 보여준다. */
+function AnswerDetail({ row }: { row: Row }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-4 overflow-hidden rounded-lg border border-zinc-200">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 bg-zinc-50 px-3 py-2 text-left transition hover:bg-zinc-100"
+      >
+        <span className="flex-1 text-sm font-semibold text-zinc-800">
+          문항별 응답
+        </span>
+        <ChevronDown
+          className={cn(
+            'h-4 w-4 shrink-0 text-zinc-400 transition-transform',
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+      {open && (
+        <div className="space-y-4 border-t border-zinc-100 px-3 py-3">
+          {TYPE_IDS.map((t) => {
+            const label = AREA[t - 1];
+            const info = TYPES[t];
+            const qs = QUESTIONS[t] ?? [];
+            const ans = row.answers?.[String(t)] ?? [];
+            return (
+              <div key={t}>
+                <div className="mb-1.5 flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: info.hex }}
+                  />
+                  <h4 className="text-xs font-bold text-zinc-700">
+                    영역 {label} · {info.name}
+                  </h4>
+                </div>
+                <ul className="space-y-1">
+                  {qs.map((q, idx) => {
+                    const v = ans[idx] ?? 0;
+                    const answered = v >= 1 && v <= 5;
+                    const label5 = answered
+                      ? SCALE[v - 1].replace(/\n/g, ' ')
+                      : '—';
+                    return (
+                      <li
+                        key={idx}
+                        className="flex items-baseline gap-2 text-xs"
+                      >
+                        <span className="w-5 shrink-0 text-right font-mono text-zinc-400">
+                          {idx + 1}
+                        </span>
+                        <span className="flex-1 text-zinc-600">{q}</span>
+                        <span
+                          className={cn(
+                            'shrink-0 rounded px-1.5 py-0.5 font-medium tabular-nums',
+                            !answered
+                              ? 'text-zinc-400'
+                              : v >= 4
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : v <= 2
+                                  ? 'bg-zinc-100 text-zinc-500'
+                                  : 'text-zinc-600',
+                          )}
+                        >
+                          {answered ? `${v} ${label5}` : '—'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 

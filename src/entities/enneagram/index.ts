@@ -14,6 +14,13 @@ export {
   type EnneagramPayload,
 } from './model/schema';
 export { SHEETS, CONTACT, type TypeSheet } from './model/content';
+export {
+  typeDistribution,
+  averageScores,
+  areaQuestionAgg,
+  type TypeDistItem,
+  type QuestionAgg,
+} from './model/aggregate';
 export type {
   EnneagramInfo,
   EnneagramAnswers,

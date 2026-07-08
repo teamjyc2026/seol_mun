@@ -90,6 +90,13 @@ export function AdminDashboard({ responses }: { responses: Row[] }) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              href="/admin"
+              title="설문 선택으로 돌아가기"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium text-zinc-700 shadow-sm transition hover:bg-zinc-100"
+            >
+              <span>← 설문 선택</span>
+            </Link>
+            <Link
               href="/admin/enneagram"
               title="에니어그램 검사 결과"
               className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-medium text-violet-700 shadow-sm transition hover:bg-violet-100"
