@@ -226,6 +226,7 @@ export function EnneagramApp() {
   const [result, setResult] = useState<SubmitEnneagramResult | null>(null);
 
   const qRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const navRef = useRef<HTMLDivElement | null>(null);
 
   const submit = useSubmitEnneagram({
     onSuccess: (r) => {
@@ -253,6 +254,14 @@ export function EnneagramApp() {
       return next;
     });
     if (missIdx === idx) setMissIdx(null);
+    // 답하면 다음 문항으로 부드럽게 자동 스크롤 (마지막 문항이면 하단 버튼으로)
+    requestAnimationFrame(() => {
+      const nextEl = qRefs.current[idx + 1];
+      (nextEl ?? navRef.current)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    });
   };
 
   const firstMissing = (t: number) =>
@@ -580,7 +589,10 @@ export function EnneagramApp() {
                                 key={v}
                                 onClick={() => pick(t, idx, v)}
                                 className={cn(
-                                  'flex flex-col items-center gap-[3px] rounded-[10px] px-1 py-[9px] transition-colors',
+                                  'flex flex-col items-center gap-[3px] rounded-[10px] px-1 py-[9px]',
+                                  'transition-[transform,background-color,border-color] duration-150 ease-out',
+                                  'will-change-transform active:scale-90',
+                                  on && 'scale-[1.07] shadow-md',
                                 )}
                                 style={{
                                   border: `1.5px solid ${on ? C.green : C.line2}`,
@@ -621,7 +633,7 @@ export function EnneagramApp() {
                   </div>
                 )}
 
-                <div className="mt-[22px] flex gap-3">
+                <div ref={navRef} className="mt-[22px] flex gap-3">
                   <button
                     onClick={prevArea}
                     className="rounded-2xl px-[22px] py-[15px] text-[16px] font-bold"
