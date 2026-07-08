@@ -309,12 +309,18 @@ function ResultCard({
   onDelete: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const top = TYPES[row.top_type];
   const sub = TYPES[row.sub_type];
   const sheet = SHEETS[row.top_type];
 
   return (
-    <li className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
+    <li
+      className={cn(
+        'relative rounded-xl border border-zinc-200 bg-white shadow-sm',
+        menuOpen ? 'z-30' : 'overflow-hidden',
+      )}
+    >
       <div className="flex items-center gap-2 px-4 py-3">
         <button
           type="button"
@@ -340,7 +346,11 @@ function ResultCard({
             {top ? top.name : `유형 ${row.top_type}`}
           </span>
         </button>
-        <KebabMenu onDelete={() => onDelete(row.id)} />
+        <KebabMenu
+          open={menuOpen}
+          setOpen={setMenuOpen}
+          onDelete={() => onDelete(row.id)}
+        />
       </div>
 
       {open && (
@@ -431,8 +441,15 @@ function ResultCard({
 }
 
 /** 카드 우측 "⋯" 메뉴 — 운영자가 결과를 바로 삭제할 수 있다. */
-function KebabMenu({ onDelete }: { onDelete: () => void }) {
-  const [open, setOpen] = useState(false);
+function KebabMenu({
+  open,
+  setOpen,
+  onDelete,
+}: {
+  open: boolean;
+  setOpen: (v: boolean) => void;
+  onDelete: () => void;
+}) {
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -449,20 +466,20 @@ function KebabMenu({ onDelete }: { onDelete: () => void }) {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
   return (
     <div ref={ref} className="relative shrink-0">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(!open)}
         aria-label="더보기"
         className="grid h-8 w-8 place-items-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
       >
         <MoreVertical className="h-4 w-4" />
       </button>
       {open && (
-        <div className="absolute right-0 top-9 z-10 w-32 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-9 z-30 w-32 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg">
           <button
             type="button"
             onClick={() => {
