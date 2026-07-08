@@ -51,6 +51,20 @@ function makeEmptyAnswers(): EnneagramAnswers {
   return a;
 }
 
+/** 전화번호 입력 중 자동으로 하이픈을 채워준다 (010-1234-5678). */
+function formatPhone(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  if (d.length <= 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+}
+
+/** 형식 검증: 10~11자리(하이픈 3-3-4 또는 3-4-4) 휴대폰 번호 */
+function isValidPhone(v: string): boolean {
+  return /^\d{2,3}-\d{3,4}-\d{4}$/.test(v.trim());
+}
+
 /* ---------- 9판 꽃 마크(SVG) ---------- */
 function Bloom({ size = 96, filled = 9 }: { size?: number; filled?: number }) {
   const petals = [];
@@ -205,6 +219,7 @@ export function EnneagramApp() {
   const [screen, setScreen] = useState<Screen>('home');
   const [info, setInfo] = useState<EnneagramInfo>(emptyInfo);
   const [nameError, setNameError] = useState(false);
+  const [phoneError, setPhoneError] = useState(false);
   const [area, setArea] = useState(1); // 현재 영역 1~9
   const [answers, setAnswers] = useState<EnneagramAnswers>(makeEmptyAnswers);
   const [missIdx, setMissIdx] = useState<number | null>(null);
@@ -249,9 +264,15 @@ export function EnneagramApp() {
       setNameError(true);
       return;
     }
+    // 전화번호는 입력했을 때만 형식 검증(선택 입력)
+    if (info.phone.trim() && !isValidPhone(info.phone)) {
+      setPhoneError(true);
+      return;
+    }
     setInfo((i) => ({ ...i, name }));
     setArea(1);
     setNameError(false);
+    setPhoneError(false);
     go('quiz');
   };
 
@@ -410,10 +431,24 @@ export function EnneagramApp() {
               <Field
                 label="전화번호"
                 value={info.phone}
-                onChange={(v) => setInfo((i) => ({ ...i, phone: v }))}
+                error={phoneError}
+                onChange={(v) => {
+                  const formatted = formatPhone(v);
+                  setInfo((i) => ({ ...i, phone: formatted }));
+                  if (phoneError && (!formatted || isValidPhone(formatted)))
+                    setPhoneError(false);
+                }}
                 placeholder="예: 010-1234-5678"
-                inputMode="tel"
+                inputMode="numeric"
               />
+              {phoneError && (
+                <p
+                  className="-mt-3 mb-4 text-[12.5px] font-semibold"
+                  style={{ color: C.coral }}
+                >
+                  전화번호 형식을 확인해 주세요. (예: 010-1234-5678)
+                </p>
+              )}
 
               <div className="mt-[10px] flex gap-3">
                 <button
