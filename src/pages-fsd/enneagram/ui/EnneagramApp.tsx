@@ -892,14 +892,28 @@ function ResultSheet({
 
       {/* CONTACT */}
       <div
-        className="rounded-2xl px-4 py-[14px] text-center text-[13px] leading-[1.6]"
+        className="rounded-2xl px-5 py-5 text-center"
         style={{
-          background: C.paper2,
-          border: `1px solid ${C.line}`,
-          color: C.inkSoft,
+          background: C.sage,
+          border: `1.5px solid ${C.green}`,
         }}
       >
-        {CONTACT.label} : {CONTACT.academy} {CONTACT.phone}
+        <div className="text-[13.5px] font-semibold" style={{ color: C.inkSoft }}>
+          {CONTACT.label}
+        </div>
+        <div
+          className="mt-1 text-[17px] font-extrabold"
+          style={{ color: C.ink }}
+        >
+          {CONTACT.academy}
+        </div>
+        <a
+          href={`tel:${CONTACT.phone.replace(/-/g, '')}`}
+          className="mt-1 block text-[26px] font-extrabold tracking-tight"
+          style={{ color: C.green }}
+        >
+          {CONTACT.phone}
+        </a>
       </div>
 
       <div className="mt-6 text-center">
