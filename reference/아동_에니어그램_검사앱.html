@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+<title>아이 에니어그램 검사</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css"/>
+<style>
+:root{
+  --paper:#FBF7EE; --paper2:#F5EFE1; --ink:#2E3A2C; --ink-soft:#5B6656;
+  --line:#E4DCC8; --line2:#D8CDB2;
+  --green:#2F6B4F; --green-d:#245740; --marigold:#F2A93B; --coral:#E8734A;
+  --sage:#EFF3E7; --card:#FFFDF7;
+  --t1:#2F6B4F; --t2:#E8734A; --t3:#F2A93B; --t4:#8E5B8E; --t5:#3E8B8B;
+  --t6:#4A6FA5; --t7:#E0B12E; --t8:#C0503A; --t9:#7A9A6B;
+  --shadow:0 1px 2px rgba(46,58,44,.06),0 8px 24px rgba(46,58,44,.07);
+  --radius:18px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  background:var(--paper); color:var(--ink);
+  line-height:1.55; letter-spacing:-0.01em;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:760px;margin:0 auto;padding:22px 18px 90px}
+.admin .wrap{max-width:1080px}
+h1,h2,h3{margin:0;font-weight:800;letter-spacing:-0.03em;line-height:1.2}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit}
+.hidden{display:none!important}
+
+/* top brand */
+.brand{display:flex;align-items:center;gap:11px;margin-bottom:26px}
+.mark{width:38px;height:38px;flex:0 0 auto}
+.brand .txt b{display:block;font-size:16px;font-weight:800;letter-spacing:-0.02em}
+.brand .txt span{display:block;font-size:12px;color:var(--ink-soft);letter-spacing:0.02em}
+.brand .adminlink{margin-left:auto;font-size:12px;color:var(--ink-soft);
+  border:1px solid var(--line2);padding:7px 12px;border-radius:99px;background:var(--card);transition:.15s}
+.brand .adminlink:hover{color:var(--green);border-color:var(--green)}
+
+/* hero */
+.hero{text-align:center;padding:14px 6px 6px}
+.hero .bloom{margin:6px auto 20px}
+.hero h1{font-size:clamp(27px,6.5vw,40px);margin-bottom:14px}
+.hero h1 .hl{color:var(--green);position:relative;white-space:nowrap}
+.hero p{font-size:15px;color:var(--ink-soft);max-width:460px;margin:0 auto 8px}
+.meta-row{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin:22px 0 30px}
+.chip{font-size:12.5px;color:var(--green-d);background:var(--sage);
+  border:1px solid #dbe6cf;padding:7px 13px;border-radius:99px;font-weight:600}
+.cta{display:inline-flex;align-items:center;gap:9px;background:var(--green);color:#fff;
+  font-size:16px;font-weight:700;padding:15px 30px;border-radius:99px;box-shadow:var(--shadow);
+  transition:transform .12s ease,background .15s}
+.cta:hover{background:var(--green-d);transform:translateY(-1px)}
+.cta:active{transform:translateY(0)}
+.cta.wide{width:100%;justify-content:center}
+.cta.ghost{background:var(--card);color:var(--green);border:1.5px solid var(--line2);box-shadow:none}
+.cta.ghost:hover{border-color:var(--green);background:var(--sage)}
+.cta[disabled]{opacity:.4;pointer-events:none}
+
+/* card */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+  padding:22px;box-shadow:var(--shadow)}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:0.1em;color:var(--coral);text-transform:uppercase;margin-bottom:9px}
+
+/* form */
+.field{margin-bottom:16px}
+.field label{display:block;font-size:13.5px;font-weight:700;margin-bottom:7px;color:var(--ink)}
+.field .req{color:var(--coral)}
+.field input,.field select{width:100%;padding:13px 14px;font-size:15px;color:var(--ink);
+  background:var(--paper);border:1.5px solid var(--line2);border-radius:12px;transition:.15s;outline:none}
+.field input:focus,.field select:focus{border-color:var(--green);background:#fff}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;padding:12px;font-size:14px;font-weight:600;border:1.5px solid var(--line2);
+  border-radius:12px;background:var(--paper);color:var(--ink-soft);transition:.12s}
+.seg button.on{background:var(--green);color:#fff;border-color:var(--green)}
+
+/* progress */
+.topbar{position:sticky;top:0;z-index:20;background:rgba(251,247,238,.92);
+  backdrop-filter:blur(8px);padding:12px 0 10px;margin:-22px -18px 18px;padding-left:18px;padding-right:18px}
+.pbar-row{display:flex;align-items:center;gap:12px}
+.pbar{flex:1;height:9px;background:var(--paper2);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.pbar i{display:block;height:100%;background:linear-gradient(90deg,var(--marigold),var(--green));
+  border-radius:99px;transition:width .4s cubic-bezier(.4,0,.2,1)}
+.pcount{font-size:12.5px;font-weight:700;color:var(--ink-soft);white-space:nowrap}
+
+/* quiz */
+.testhead{display:flex;align-items:center;gap:14px;margin:6px 0 20px}
+.testhead .dot{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;
+  color:#fff;font-weight:800;font-size:19px;flex:0 0 auto;box-shadow:var(--shadow)}
+.testhead h2{font-size:20px}
+.testhead .sub{font-size:12.5px;color:var(--ink-soft);font-weight:600;margin-top:2px}
+.qlist{display:flex;flex-direction:column;gap:11px}
+.q{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:15px 16px;transition:.15s}
+.q.miss{border-color:var(--coral);background:#fdf3ee}
+.q .qtxt{font-size:14.5px;font-weight:500;margin-bottom:12px;display:flex;gap:9px}
+.q .qtxt .n{color:var(--green);font-weight:800;flex:0 0 auto}
+.likert{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.likert button{padding:9px 4px 8px;border:1.5px solid var(--line2);border-radius:10px;background:var(--paper);
+  display:flex;flex-direction:column;align-items:center;gap:3px;transition:.12s}
+.likert button .num{font-size:15px;font-weight:800;color:var(--ink-soft)}
+.likert button .lab{font-size:9.5px;color:var(--ink-soft);line-height:1.15;text-align:center}
+.likert button.on{border-color:var(--green);background:var(--green)}
+.likert button.on .num,.likert button.on .lab{color:#fff}
+.navrow{display:flex;gap:11px;margin-top:22px}
+.navrow .cta{flex:1}
+.scalehint{font-size:11.5px;color:var(--ink-soft);text-align:center;margin:14px 0 4px;background:var(--paper2);
+  padding:9px 12px;border-radius:10px;border:1px solid var(--line)}
+
+/* review + done */
+.rev-scores{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+.rev-scores .s{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:11px;text-align:center}
+.rev-scores .s .nm{font-size:11.5px;color:var(--ink-soft);font-weight:600}
+.rev-scores .s .vl{font-size:20px;font-weight:800;margin-top:3px}
+.done-hero{text-align:center;padding:20px 10px}
+.done-hero .big{font-size:26px;font-weight:800;margin:16px 0 8px}
+.top-badge{display:inline-flex;flex-direction:column;align-items:center;gap:4px;
+  background:var(--sage);border:1px solid #d3e2c6;border-radius:16px;padding:16px 26px;margin:10px 0 18px}
+.top-badge .k{font-size:12px;color:var(--ink-soft);font-weight:600}
+.top-badge .v{font-size:24px;font-weight:800}
+
+/* admin */
+.admin-gate{max-width:400px;margin:40px auto}
+.stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;text-align:center;box-shadow:var(--shadow)}
+.stat .v{font-size:26px;font-weight:800;color:var(--green)}
+.stat .k{font-size:12px;color:var(--ink-soft);font-weight:600;margin-top:2px}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.toolbar .grow{flex:1}
+.btn-sm{font-size:13px;font-weight:600;padding:9px 15px;border-radius:10px;background:var(--card);
+  border:1.5px solid var(--line2);color:var(--ink);transition:.15s}
+.btn-sm:hover{border-color:var(--green);color:var(--green)}
+.btn-sm.danger:hover{border-color:var(--coral);color:var(--coral)}
+.search{padding:10px 14px;font-size:14px;border:1.5px solid var(--line2);border-radius:10px;background:var(--card);min-width:160px}
+.sub-list{display:flex;flex-direction:column;gap:12px}
+.sub-item{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow)}
+.sub-top{display:flex;align-items:center;gap:12px;cursor:pointer}
+.sub-top .who{flex:1;min-width:0}
+.sub-top .who b{font-size:16px;font-weight:800}
+.sub-top .who span{font-size:12.5px;color:var(--ink-soft);display:block;margin-top:1px}
+.sub-top .tag{font-size:12px;font-weight:800;color:#fff;padding:6px 13px;border-radius:99px;white-space:nowrap}
+.sub-top .chev{color:var(--ink-soft);font-size:13px;transition:transform .2s}
+.sub-item.open .chev{transform:rotate(90deg)}
+.sub-detail{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line2);display:none;
+  grid-template-columns:auto 1fr;gap:22px;align-items:center}
+.sub-item.open .sub-detail{display:grid}
+.bars{display:flex;flex-direction:column;gap:8px;min-width:0}
+.bar-row{display:flex;align-items:center;gap:10px;font-size:13px}
+.bar-row .bn{width:118px;flex:0 0 auto;font-weight:600;color:var(--ink);display:flex;gap:7px;align-items:center}
+.bar-row .bn .sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+.bar-row .track{flex:1;height:14px;background:var(--paper2);border-radius:99px;overflow:hidden;border:1px solid var(--line)}
+.bar-row .track i{display:block;height:100%;border-radius:99px;transition:width .6s cubic-bezier(.4,0,.2,1)}
+.bar-row .bv{width:32px;text-align:right;font-weight:800;font-size:13px}
+.enneabox{text-align:center}
+.enneabox .cap{font-size:11px;color:var(--ink-soft);margin-top:4px;font-weight:600}
+.del-row{margin-top:14px;text-align:right}
+.empty{text-align:center;padding:60px 20px;color:var(--ink-soft)}
+.empty .em-mark{margin-bottom:14px;opacity:.5}
+.foot{margin-top:26px;font-size:11.5px;color:var(--ink-soft);text-align:center;line-height:1.7}
+.note{font-size:12px;color:var(--ink-soft);background:var(--paper2);border:1px solid var(--line);
+  border-radius:10px;padding:11px 13px;margin-top:14px;line-height:1.6}
+@media(max-width:560px){
+  .sub-detail{grid-template-columns:1fr;gap:16px}
+  .bar-row .bn{width:96px;font-size:12px}
+  .rev-scores{grid-template-columns:repeat(3,1fr)}
+  .likert button .lab{display:none}
+  .likert button{padding:12px 4px}
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+const QUESTIONS = {"1": ["자기 방이나 장난감(책상)을 스스로 정리하며, 깔끔한 편인가?", "눈치가 빨라 부모가 말하지 않아도 스스로 할 일을 잘 하는가?", "책임감이 강하고, 어떤 역할이 주어지면 정확하게 해내는가?", "농담이나 우스갯소리를 싫어하며 진지한 것을 좋아하는가?", "끈기 있게 자신의 결점을 고치려고 하는가?", "집에서나 유치원(학교)에서 할 일을 떠맡는 경우가 많은가?", "할 일이 많아 긴장되고 바쁘게 움직이는 것을 좋아하는가?", "유치원(학교)에서 돌아오자마자 숙제를 다 해야만 안심을 하는가?", "유치원(학교)에서 친구들이 질서를 지키지 않는다고 비난하는 경우가 많은가?", "남에게 아는 체하고 간섭하기 좋아하는가?", "다른 아이들을 괴롭히지는 않지만, 가르치려 하는 편인가?", "다른 사람에게 비난을 받지 않으려고 신경을 많이 쓰는가?", "화가 나는데도 삭이느라 긴장할 때가 자주 있는가?", "어쩌다 아주 격렬하게 화를 내고는 스스로 언짢아하는 때가 자주 있는가?", "잘못을 개선하는 등 정의롭고 이상적인 문제에 관심이 많은가?"], "2": ["늘 자기 자신보다 남을 먼저 배려하는 편인가?", "어려움에 처한 사람을 보면 걱정하며 돌봐 주고 싶어하는가?", "마음이 여려서 자주 상처 받는가?", "친구가 달라고 하지 않았는데도 장난감이나 과자를 잘 주는가?", "자신이 원하는 것을 다른 사람들에게 부탁하는 것을 잘 못 하는가?", "폭력적인 장면이나 비극적인 이야기, 잔혹한 뉴스 등을 싫어하는가?", "눈치가 빨라 말하지 않아도 남들에게 필요한 것을 잘 알아차리는 편인가?", "친구들이 좋아할 만한 화제나 말투에 신경을 쓰는 편인가?", "다른 사람을 기쁘게 하려고 일부러 명랑한 행동을 하는 때가 자주 있는가?", "친구나 동생이 자신에게 의지하는 것을 좋아하는가?", "공부나 다른 일보다 친구들과 함께 잘 어울리는 일을 중요하게 여기는가?", "친구들과 다투면 자신이 먼저 좋은 관계로 회복하려고 노력하는가?", "부모나 선생님에게서 사랑 받으려고 애쓰는가?", "부모가 다른 아이들에게 잘 해 주면 노골적으로 질투하는가?", "다른 사람들의 평가나 반응에 신경을 쓰는 편인가?"], "3": ["재주가 많고 명랑하며, 호기심이 많은가?", "유치원(학교) 활동에 주도적이고 적극적으로 참여하는 편인가?", "자신의 일에 애착심이 강하며, 끝까지 다부지게 해내는가?", "경쟁심이 강하며, 무엇이든 최고가 되려고 하는가?", "놀이, 학습(공부)를 열심히 해서 어른들의 귀여움을 독차지하고 싶어하는가?", "일을 재치 있게 효율적으로 하며, 꾀가 많은가?", "남 앞에 나서기를 좋아하는가?", "외출을 할 때 옷차림에 신경 쓰며 좋은 옷을 입으려 하는가?", "남들에게 꾸며서라도 좋게 보이려고 애쓰는가?", "유행에 민감하며 사고방식이 현실적인가?", "목표를 세우기 좋아하고, 목표를 이루려고 끈기 있게 노력하는가?", "바쁘지만 늘 활기차고 자신감이 넘치는가?", "‘기쁘다’, ‘슬프다’.’쓸쓸하다’ 와 같은 감정 표현에 무관심한 편인가?", "실수를 하면 다른 사람 탓으로 돌리는가?", "목적을 이루기 위해 편법을 쓰거나 거짓말을 해도 괜찮다고 여기는가?"], "4": ["이야기나 영화, 음악, 미술처럼 정서적인 데 관심이 많은가?", "소지품을 고르는 데 까다롭고, 아름다운 물건 수집하기를 좋아하는가?", "낯가림이 심하거나, 분위기에 많이 좌우되는가?", "여리고 섬세하며 감수성이 풍부한가?", "친구들과 똑같이 하지 않고 은근히 눈에 띄거나 특이하게 보이고 싶어하는가?", "상상력이 풍부하며, 새로운 것 만들기를 좋아하는가?", "몸을 움직이는 것을 싫어하며, 규칙적으로 하는 일을 싫어하는 편인가?", "예의 바르고 품위 있게 행동하려고 애쓰는가?", "내성적인 편이지만, 남 앞에 나서는 일을 할 때는 활기찬 모습을 보이는가?", "말귀를 잘 알아듣고 이해심이 많아 다른 사람을 잘 도와 주는 편인가?", "내심 동생이나 친구의 장점을 부러워하는 경우가 있는가?", "자신에 대해 비난하는 말에 민감하며, 사소한 일에도 속상해하는가?", "부모가 자신을 오해한다고 생각하면 반항하거나 모든 것을 거부하기도 하는가?", "아이답지 않게 죽음이나 비극적인 일에 대한 관심이 많은가?", "위인전을 좋아하고 이상적으로 묘사된 인물이나 영웅을 좋아하는가?"], "5": ["혼자 노는 것을 좋아하는가?", "동화책을 읽거나 관심 분야에 몰두하면 오랜 시간 빠져 있는가?", "친구가 많지 않으며, 생각이 맞는 소수의 친구와 사귀는 걸 좋아하는가?", "이론에 관심이 많고, 정보 모으기를 좋아하는가?", "궁금한 것이 있으면 질문을 하거나 책을 뒤져서라도 답을 찾으려 하는가?", "말수가 적고 조용하지만, 의견을 물어보면 자기 의견을 또렷하게 말하는가?", "장황하게 설명하기 보다는, 논리적으로 간결하게 대화하는 것을 좋아하는가?", "다른 사람이 자신의 소지품을 만지는 것을 싫어하는가?", "여럿이 모인 곳에선 주로 듣기만 하면서 방관자처럼 관찰하는 경향이 있는가?", "무표정해서 속으로 무슨 생각을 하는지 알 수 없을 때가 자주 있는가?", "사람들에게 주목 받는 것을 싫어하는가?", "단체 행동을 싫어하는가?", "갖고 싶은 물건이 있어도 부모에게 사 달라고 조르지 않을 정도로 속이 깊은가?", "사회적인 규범에 그다지 신경 쓰지 않는 편인가?", "물건을 버리지 않고 모아 두는 경향이 있는가?"], "6": ["부모에게 순종하며 충실한 편인가?", "모범생이며, 선생님이나 친구들에게서 신뢰를 받는 편인가?", "신경이 예민하며, 자질구레한 잔걱정이 많은가?", "돌다리도 두들겨 보고 건널 정도로 조심성이 많고 신중한가?", "친구들과 패거리를 만들어 다니기를 좋아하는가?", "친구들에게 따돌림 당하는 것을 겁내는가?", "뒤에서 친구에 대해 불평하거나 빈정거리는 경우가 있는가?", "약한 사람이나 어려움에 처한 사람들에 대해 동정심이 많은가?", "시간 약속과 질서를 잘 지키는가?", "결단력은 약하지만, 일단 결심한 것을 꾸준히 해내는가?", "쓸데없이 불안해할 때가 자주 있는가?", "겁이 많고 잘 놀라는가?", "재미있게 지내다가 갑자기 화를 내는 등 변덕스러운 면이 있는가?", "꾸중 듣는 것이 겁이 나 실수하지 않으려고 애쓰는가?", "유치원(학교) 일에 관심이 많으며, 유치원(학교)에서 시키는 것은 꼭 지키려고 애쓰는가?"], "7": ["친구가 많고 친구들과 같이 다니는 것을 좋아하는가?", "명랑하고 낙천적인가?", "장난을 잘 치고 산만한가?", "마음에 드는 물건이 있으면 갖지 않고는 못 배기는가?", "용돈을 주면 금방 다 써 버리는가?", "또래에 비해 조숙하게 행동하려고 하는가?", "스타 의식이 있고, 자기도취적인 면이 있는가?", "호기심이 많고 끼가 많은가?", "우스갯소리를 잘 하며, 재미있는 일로 친구들을 즐겁게 해 주는가?", "어른들에게 애교를 잘 부리는가?", "한 군데 가만히 앉아 있거나 지루한 것은 참지 못하는가?", "뭐든지 잘 할 수 있다는 자신감이 넘치며, 일을 할 땐 빨리 처리하는가?", "야단을 맞아도 조금만 지나면 빨리 잊어버리는가?", "새로운 물건을 사 주면 금방 싫증을 내는가?", "한 가지 일을 끝까지 해내는 인내심이 부족한가?"], "8": ["친구를 주위에 모으는 편인가?", "힘이 세고 자신만만하고 활기가 있는가?", "어디서나 명령하기 좋아하며, 자신이 대장이 되어야 편하게 여기는가?", "다른 아이들을 무시하거나 싸움을 자주 하는 편인가?", "친한 친구나 동생처럼 ‘자기 편 사람’에게는 보호자처럼 행동하는가?", "화를 내면 겁날 정도로 과격하지만, 화가 쉽게 풀리며 뒤끝이 없는 편인가?", "남에게 복종하기를 싫어하는가?", "대담하고 스릴이 있는 일을 좋아하는가?", "부모나 선생님에게도 고집불통으로 대들어서 힘들게 할 때가 있는가?", "독립심이 강하지만, 부모에게 잘 하려고 애쓰는 편인가?", "말투나 행동이 화끈하고 통이 큰 편인가?", "친구 중에 말이나 행동이 굼뜬 친구를 보면 답답해서 참지 못하는가?", "자기가 좋아하는 일을 할 때는 발동 걸린 모터처럼 밀어붙이는가?", "솔직하고 직선적이며, 뜻밖에도 여린 면이 있는가?", "선배들을 깍듯이 대하는가?"], "9": ["부모를 귀찮게 하는 일이 없이 착하고 순한 편인가?", "정리정돈을 제대로 하지 못하며, 자질구레한 것도 버리지 않는가?", "부모에게 안기는 것과 같은 신체적 접촉을 좋아하는가?", "쇼핑을 할 때나 자기에게 필요한 물건을 고를 때 시간이 많이 걸리는가?", "텔레비전이나 컴퓨터에 매달려 지내거나 집안에서 빈둥거리기를 좋아하는가?", "과제물(숙제)과 같이 꼭 해야 할 일도 시작할 때까지 시간이 걸리는 편인가?", "시험을 치를 때 답을 대충 적어 내곤 해 아는 문제도 틀리는 경우가 많은가?", "텔레비전이나 만화에 폭력적인 장면이 나오면 무서워서 안 보려고 하는가?", "가족이나 친구들이 싸우면 괴로워하며 피해 버리는가?", "유치원(학교)에서 다쳐도 부모에게 말하지 않고 넘어가는 경우가 종종 있는가?", "평소엔 느긋하지만, 일단 일을 시작하면 도중에 그만두지 않고 계속하는가?", "야단치거나 강제로 시키면 고집부리면서 아무것도 하지 않으려는 경우가 있는가?", "남 앞에 나서서 행동하는 것을 부담스러워하는가?", "무언가 선택할 때는 친구나 어른들의 결정에 맡겨 버리는 편인가?", "늘 낙천적이며, 놀 때도 승부에 집착하지 않고 즐기는 편인가?"]};
+const SCALE = ["전혀\n아니다","별로\n아니다","보통","조금\n그렇다","매우\n그렇다"];
+const SCALE_FULL = "1 전혀 그렇지 않다 · 2 대체로 그렇지 않다 · 3 보통이다 · 4 대체로 그렇다 · 5 매우 그렇다";
+const AREA = ["A","B","C","D","E","F","G","H","I"];
+const TYPES = {
+ 1:{name:"개혁가",tag:"완벽을 추구하는 모범생",color:"var(--t1)",hex:"#2F6B4F",desc:"원칙과 정리정돈을 좋아하고 책임감이 강해요."},
+ 2:{name:"조력가",tag:"마음이 따뜻한 도우미",color:"var(--t2)",hex:"#E8734A",desc:"남을 먼저 배려하고 도움 주기를 좋아해요."},
+ 3:{name:"성취가",tag:"목표를 향해 달리는 리더",color:"var(--t3)",hex:"#F2A93B",desc:"인정받기를 원하고 무엇이든 잘 해내려 해요."},
+ 4:{name:"예술가",tag:"감성이 풍부한 개성파",color:"var(--t4)",hex:"#8E5B8E",desc:"감수성이 풍부하고 자기만의 개성을 소중히 해요."},
+ 5:{name:"탐구가",tag:"호기심 많은 관찰자",color:"var(--t5)",hex:"#3E8B8B",desc:"혼자 몰두하며 궁금한 것을 깊이 파고들어요."},
+ 6:{name:"충실가",tag:"신중하고 성실한 안전지향",color:"var(--t6)",hex:"#4A6FA5",desc:"조심성이 많고 성실하며 안정감을 중요하게 여겨요."},
+ 7:{name:"열정가",tag:"밝고 활기찬 모험가",color:"var(--t7)",hex:"#E0B12E",desc:"명랑하고 호기심이 많으며 새로운 걸 좋아해요."},
+ 8:{name:"도전가",tag:"씩씩하고 당당한 대장",color:"var(--t8)",hex:"#C0503A",desc:"씩씩하고 자신감이 넘치며 앞장서기를 좋아해요."},
+ 9:{name:"평화가",tag:"느긋하고 온화한 중재자",color:"var(--t9)",hex:"#7A9A6B",desc:"느긋하고 온화하며 다툼 없는 걸 좋아해요."},
+};
+const ADMIN_PASS = "modi1234"; // 관리자 비밀번호 — 배포 전 꼭 변경하세요
+
+/* ---------- storage ---------- */
+const KEY="enn:sub:";
+async function saveSub(o){ await window.storage.set(KEY+o.id, JSON.stringify(o), true); }
+async function listSubs(){
+  let keys=[];
+  try{ const r=await window.storage.list(KEY,true); keys=(r&&r.keys)||[]; }catch(e){ return []; }
+  const out=[];
+  for(const k of keys){ try{ const g=await window.storage.get(k,true); if(g&&g.value) out.push(JSON.parse(g.value)); }catch(e){} }
+  out.sort((a,b)=>b.createdAt-a.createdAt);
+  return out;
+}
+async function delSub(id){ try{ await window.storage.delete(KEY+id,true); }catch(e){} }
+
+/* ---------- helpers ---------- */
+const $=(s,el=document)=>el.querySelector(s);
+const app=$("#app");
+function bloomSVG(filled,size=96){
+  // 9 petals radial; filled = number of completed tests
+  let petals="";
+  for(let i=0;i<9;i++){
+    const ang=(i/9)*360-90;
+    const on=i<filled;
+    const col=on?TYPES[i+1].hex:"#E4DCC8";
+    petals+=`<g transform="rotate(${ang} 50 50)"><ellipse cx="50" cy="24" rx="8.5" ry="16" fill="${col}" opacity="${on?1:.55}"/></g>`;
+  }
+  return `<svg class="bloom" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">${petals}<circle cx="50" cy="50" r="11" fill="#F2A93B"/><circle cx="50" cy="50" r="6" fill="#E8734A"/></svg>`;
+}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+
+/* ---------- state ---------- */
+let ST={ screen:"home", info:{name:"",age:"",gender:"",parent:"",phone:""}, test:1, answers:{} };
+for(let t=1;t<=9;t++) ST.answers[t]=Array(15).fill(0);
+
+function computeScores(ans){
+  const s={},raw={}; let total=0;
+  for(let t=1;t<=9;t++){ const sum=ans[t].reduce((a,b)=>a+(b||0),0); s[t]=sum; raw[t]=ans[t].slice(); total+=sum; }
+  let top=1; for(let t=2;t<=9;t++) if(s[t]>s[top]) top=t;
+  return {scores:s,total,top};
+}
+
+/* ---------- render ---------- */
+function render(){
+  document.body.classList.toggle("admin", ST.screen.startsWith("admin"));
+  window.scrollTo(0,0);
+  if(ST.screen==="home") return renderHome();
+  if(ST.screen==="info") return renderInfo();
+  if(ST.screen==="quiz") return renderQuiz();
+  if(ST.screen==="review") return renderReview();
+  if(ST.screen==="done") return renderDone();
+  if(ST.screen==="admin-login") return renderAdminLogin();
+  if(ST.screen==="admin") return renderAdmin();
+}
+function brand(withAdmin){
+  return `<div class="brand">
+    ${bloomSVG(9,38).replace('class="bloom"','')}
+    <div class="txt"><b>아이 에니어그램 검사</b><span>유아 · 초등학생 성격유형 검사</span></div>
+    ${withAdmin?`<button class="adminlink" onclick="go('admin-login')">관리자</button>`:""}
+  </div>`;
+}
+
+/* ---- HOME ---- */
+function renderHome(){
+  app.innerHTML = brand(true) + `
+   <div class="hero">
+     ${bloomSVG(9,110)}
+     <h1>우리 아이는<br/><span class="hl">어떤 성격</span>일까요?</h1>
+     <p>아이의 평소 모습을 떠올리며 135개의 질문에 답해 주세요. 9가지 성격유형 중 아이에게 가장 잘 맞는 유형을 찾아드려요.</p>
+     <div class="meta-row">
+       <span class="chip">질문 135개</span>
+       <span class="chip">약 10~15분</span>
+       <span class="chip">9가지 유형</span>
+     </div>
+     <button class="cta" onclick="go('info')">검사 시작하기 &nbsp;→</button>
+     <div class="note">부모님이 아이를 관찰한 그대로 솔직하게 응답할수록 결과가 정확해요. 정답은 없습니다.</div>
+   </div>`;
+}
+
+/* ---- INFO ---- */
+function renderInfo(){
+  const i=ST.info;
+  app.innerHTML = brand(false) + `
+   <div class="card">
+     <div class="eyebrow">먼저 · 아이 정보</div>
+     <h2>누구의 검사인가요?</h2>
+     <p style="font-size:13.5px;color:var(--ink-soft);margin:8px 0 20px">결과를 구분하기 위한 정보예요. 검사 자료로만 사용됩니다.</p>
+     <div class="field"><label>아이 이름 <span class="req">*</span></label>
+       <input id="f-name" value="${esc(i.name)}" placeholder="예: 김모디" autocomplete="off"/></div>
+     <div class="two">
+       <div class="field"><label>나이</label>
+         <input id="f-age" value="${esc(i.age)}" placeholder="예: 8세" inputmode="numeric" autocomplete="off"/></div>
+       <div class="field"><label>성별</label>
+         <div class="seg" id="f-gender">
+           <button data-g="남" class="${i.gender==='남'?'on':''}">남</button>
+           <button data-g="여" class="${i.gender==='여'?'on':''}">여</button>
+         </div></div>
+     </div>
+     <div class="field"><label>학부모 이름</label>
+       <input id="f-parent" value="${esc(i.parent)}" placeholder="예: 김부모" autocomplete="off"/></div>
+     <div class="field"><label>연락처</label>
+       <input id="f-phone" value="${esc(i.phone)}" placeholder="예: 010-1234-5678" inputmode="tel" autocomplete="off"/></div>
+     <div class="navrow">
+       <button class="cta ghost" style="flex:0 0 auto;padding-left:22px;padding-right:22px" onclick="go('home')">이전</button>
+       <button class="cta" onclick="submitInfo()">다음 &nbsp;→</button>
+     </div>
+   </div>`;
+  $("#f-gender").addEventListener("click",e=>{
+    const b=e.target.closest("button"); if(!b)return;
+    ST.info.gender=b.dataset.g;
+    [...e.currentTarget.children].forEach(x=>x.classList.toggle("on",x===b));
+  });
+}
+window.submitInfo=function(){
+  ST.info.name=$("#f-name").value.trim();
+  ST.info.age=$("#f-age").value.trim();
+  ST.info.parent=$("#f-parent").value.trim();
+  ST.info.phone=$("#f-phone").value.trim();
+  if(!ST.info.name){ $("#f-name").focus(); $("#f-name").style.borderColor="var(--coral)"; return; }
+  ST.test=1; go('quiz');
+};
+
+/* ---- QUIZ ---- */
+function answeredCount(){ let c=0; for(let t=1;t<=9;t++) c+=ST.answers[t].filter(x=>x>0).length; return c; }
+function renderQuiz(){
+  const t=ST.test, qs=QUESTIONS[t], T=TYPES[t];
+  const done=answeredCount(), pct=Math.round(done/135*100);
+  let rows="";
+  qs.forEach((q,idx)=>{
+    const val=ST.answers[t][idx];
+    let btns="";
+    for(let v=1;v<=5;v++){
+      btns+=`<button class="${val===v?'on':''}" onclick="pick(${t},${idx},${v})">
+        <span class="num">${v}</span><span class="lab">${SCALE[v-1].replace('\n','<br/>')}</span></button>`;
+    }
+    rows+=`<div class="q" id="q-${idx}"><div class="qtxt"><span class="n">${idx+1}</span><span>${esc(q)}</span></div>
+      <div class="likert">${btns}</div></div>`;
+  });
+  app.innerHTML = `
+   <div class="topbar"><div class="pbar-row">
+     <div class="pbar"><i style="width:${pct}%"></i></div>
+     <div class="pcount">${done}/135</div>
+   </div></div>
+   <div class="testhead">
+     <div class="dot" style="background:${T.color}">${AREA[t-1]}</div>
+     <div><h2>영역 ${AREA[t-1]} <span style="font-weight:600;color:var(--ink-soft);font-size:14px">전체 9개 중</span></h2>
+       <div class="sub">아이의 평소 모습을 떠올리며 답해 주세요</div></div>
+   </div>
+   <div class="scalehint">${SCALE_FULL}</div>
+   <div class="qlist">${rows}</div>
+   <div class="navrow">
+     ${t>1?`<button class="cta ghost" style="flex:0 0 auto;padding-left:22px;padding-right:22px" onclick="prevTest()">이전</button>`:''}
+     <button class="cta" onclick="nextTest()">${t<9?'다음 유형 &nbsp;→':'응답 확인하기 &nbsp;→'}</button>
+   </div>
+   <div class="foot">${t} / 9 영역</div>`;
+}
+window.pick=function(t,idx,v){
+  ST.answers[t][idx]=v;
+  const q=$("#q-"+idx); q.classList.remove("miss");
+  const btns=q.querySelectorAll(".likert button");
+  btns.forEach((b,bi)=>b.classList.toggle("on",bi===v-1));
+  // update progress
+  const done=answeredCount(),pct=Math.round(done/135*100);
+  const bar=$(".pbar i"), cnt=$(".pcount");
+  if(bar)bar.style.width=pct+"%"; if(cnt)cnt.textContent=done+"/135";
+};
+function firstMissing(t){ return ST.answers[t].findIndex(x=>x===0); }
+window.nextTest=function(){
+  const miss=firstMissing(ST.test);
+  if(miss>=0){
+    const q=$("#q-"+miss); q.classList.add("miss");
+    q.scrollIntoView({behavior:"smooth",block:"center"});
+    return;
+  }
+  if(ST.test<9){ ST.test++; render(); } else go('review');
+};
+window.prevTest=function(){ if(ST.test>1){ ST.test--; render(); } };
+
+/* ---- REVIEW ---- */
+function renderReview(){
+  const {scores,total,top}=computeScores(ST.answers);
+  let cells="";
+  for(let t=1;t<=9;t++){
+    cells+=`<div class="s"><div class="nm">영역 ${AREA[t-1]}</div><div class="vl" style="color:${TYPES[t].color}">${scores[t]}</div></div>`;
+  }
+  app.innerHTML = brand(false) + `
+   <div class="card">
+     <div class="eyebrow">마지막 · 확인</div>
+     <h2>${esc(ST.info.name||'우리 아이')} 응답 요약</h2>
+     <p style="font-size:13.5px;color:var(--ink-soft);margin:8px 0 4px">각 영역별 점수(15~75점)입니다. 제출하면 담당 선생님에게 전달돼요.</p>
+     <div class="rev-scores">${cells}</div>
+     <div class="note">검사 결과 유형은 담당 선생님이 확인한 뒤 안내해 드려요. 이 화면에서는 영역별 점수만 보여드립니다.</div>
+     <div class="navrow">
+       <button class="cta ghost" style="flex:0 0 auto;padding-left:22px;padding-right:22px" onclick="ST.test=9;go('quiz')">이전</button>
+       <button class="cta" id="submit-btn" onclick="submitAll()">제출하기 &nbsp;✓</button>
+     </div>
+     <div class="note">제출 후에는 수정할 수 없어요. 응답을 한 번 더 확인해 주세요.</div>
+   </div>`;
+}
+window.submitAll=async function(){
+  const btn=$("#submit-btn"); if(btn){btn.textContent="제출 중…";btn.setAttribute("disabled","");}
+  const {scores,total,top}=computeScores(ST.answers);
+  const sub={ id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    createdAt:Date.now(), info:{...ST.info}, answers:JSON.parse(JSON.stringify(ST.answers)),
+    scores, total, top };
+  try{ await saveSub(sub); ST.lastTop=top; ST.lastScores=scores; go('done'); }
+  catch(e){ if(btn){btn.textContent="다시 시도";btn.removeAttribute("disabled");} alert("저장에 실패했어요. 잠시 후 다시 시도해 주세요."); }
+};
+
+/* ---- DONE ---- */
+function renderDone(){
+  app.innerHTML = `
+   <div class="done-hero">
+     ${bloomSVG(9,120)}
+     <div class="big">제출이 완료됐어요! 🌱</div>
+     <p style="color:var(--ink-soft);font-size:14.5px;max-width:420px;margin:0 auto 6px">
+       ${esc(ST.info.name||'우리 아이')}의 응답이 안전하게 전달됐습니다. 검사 결과 유형은 담당 선생님이 확인한 뒤 따로 안내해 드려요.</p>
+     <div style="margin-top:18px"><button class="cta ghost" onclick="resetNew()">다른 아이 검사하기</button></div>
+   </div>`;
+}
+window.resetNew=function(){
+  ST.info={name:"",age:"",gender:"",parent:"",phone:""}; ST.test=1;
+  for(let t=1;t<=9;t++) ST.answers[t]=Array(15).fill(0);
+  go('home');
+};
+
+/* ---- ADMIN LOGIN ---- */
+function renderAdminLogin(){
+  app.innerHTML = brand(false) + `
+   <div class="admin-gate card">
+     <div class="eyebrow">관리자</div>
+     <h2>결과 관리 페이지</h2>
+     <p style="font-size:13.5px;color:var(--ink-soft);margin:8px 0 18px">비밀번호를 입력하면 제출된 검사 결과를 볼 수 있어요.</p>
+     <div class="field"><label>비밀번호</label>
+       <input id="adm-pass" type="password" placeholder="관리자 비밀번호" onkeydown="if(event.key==='Enter')tryLogin()"/></div>
+     <button class="cta wide" onclick="tryLogin()">입장하기</button>
+     <div class="navrow" style="margin-top:12px"><button class="cta ghost wide" onclick="go('home')">← 검사 화면으로</button></div>
+   </div>`;
+  setTimeout(()=>$("#adm-pass")&&$("#adm-pass").focus(),50);
+}
+window.tryLogin=function(){
+  const v=$("#adm-pass").value;
+  if(v===ADMIN_PASS){ go('admin'); }
+  else{ const i=$("#adm-pass"); i.value=""; i.style.borderColor="var(--coral)"; i.placeholder="비밀번호가 올라요"; }
+};
+
+/* ---- ADMIN DASHBOARD ---- */
+let ADMIN_CACHE=[], ADMIN_FILTER="";
+async function renderAdmin(){
+  app.innerHTML = brand(false) + `<div id="adm-body"><div class="empty">${bloomSVG(3,60)}<div>불러오는 중…</div></div></div>`;
+  ADMIN_CACHE = await listSubs();
+  paintAdmin();
+}
+function typeDistribution(list){
+  const d={}; for(let t=1;t<=9;t++)d[t]=0;
+  list.forEach(s=>{ d[s.top]=(d[s.top]||0)+1; });
+  return d;
+}
+function paintAdmin(){
+  const body=$("#adm-body"); if(!body)return;
+  const all=ADMIN_CACHE;
+  const list = ADMIN_FILTER
+    ? all.filter(s=> (s.info.name||"").includes(ADMIN_FILTER) || (s.info.parent||"").includes(ADMIN_FILTER) || (s.info.phone||"").includes(ADMIN_FILTER))
+    : all;
+  if(all.length===0){
+    body.innerHTML=`<div class="empty">${bloomSVG(0,72)}<div style="font-weight:700;margin-bottom:4px">아직 제출된 결과가 없어요</div>
+      <div style="font-size:13px">학부모님이 검사를 완료하면 여기에 표시됩니다.</div></div>
+      ${adminFoot()}`;
+    return;
+  }
+  const dist=typeDistribution(all);
+  let topType=1; for(let t=2;t<=9;t++) if(dist[t]>dist[topType])topType=t;
+  const stat=`<div class="stat-row">
+     <div class="stat"><div class="v">${all.length}</div><div class="k">전체 검사 수</div></div>
+     <div class="stat"><div class="v">${dist[topType]>0?TYPES[topType].name:'–'}</div><div class="k">가장 많은 유형</div></div>
+     <div class="stat"><div class="v">${new Set(all.map(s=>s.info.name)).size}</div><div class="k">검사한 아이</div></div>
+   </div>`;
+  const tools=`<div class="toolbar">
+     <input class="search" placeholder="이름·학부모·연락처 검색" value="${esc(ADMIN_FILTER)}" oninput="ADMIN_FILTER=this.value;paintAdmin()"/>
+     <div class="grow"></div>
+     <button class="btn-sm" onclick="exportCSV()">CSV 내보내기</button>
+     <button class="btn-sm" onclick="renderAdmin()">새로고침</button>
+     <button class="btn-sm" onclick="go('home')">검사 화면</button>
+   </div>`;
+  let items="";
+  list.forEach(s=>{
+    const T=TYPES[s.top]; const d=new Date(s.createdAt);
+    const when=`${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    let bars="";
+    const maxv=75;
+    for(let t=1;t<=9;t++){
+      const w=Math.round(s.scores[t]/maxv*100);
+      bars+=`<div class="bar-row"><div class="bn"><span class="sw" style="background:${TYPES[t].hex}"></span>${t}.${TYPES[t].name}</div>
+        <div class="track"><i style="width:${w}%;background:${TYPES[t].hex}"></i></div><div class="bv">${s.scores[t]}</div></div>`;
+    }
+    items+=`<div class="sub-item" id="si-${s.id}">
+      <div class="sub-top" onclick="toggleItem('${s.id}')">
+        <div class="who"><b>${esc(s.info.name||'이름 없음')}</b>
+          <span>${esc([s.info.age,s.info.gender].filter(Boolean).join(' · '))}${s.info.parent?' · 학부모 '+esc(s.info.parent):''}${s.info.phone?' · '+esc(s.info.phone):''} · ${when}</span></div>
+        <div class="tag" style="background:${T.color}">${s.top}. ${T.name}</div>
+        <div class="chev">▶</div>
+      </div>
+      <div class="sub-detail">
+        <div class="enneabox">${enneaChart(s.scores,s.top)}<div class="cap">유형별 점수 분포</div></div>
+        <div class="bars">${bars}
+          <div class="del-row"><button class="btn-sm danger" onclick="removeItem('${s.id}')">이 결과 삭제</button></div>
+        </div>
+      </div>
+    </div>`;
+  });
+  body.innerHTML = stat + tools + `<div class="sub-list">${items||'<div class="empty">검색 결과가 없어요.</div>'}</div>` + adminFoot();
+}
+function adminFoot(){
+  return `<div class="foot">이 페이지의 결과는 브라우저 공용 저장소에 저장됩니다.<br/>중요한 자료는 CSV로 내려받아 별도 보관하시길 권장해요.</div>`;
+}
+window.toggleItem=function(id){ const el=$("#si-"+id); if(el)el.classList.toggle("open"); };
+window.removeItem=async function(id){
+  if(!confirm("이 검사 결과를 삭제할까요? 되돌릴 수 없어요.")) return;
+  await delSub(id); ADMIN_CACHE=ADMIN_CACHE.filter(s=>s.id!==id); paintAdmin();
+};
+function enneaChart(scores,top){
+  // radial 9-axis chart
+  const cx=90,cy=90,R=66,maxv=75;
+  let axes="",poly=[],dots="";
+  for(let t=1;t<=9;t++){
+    const ang=((t-1)/9)*2*Math.PI - Math.PI/2;
+    const ex=cx+Math.cos(ang)*R, ey=cy+Math.sin(ang)*R;
+    axes+=`<line x1="${cx}" y1="${cy}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="#E4DCC8" stroke-width="1"/>`;
+    const r=(scores[t]/maxv)*R;
+    const px=cx+Math.cos(ang)*r, py=cy+Math.sin(ang)*r;
+    poly.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+    dots+=`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${t===top?4:2.5}" fill="${TYPES[t].hex}"/>`;
+    const lx=cx+Math.cos(ang)*(R+11), ly=cy+Math.sin(ang)*(R+11);
+    axes+=`<text x="${lx.toFixed(1)}" y="${(ly+3).toFixed(1)}" font-size="9" fill="#5B6656" text-anchor="middle" font-weight="700">${t}</text>`;
+  }
+  // rings
+  let rings="";
+  [0.33,0.66,1].forEach(f=>{ rings+=`<circle cx="${cx}" cy="${cy}" r="${(R*f).toFixed(1)}" fill="none" stroke="#EFE9D8" stroke-width="1"/>`; });
+  return `<svg width="180" height="180" viewBox="0 0 180 180">
+    ${rings}${axes}
+    <polygon points="${poly.join(' ')}" fill="${TYPES[top].hex}22" stroke="${TYPES[top].hex}" stroke-width="1.8" stroke-linejoin="round"/>
+    ${dots}</svg>`;
+}
+window.exportCSV=function(){
+  const rows=[["제출일시","아이이름","나이","성별","학부모","연락처",
+    "1개혁가","2조력가","3성취가","4예술가","5탐구가","6충실가","7열정가","8도전가","9평화가","총점","대표유형"]];
+  ADMIN_CACHE.forEach(s=>{
+    const d=new Date(s.createdAt);
+    const when=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    rows.push([when,s.info.name||"",s.info.age||"",s.info.gender||"",s.info.parent||"",s.info.phone||"",
+      s.scores[1],s.scores[2],s.scores[3],s.scores[4],s.scores[5],s.scores[6],s.scores[7],s.scores[8],s.scores[9],
+      s.total, `${s.top}. ${TYPES[s.top].name}`]);
+  });
+  const csv="\ufeff"+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\r\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"});
+  const url=URL.createObjectURL(blob); const a=document.createElement("a");
+  a.href=url; a.download=`에니어그램_결과_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+};
+
+window.go=function(s){ ST.screen=s; render(); };
+render();
+</script>
+</body>
+</html>
