@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bot, LogOut, Plus } from 'lucide-react';
+import { Bot, LogOut, Plus, Sparkles } from 'lucide-react';
 import { cn } from '@/shared/lib/cn';
 import type { ResponseRow as Row } from '@/entities/response';
 import { ExportButton } from '@/features/admin-export';
@@ -89,6 +89,14 @@ export function AdminDashboard({ responses }: { responses: Row[] }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/admin/enneagram"
+              title="에니어그램 검사 결과"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-medium text-violet-700 shadow-sm transition hover:bg-violet-100"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>② 에니어그램 검사 결과</span>
+            </Link>
             <Link
               href="/admin/agent"
               title="에이전트"
