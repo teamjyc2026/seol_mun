@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
         { status: 500 },
       );
     }
-    return NextResponse.json({ id: data.id, top, sub, scores, total }, { status: 201 });
+    // 검사 결과(top/sub/scores)는 관리자 페이지에서만 열람 — 응답으로 내려주지 않는다.
+    return NextResponse.json({ id: data.id }, { status: 201 });
   } catch (e) {
     console.error('[POST /api/enneagram] server error', e);
     return NextResponse.json(

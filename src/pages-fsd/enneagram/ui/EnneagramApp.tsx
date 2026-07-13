@@ -10,16 +10,11 @@ import {
   QUESTIONS,
   TOTAL_QUESTIONS,
   PER_AREA,
-  SHEETS,
   CONTACT,
-  computeScores,
   type EnneagramInfo,
   type EnneagramAnswers,
 } from '@/entities/enneagram';
-import {
-  useSubmitEnneagram,
-  type SubmitEnneagramResult,
-} from '@/features/submit-enneagram';
+import { useSubmitEnneagram } from '@/features/submit-enneagram';
 import { cn } from '@/shared/lib/cn';
 
 /* ---------- palette (원본 CSS 변수 이식) ---------- */
@@ -41,7 +36,7 @@ const C = {
 const SHADOW =
   '0 1px 2px rgba(46,58,44,.06), 0 8px 24px rgba(46,58,44,.07)';
 
-type Screen = 'home' | 'info' | 'quiz' | 'result';
+type Screen = 'home' | 'info' | 'quiz' | 'done';
 
 const emptyInfo: EnneagramInfo = { name: '', school: '', grade: '', phone: '' };
 
@@ -100,92 +95,6 @@ function Bloom({ size = 96, filled = 9 }: { size?: number; filled?: number }) {
   );
 }
 
-/* ---------- 레이더(에니어) 차트 ---------- */
-function EnneaChart({
-  scores,
-  top,
-}: {
-  scores: Record<string, number>;
-  top: number;
-}) {
-  const cx = 90;
-  const cy = 90;
-  const R = 66;
-  const maxv = PER_AREA * 5; // 75
-  const axes: React.ReactNode[] = [];
-  const dots: React.ReactNode[] = [];
-  const poly: string[] = [];
-  for (let t = 1; t <= 9; t++) {
-    const ang = ((t - 1) / 9) * 2 * Math.PI - Math.PI / 2;
-    const ex = cx + Math.cos(ang) * R;
-    const ey = cy + Math.sin(ang) * R;
-    axes.push(
-      <line
-        key={`ax-${t}`}
-        x1={cx}
-        y1={cy}
-        x2={ex.toFixed(1)}
-        y2={ey.toFixed(1)}
-        stroke={C.line}
-        strokeWidth={1}
-      />,
-    );
-    const r = ((scores[String(t)] ?? 0) / maxv) * R;
-    const px = cx + Math.cos(ang) * r;
-    const py = cy + Math.sin(ang) * r;
-    poly.push(`${px.toFixed(1)},${py.toFixed(1)}`);
-    dots.push(
-      <circle
-        key={`dot-${t}`}
-        cx={px.toFixed(1)}
-        cy={py.toFixed(1)}
-        r={t === top ? 4 : 2.5}
-        fill={TYPES[t].hex}
-      />,
-    );
-    const lx = cx + Math.cos(ang) * (R + 12);
-    const ly = cy + Math.sin(ang) * (R + 12);
-    axes.push(
-      <text
-        key={`lb-${t}`}
-        x={lx.toFixed(1)}
-        y={(ly + 3).toFixed(1)}
-        fontSize={9}
-        fill={C.inkSoft}
-        textAnchor="middle"
-        fontWeight={700}
-      >
-        {t}
-      </text>,
-    );
-  }
-  const rings = [0.33, 0.66, 1].map((f) => (
-    <circle
-      key={f}
-      cx={cx}
-      cy={cy}
-      r={(R * f).toFixed(1)}
-      fill="none"
-      stroke="#EFE9D8"
-      strokeWidth={1}
-    />
-  ));
-  return (
-    <svg width={180} height={180} viewBox="0 0 180 180">
-      {rings}
-      {axes}
-      <polygon
-        points={poly.join(' ')}
-        fill={`${TYPES[top].hex}22`}
-        stroke={TYPES[top].hex}
-        strokeWidth={1.8}
-        strokeLinejoin="round"
-      />
-      {dots}
-    </svg>
-  );
-}
-
 /* ---------- 브랜드 헤더 ---------- */
 function Brand({ withAdmin }: { withAdmin?: boolean }) {
   return (
@@ -223,15 +132,13 @@ export function EnneagramApp() {
   const [area, setArea] = useState(1); // 현재 영역 1~9
   const [answers, setAnswers] = useState<EnneagramAnswers>(makeEmptyAnswers);
   const [missIdx, setMissIdx] = useState<number | null>(null);
-  const [result, setResult] = useState<SubmitEnneagramResult | null>(null);
 
   const qRefs = useRef<Array<HTMLDivElement | null>>([]);
   const navRef = useRef<HTMLDivElement | null>(null);
 
   const submit = useSubmitEnneagram({
-    onSuccess: (r) => {
-      setResult(r);
-      setScreen('result');
+    onSuccess: () => {
+      go('done');
     },
   });
 
@@ -322,7 +229,6 @@ export function EnneagramApp() {
     setInfo(emptyInfo);
     setAnswers(makeEmptyAnswers());
     setArea(1);
-    setResult(null);
     setNameError(false);
     setMissIdx(null);
     go('home');
@@ -652,7 +558,7 @@ export function EnneagramApp() {
                       ? '제출 중…'
                       : t < 9
                         ? '다음 영역 →'
-                        : '제출하고 결과 보기 ✓'}
+                        : '제출하기 ✓'}
                   </button>
                 </div>
                 <div
@@ -660,19 +566,14 @@ export function EnneagramApp() {
                   style={{ color: C.inkSoft }}
                 >
                   {t} / 9 영역
-                  {t === 9 &&
-                    ' · 제출하면 결과지가 바로 생성돼요 (수정 불가)'}
+                  {t === 9 && ' · 제출하면 검사가 완료돼요 (수정 불가)'}
                 </div>
               </>
             );
           })()}
 
-        {screen === 'result' && result && (
-          <ResultSheet
-            name={info.name}
-            result={result}
-            onRestart={resetAll}
-          />
+        {screen === 'done' && (
+          <DoneSheet name={info.name} onRestart={resetAll} />
         )}
       </div>
     </div>
@@ -722,23 +623,14 @@ function Field({
   );
 }
 
-/* ---------- 결과지 ---------- */
-function ResultSheet({
+/* ---------- 검사 완료 안내 (결과는 관리자 페이지에서만 열람) ---------- */
+function DoneSheet({
   name,
-  result,
   onRestart,
 }: {
   name: string;
-  result: SubmitEnneagramResult;
   onRestart: () => void;
 }) {
-  const { top, sub, scores } = result;
-  const topT = TYPES[top];
-  const subT = TYPES[sub];
-  const topSheet = SHEETS[top];
-  const subSheet = SHEETS[sub];
-  const maxv = PER_AREA * 5;
-
   return (
     <>
       <Brand />
@@ -747,169 +639,33 @@ function ResultSheet({
           <Bloom size={90} filled={9} />
         </div>
         <h1 className="text-[24px] font-extrabold tracking-tight">
-          {name || '우리 아이'} 학생의 기질 결과
+          수고하셨습니다!
         </h1>
-      </div>
-
-      {/* 주요기질 */}
-      <div
-        className="mb-4 rounded-2xl p-[22px]"
-        style={{
-          background: C.card,
-          border: `1px solid ${C.line}`,
-          boxShadow: SHADOW,
-        }}
-      >
-        <div
-          className="mb-[9px] text-[12px] font-bold uppercase tracking-[0.1em]"
-          style={{ color: C.coral }}
+        <p
+          className="mt-2 text-[14px]"
+          style={{ color: C.inkSoft }}
         >
-          주요기질
-        </div>
-        <div className="flex items-center gap-3">
-          <div
-            className="grid h-12 w-12 flex-none place-items-center rounded-[13px] text-[20px] font-extrabold text-white"
-            style={{ background: topT.hex, boxShadow: SHADOW }}
-          >
-            {top}
-          </div>
-          <div>
-            <h2 className="text-[22px] font-extrabold tracking-tight">
-              {topT.name}
-            </h2>
-            <div
-              className="text-[13.5px] font-semibold"
-              style={{ color: C.inkSoft }}
-            >
-              {topT.tag}
-            </div>
-          </div>
-        </div>
-        <p className="mt-4 text-[14.5px] leading-[1.6]">{topSheet.summary}</p>
-        {topSheet.body?.trim() &&
-          topSheet.body
-            .split('\n\n')
-            .map((para, i) => (
-              <p
-                key={i}
-                className="mt-3 text-[14px] leading-[1.7]"
-                style={{ color: C.inkSoft }}
-              >
-                {para}
-              </p>
-            ))}
+          {name ? `${name} 학생의 ` : ''}검사가 정상적으로 제출되었어요.
+        </p>
       </div>
 
-      {/* 서브기질 */}
       <div
-        className="mb-4 rounded-2xl p-[22px]"
-        style={{
-          background: C.sage,
-          border: '1px solid #d3e2c6',
-        }}
-      >
-        <div
-          className="mb-[9px] text-[12px] font-bold uppercase tracking-[0.1em]"
-          style={{ color: C.green }}
-        >
-          서브기질
-        </div>
-        <div className="flex items-center gap-3">
-          <div
-            className="grid h-10 w-10 flex-none place-items-center rounded-[12px] text-[17px] font-extrabold text-white"
-            style={{ background: subT.hex }}
-          >
-            {sub}
-          </div>
-          <div>
-            <h3 className="text-[18px] font-extrabold tracking-tight">
-              {subT.name}
-            </h3>
-            <div
-              className="text-[12.5px] font-semibold"
-              style={{ color: C.inkSoft }}
-            >
-              {subT.tag}
-            </div>
-          </div>
-        </div>
-        <p className="mt-3 text-[14px] leading-[1.6]">{subSheet.summary}</p>
-      </div>
-
-      {/* 9유형 점수 레이더 + 막대 */}
-      <div
-        className="mb-4 rounded-2xl p-[22px]"
-        style={{
-          background: C.card,
-          border: `1px solid ${C.line}`,
-          boxShadow: SHADOW,
-        }}
-      >
-        <div
-          className="mb-3 text-[12px] font-bold uppercase tracking-[0.1em]"
-          style={{ color: C.coral }}
-        >
-          유형별 점수
-        </div>
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
-          <div className="flex-none">
-            <EnneaChart scores={scores} top={top} />
-          </div>
-          <div className="flex w-full flex-col gap-2">
-            {Array.from({ length: 9 }, (_, i) => i + 1).map((t) => {
-              const v = scores[String(t)] ?? 0;
-              const w = Math.round((v / maxv) * 100);
-              return (
-                <div key={t} className="flex items-center gap-[10px] text-[13px]">
-                  <div className="flex w-[112px] flex-none items-center gap-[7px] font-semibold">
-                    <span
-                      className="h-[9px] w-[9px] flex-none rounded-[3px]"
-                      style={{ background: TYPES[t].hex }}
-                    />
-                    {t}.{TYPES[t].name}
-                  </div>
-                  <div
-                    className="h-[14px] flex-1 overflow-hidden rounded-full"
-                    style={{
-                      background: C.paper2,
-                      border: `1px solid ${C.line}`,
-                    }}
-                  >
-                    <div
-                      className="h-full rounded-full transition-[width] duration-700"
-                      style={{ width: `${w}%`, background: TYPES[t].hex }}
-                    />
-                  </div>
-                  <div className="w-[32px] text-right text-[13px] font-extrabold">
-                    {v}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* CONTACT */}
-      <div
-        className="rounded-2xl px-5 py-5 text-center"
+        className="rounded-2xl px-6 py-7 text-center"
         style={{
           background: C.sage,
           border: `1.5px solid ${C.green}`,
         }}
       >
-        <div className="text-[13.5px] font-semibold" style={{ color: C.inkSoft }}>
-          {CONTACT.label}
-        </div>
-        <div
-          className="mt-1 text-[17px] font-extrabold"
-          style={{ color: C.ink }}
-        >
-          {CONTACT.academy}
-        </div>
+        <p className="text-[15.5px] leading-[1.7]" style={{ color: C.ink }}>
+          검사결과와 기질에 맞는 학습 코칭은
+          <br />
+          <b>{CONTACT.academy}</b>으로 문의주세요.
+          <br />
+          체험수업과 함께 상담드립니다.
+        </p>
         <a
           href={`tel:${CONTACT.phone.replace(/-/g, '')}`}
-          className="mt-1 block text-[26px] font-extrabold tracking-tight"
+          className="mt-3 block text-[26px] font-extrabold tracking-tight"
           style={{ color: C.green }}
         >
           {CONTACT.phone}
